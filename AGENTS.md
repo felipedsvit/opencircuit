@@ -2,9 +2,9 @@
 
 ## What this repo is
 
-OpenCircuit is a Rust electrical-schematic editor/simulator for industrial control circuits (contactors, relays, timers). It is **pre-implementation**: the workspace builds only `circuit-domain` and `circuit-diagnostics`; every other `crates/*` and `apps/*` directory is an empty placeholder.
+OpenCircuit is a Rust electrical-schematic editor/simulator for industrial control circuits (contactors, relays, timers). It is **pre-implementation**: the workspace builds only `circuit-domain`, `circuit-diagnostics` and the `xtask` repository tool; every other `crates/*` and `apps/*` directory is a tracked placeholder.
 
-`ideia.md` is the authoritative design spec (in Portuguese). Read it before touching domain or simulation contracts — especially §2 (critical corrections), §3 (data model), §4 (crate contracts), §12 (roadmap), and §14/§15 (final layout and decisions). Existing code already implements §2.1/§2.5/§3.1/§3.3.
+`ideia.md` is the authoritative design spec (in Portuguese). Read it before touching domain or simulation contracts — especially §2 (critical corrections), §3 (data model), §4 (crate contracts), §12 (roadmap), and §14/§15 (final layout and decisions). `OpenCircuit_Arquitetura_Tecnica_v0.2.md` consolidates the proposal and is the reference for contract-level decisions. Existing code already implements §2.1/§2.5/§3.1/§3.3.
 
 ## Commands
 
@@ -15,17 +15,18 @@ cargo test --workspace
 cargo test -p circuit-domain
 cargo test -p circuit-domain symbol_instance_references_its_device   # single test substring
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo run -p xtask -- check-architecture
 ```
 
-- No CI, `rustfmt.toml`, `clippy.toml`, or `rust-toolchain.toml` yet. Local toolchain is rustc 1.99.1; edition 2024, resolver 3.
-- Only the root `Cargo.lock` should be committed. Stray `crates/*/Cargo.lock` and `crates/*/target/` already exist because cargo was once run inside crates — run from the root, do not add them.
+- CI is in `.github/workflows/ci.yml` and runs fmt, clippy, tests, `cargo-deny` and the architecture checker. `rust-toolchain.toml` pins rustc 1.99.1; there is no `rustfmt.toml` or `clippy.toml` yet. Edition 2024, resolver 3, MSRV 1.85.
+- Only the root `Cargo.lock` should be committed. Do not run cargo from inside a crate directory; do not add nested `Cargo.lock` or `target/` files.
 
 ## Workspace gotchas
 
 - Root `Cargo.toml` lists members explicitly (no globs). A new crate under `crates/` or `apps/` must be added to `members`; intra-workspace deps go in `[workspace.dependencies]` and are consumed as `{ workspace = true }` (see `circuit-diagnostics`).
-- `crates/circuit-domain/` contains its own empty `.git` from an accidental `git init`. The parent repo sees it as one embedded `?? crates/circuit-domain/` entry, so **its files cannot be committed** until that `.git` directory is removed.
-- The initial commit tracks only `.gitignore`, `LICENSE`, and `README.md`; everything else is untracked.
+- Do not run `git init` inside a crate. The accidental nested repository in `crates/circuit-domain/` was removed; keep the repository root as the only Git repository.
+- Placeholder directories are tracked with `.gitkeep`. Do not add a placeholder crate to `members` until it has a real `src/lib.rs`.
 
 ## Design rules that override default instincts
 
@@ -42,5 +43,5 @@ cargo clippy --workspace --all-targets
 ## Conventions
 
 - Code identifiers, test names, and diagnostic messages are English even though `ideia.md` is Portuguese.
-- IDs are newtypes; derives follow `crates/circuit-domain/src/lib.rs` (`Clone, Copy, Debug, Eq, Hash, PartialEq`, plus `Ord/PartialOrd` when sorted).
-- Tests are inline `#[cfg(test)] mod tests` in each `src/lib.rs`; there are no integration tests or fixtures yet.
+- IDs are newtypes; derives follow `crates/circuit-domain/src/ids.rs` (`Clone, Copy, Debug, Eq, Hash, PartialEq`, plus `Ord/PartialOrd` when sorted).
+- Tests are inline `#[cfg(test)] mod tests` next to the code they cover (module file or `src/lib.rs`); golden fixtures will live under `tests/fixtures` and `tests/integration`.
