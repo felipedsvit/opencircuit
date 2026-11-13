@@ -5,9 +5,9 @@
 | Campo | Valor |
 |---|---|
 | Nome de trabalho | OpenCircuit |
-| Versão do documento | 0.3 — revisão pragmática da proposta consolidada |
+| Versão do documento | 0.3 — proposta consolidada e pragmática |
 | Data | 13/11/2026 |
-| Status | Arquitetura proposta; contratos corrigidos após revisão da v0.2; sujeita a validação por protótipos e testes |
+| Status | Arquitetura proposta; contratos fechados para prototipagem; sujeita a validação por protótipos e testes |
 | Plataforma inicial | Desktop — Linux, Windows e macOS |
 | Plataforma futura | WebAssembly |
 | Linguagem | Rust |
@@ -16,40 +16,13 @@
 
 ---
 
-## 0. O que mudou da v0.2 para a v0.3
+## 0. Tese e escopo do documento
 
-A v0.3 não muda a tese da v0.2: o circuito é um modelo de domínio independente da interface, compilado para uma representação executável e simulado com tempo virtual e semântica determinística. A revisão faz três coisas:
+O circuito é um modelo de domínio independente da interface, compilado para uma representação executável e simulado com tempo virtual e semântica determinística. Este documento fixa:
 
-1. **Corrige contratos que se contradiziam** entre seções (assinatura do compilador, tipos de sinais, snapshot, catálogo).
-2. **Reduz a estrutura inicial** (de 13 crates para 3 crates + CLI + `xtask`) e define gatilhos objetivos para dividir depois.
-3. **Fecha decisões de semântica** que a v0.2 adiava para "protótipo" mas que definem o formato de arquivo e os testes golden (modelo de rede, tick, temporizadores, entradas, falhas, persistência).
-
-| # | Tema | v0.2 | v0.3 | Motivo |
-|---|---|---|---|---|
-| 1 | Crates iniciais | 13 crates (§5) | `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli`, `xtask`; divisão por gatilho (§5.3) | Contratos ainda instáveis; cada fronteira de crate encarece a mudança |
-| 2 | `compile()` | `Result<_, Vec<Diagnostic>>` | `CompileOutput { circuit: Option<_>, diagnostics }` (§8.1) | Warnings sumiam em sucesso; resultado parcial sumia em erro |
-| 3 | Nets | Union-Find sobre pinos a cada tick | Nets de cobre estáticas na compilação; por tick, Union-Find só sobre nets e switches (§8.3, §9.2) | Custo e ambiguidade do termo "net" |
-| 4 | Modelo de rede | `SourceId` por net, regras ad hoc | Máscara de condutores (`ConductorSet`, 1 byte) por net (§9) | Menor modelo que cobre o MVP |
-| 5 | `SimSnapshot` | `NetState`/`NetIx` indefinidos | Estados por `WireId`/`SymbolId`/`DeviceId`; tipos em `circuit-model` (§12) | Renderer não pode depender de índices internos de topologia |
-| 6 | Catálogo | `ComponentDefinition` por `DeviceKind`; terminais no device | `ComponentModel` com `id` + `version`; terminais só nos símbolos; limites de instâncias (§7) | Contatos são símbolos livres; vários modelos por classe de dispositivo |
-| 7 | Chaves de terminal | Números exibidos (`13`, `14`) | Chaves estruturais; rótulos derivados (§6.2) | Renumerar contato não pode exigir migração de arquivo |
-| 8 | IDs e códigos | `uuid` declarado, IDs `u64`; enum Rust como "código estável" | `u64` + `next_id` persistido; códigos `OCxxxx` (§6.1, §13) | Consistência; sem `getrandom` no alvo WASM |
-| 9 | `Wire.route` | Rota completa | Apenas waypoints intermediários (§6.6) | Mover símbolo invalidava a geometria derivada |
-| 10 | Atraso de atuação | "Consequência" do modelo síncrono | `DelayConfig` em ticks (padrão 1); contadores de TON/TOF (§10, §11) | Remove ambiguidade de limite; permite o reversor determinístico |
-| 11 | Entradas | `Inputs` indefinido | `InputEvent`/`InputAction`; entradas efetivas no mesmo tick (§10.3) | Contrato GUI/CLI → simulador |
-| 12 | Falhas | Comportamento pós-falha indefinido | `FaultPolicy::{Report, Halt}` (§10.6) | Curto-circuito precisa de política |
-| 13 | API do simulador | `step()` devolve snapshot por tick | `step`/`step_n` + `snapshot()` sob demanda + trace de mudanças (§10.4, §12) | A 1 ms, snapshot por tick aloca 1000×/s |
-| 14 | Persistência | Preservar campos desconhecidos | Rejeitar schema mais novo; leitura em duas fases; sem floats (§15) | Preservação exigiria `flatten` em todo struct |
-| 15 | Dispositivos | Sem chave com retenção/fusível | `LatchingSwitch` e `Fuse` (§6.3, §7) | Partida direta realista tem Q1/F1 |
-| 16 | Tensões do perfil | Campos sem uso definido | Rótulos para checar compatibilidade de carga (§6.7, §9.4) | Solver não calcula tensão |
-| 17 | Roadmap | M0 de fundação sem entrega visível | M0 = fatia vertical headless; viewer read-only em M1.5 (§20) | Validar contrato snapshot → renderer cedo |
-| 18 | ADRs e documentos | 10 ADRs; 4 documentos | 4 ADRs obrigatórios; 2 documentos normativos (§22) | Cerimônia desproporcional ao estágio |
-| 19 | Dependências | `uuid`, `petgraph`, versões de egui fixas no papel | Sem `uuid`/`petgraph`; versões da UI resolvidas com `cargo add` (§5.6) | A v0.2 citava egui/eframe 0.37; em 13/11/2026 a versão mais recente observada do eframe foi a 0.36.1 |
-| 20 | Testes | Reversor genérico; "trace" sem formato | Reversor em três casos; trace como log de mudanças; `.gitattributes` com `eol=lf` (§17) | Simultaneidade expõe a semântica do tick |
-| 21 | Entrada do solver | `solve(circuit, &DeviceSignals)`, com o tipo definido na camada de simulação (dependência cíclica entre camadas) | `solve(circuit, &SwitchMask)`; sinais ficam no runtime (§9.2) | `electrical` não pode depender de `simulation` |
-| 22 | Estado do runtime | `current` + `next` no estado | Só os sinais efetivos; `next` é temporário do tick (§10.4) | `next` é função pura; checkpoint menor |
-| 23 | Temporizadores | Quatro fases + `previous_input`; limite do preset indefinido | `elapsed` + `out`; regra de fronteira explícita (§11) | Semântica observável definida por tabelas de ticks |
-| 24 | Perfis de alimentação | Perfil sem regra de associação a condutores | Um perfil por condutor (`ConflictingSupplies`) (§6.7) | Solver carrega só bits de condutor sem perder a origem da tensão |
+1. **Contratos consistentes entre seções** (assinatura do compilador, tipos de sinais, snapshot, catálogo).
+2. **Estrutura inicial mínima:** `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli` e `xtask`; divisão em crates apenas por gatilho objetivo (§5.3).
+3. **Semântica fechada** para o que define o formato de arquivo e os testes golden: modelo de rede, tick, temporizadores, entradas, falhas e persistência.
 
 ### 0.1 Como ler este documento
 
@@ -205,7 +178,7 @@ O diagrama é conceitual. As dependências entre crates e módulos seguem a §5.
 
 ### 4.3 Rede de cobre e grupo: dois níveis de conectividade
 
-A v0.2 usava "net" para dois conceitos diferentes. A v0.3 os separa:
+O termo "net" tem dois sentidos distintos, separados aqui:
 
 | Conceito | Quando é calculado | Une o quê | Identidade |
 |---|---|---|---|
@@ -368,7 +341,7 @@ criterion = "0.6"
 # UI (M1.5): não fixar no papel; usar `cargo add eframe` e deixar o Cargo.lock registrar.
 ```
 
-**Nota sobre egui/eframe:** a v0.2 listava egui/eframe 0.37. A consulta ao docs.rs em 13/11/2026 apontou o eframe 0.36.1 como a versão mais recente, e não encontrei evidência de uma 0.37. Por isso a versão deixa de ser fixada no documento.
+**Nota sobre egui/eframe:** a versão não é fixada no documento. Em 13/11/2026 a versão mais recente observada no docs.rs era o eframe 0.36.1; a versão real é a resolvida por `cargo add` e registrada no `Cargo.lock`.
 
 **Nota sobre MSRV:** não copiar o MSRV de outro projeto. Fixar `rust-toolchain.toml`, medir o MSRV do conjunto real de dependências e dos alvos suportados e só então preencher `rust-version`.
 
@@ -416,7 +389,7 @@ pub struct PinRef {
 }
 ```
 
-A v0.2 usava os números exibidos (`13`, `14`) como chaves. Isso acopla o arquivo a uma convenção de numeração que o usuário pode querer mudar. Na v0.3:
+Os números exibidos (`13`, `14`) não são chaves: isso acoplaria o arquivo a uma convenção de numeração que o usuário pode querer mudar. Na prática:
 
 - **A chave é estrutural** e pertence à definição do símbolo no catálogo: `a1`/`a2` (bobina), `p1`/`p2` (contato e botão), `com`/`no`/`nc` (reversor de contato), `pole1.in`/`pole1.out` … (contatos de força), `x1`/`x2` (lâmpada, buzzer), `u1`/`v1`/`w1` (motor), `out` (terminal de alimentação).
 - **O rótulo exibido é derivado** pelo catálogo. Em contatos auxiliares, o rótulo vem de `(slot, tipo)`: NA no slot 1 exibe `13/14`; NC no slot 2 exibe `21/22`. O usuário pode sobrescrever o rótulo na instância (campo de apresentação) sem alterar chaves nem conectividade.
@@ -665,7 +638,7 @@ pub struct CompileOutput {
 pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutput;
 ```
 
-A v0.2 devolvia `Result<_, Vec<Diagnostic>>`: avisos sumiam em caso de sucesso e nada parcial era útil ao editor em caso de erro. Com `CompileOutput`, o editor exibe todos os diagnósticos sempre, e a CLI decide o código de saída.
+`compile` devolve `CompileOutput`, e não `Result<_, Vec<Diagnostic>>`: avisos não somem em caso de sucesso, e o resultado parcial fica disponível mesmo em caso de erro. O editor exibe todos os diagnósticos sempre, e a CLI decide o código de saída.
 
 Política de fases: a fase 1 roda por completo. Se produzir qualquer Error que invalide as tabelas das fases seguintes (ID duplicado, referência inexistente), a compilação para ali. Caso contrário, as fases 2–6 rodam e acumulam diagnósticos sem abortar na primeira falha.
 
@@ -761,7 +734,7 @@ pub struct ElectricalSolution {
 pub enum LoadState { Off, On, Rotating(Direction) }
 ```
 
-O solver **não conhece sinais nem dispositivos**: recebe apenas o conjunto de switches fechados (`SwitchMask`, bitset por `SwitchIx`). O runtime converte sinais efetivos em `SwitchMask`. Isso elimina a dependência cíclica que a v0.2 criava entre `electrical` e o estado de simulação.
+O solver **não conhece sinais nem dispositivos**: recebe apenas o conjunto de switches fechados (`SwitchMask`, bitset por `SwitchIx`). O runtime converte sinais efetivos em `SwitchMask`. Assim `electrical` não depende do estado de simulação, e não há dependência cíclica entre camadas.
 
 Passos:
 
@@ -909,7 +882,7 @@ pub struct RuntimeState {
 }
 ```
 
-A v0.2 mantinha `current` e `next` no estado. Na v0.3 o `next` é calculado a cada tick por função pura de `(S', sol, T)` e vive apenas como temporário; o estado observável e o checkpoint ficam menores.
+O `next` é calculado a cada tick por função pura de `(S', sol, T)` e vive apenas como temporário; o estado observável e o checkpoint ficam menores.
 
 ```rust
 pub struct Simulator { /* config, circuit, solver, state, trace */ }
@@ -1030,7 +1003,7 @@ pub struct TimerState {
 }
 ```
 
-A v0.2 usava quatro fases (`Idle`, `Timing`, `Active`, `Retiming`) e `previous_input`. Os dois algoritmos acima só precisam de `elapsed` e `out`; as fases são derivadas, e a semântica observável (a tabela de ticks) é a especificação.
+Os dois algoritmos acima só precisam de `elapsed` e `out`; fases como `Idle`, `Timing`, `Active` e `Retiming` são derivadas, e a semântica observável (a tabela de ticks) é a especificação.
 
 ### 11.4 Matriz mínima de comportamento
 
@@ -1283,7 +1256,7 @@ JSON com extensão `.ocircuit`. Regras normativas (detalhadas em `FORMAT.md`):
 - Serialização **canônica**: campos em ordem fixa da struct; coleções ordenadas por ID; `BTreeMap` para parâmetros; indentação de 2 espaços; fim de linha LF; newline final. Salvar um arquivo canônico recém-carregado produz **os mesmos bytes**.
 - `.gitattributes` fixa `eol=lf` para `*.ocircuit`, traces e fixtures, para que o CI em Windows não quebre comparações byte a byte.
 - Validação antes de usar: o loader aplica `deny_unknown_fields` ao schema **atual** e confere ranges de ID.
-- Campos desconhecidos **não são preservados**. A v0.2 previa preservá-los quando "compatível"; isso exigiria `flatten` em toda struct e conflita com a validação estrita. Decisão: recusar o que não se entende (§15.3).
+- Campos desconhecidos **não são preservados**. Preservá-los exigiria `flatten` em toda struct e conflitaria com a validação estrita. Decisão: recusar o que não se entende (§15.3).
 - A versão do modelo de componente (`model.version`) é independente do `schema_version` do documento.
 
 ### 15.2 Exemplo (comando da partida direta)
@@ -1626,7 +1599,7 @@ Começa ao fim do M0 (contrato de snapshot estável) e roda em paralelo ao M1.
 
 ### 22.1 Documentos
 
-A v0.2 previa `ARCHITECTURE.md`, `FORMAT.md`, `SIMULATION.md` e `ROADMAP.md`, mais este documento: cinco textos para manter sincronizados antes de existir código. Na v0.3:
+Documentos do projeto, com papéis distintos:
 
 - **`SIMULATION.md` (normativo):** semântica do tick, entradas, atraso de atuação, temporizadores, regras do solver, formato do trace.
 - **`FORMAT.md` (normativo):** schema JSON, IDs, chaves de terminal, canonicalização, migrações e changelog de versões.
@@ -1644,21 +1617,6 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | ADR-002 | Semântica do tick e do commit: entradas efetivas no mesmo tick, atraso mínimo de 1 tick, snapshot pré-commit, trace como log de mudanças, replay e checkpoint |
 | ADR-003 | Modelo de condutores (máscara de bits, um perfil por condutor), regras de conflito e limites do solver discreto |
 | ADR-004 | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
-
-### 22.3 Correspondência com os ADRs da v0.2
-
-| v0.2 | v0.3 |
-|---|---|
-| ADR-001 Rust e egui/eframe | Já decidido; registrado em uma linha no `README.md` |
-| ADR-002 Device/SymbolInstance/Terminal | ADR-001 |
-| ADR-003 IDs de terminais | ADR-001 |
-| ADR-004 Alimentação e condutores | ADR-003 |
-| ADR-005 Semântica temporal | ADR-002 |
-| ADR-006 Limites do solver | ADR-003 |
-| ADR-007 JSON e versionamento | ADR-004 |
-| ADR-008 Command Pattern | Decidido no início do M2 (§14.6) |
-| ADR-009 Determinismo, checkpoint e replay | ADR-002 |
-| ADR-010 Dependências, forks e licenças | `deny.toml`, `CONTRIBUTING.md` e §5.5 |
 
 ---
 
@@ -1712,7 +1670,7 @@ A GUI será uma camada de apresentação desse mesmo cenário, nunca uma impleme
 
 ## 24. Decisões pendentes e status
 
-A v0.2 listava oito questões a resolver só por protótipo. A v0.3 fecha as que são decisão de contrato, pois definem arquivo e testes, e mantém em aberto as que dependem de medição.
+Questões que são decisão de contrato, pois definem arquivo e testes, estão fechadas. As que dependem de medição permanecem em aberto.
 
 | # | Questão | Status | Onde |
 |---|---|---|---|
@@ -1737,7 +1695,7 @@ Respostas ainda abertas devem ser registradas em ADR ou neste documento.
 
 ## 25. Conclusão
 
-A arquitetura do OpenCircuit continua viável como projeto open source em Rust, e a v0.3 a torna mais executável: remove contradições entre contratos, reduz a estrutura inicial ao que o primeiro cenário exige, fecha a semântica que define o formato de arquivo e dos testes, e antecipa um retorno visual (viewer) sem entregar a lógica à interface.
+A arquitetura do OpenCircuit é viável como projeto open source em Rust, e este documento a torna executável: contratos consistentes entre seções, estrutura inicial reduzida ao que o primeiro cenário exige, semântica fechada para o formato de arquivo e para os testes, e um retorno visual antecipado (viewer) sem entregar a lógica à interface.
 
 As decisões mais importantes:
 
