@@ -1,68 +1,92 @@
 # Roadmap
 
-The roadmap follows the consolidated architecture proposal. Each milestone has an
-exit criterion; features outside the current milestone are not started early.
+The roadmap follows the consolidated architecture proposal. Each milestone has
+an observable exit criterion; features outside the current milestone are not
+started early. The authoritative detail is in
+[`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md).
 
-## M0 — Foundation and contracts (in progress)
+## M0 — Foundation and contracts (done)
 
-- [x] Workspace, toolchain and explicit members.
+- [x] Workspace, toolchain, resolver and explicit members.
 - [x] Stable IDs and device/symbol separation.
 - [x] Stable terminal keys.
 - [x] Conductors and explicit supply profiles.
 - [x] Structural diagnostics and validation.
 - [x] Architecture rule checker.
-- [ ] Cross-platform CI green on all targets.
-- [ ] Temporal semantics contracts.
+- [x] CI with fmt, clippy, tests, `cargo-deny` and architecture checks.
+- [x] Initial tests for the domain and diagnostics contracts.
 
 **Exit criterion:** documented contracts that compile and are covered by initial
-tests.
+tests. All checks pass at the M0 revision.
 
-## M1 — Headless logic engine
+M0 builds `circuit-domain` and `circuit-diagnostics`. The first M1 step
+consolidates them into `circuit-model` and creates `circuit-sim`,
+`circuit-project` and `apps/cli`.
 
-- Initial component catalog.
-- Topology compiler and deterministic dense indices.
-- Union-Find connectivity.
-- Discrete electrical solver.
-- Pushbuttons, coils and contacts.
-- TON and TOF timers.
-- Direct-online and reversing scenarios.
-- Headless CLI.
-- Golden tests.
+## M1 — Headless vertical slice
 
-**Exit criterion:** control scenarios run without the GUI with deterministic
-traces.
+- Consolidate `circuit-domain` + `circuit-diagnostics` into `circuit-model`.
+- `circuit-sim` with topology, electrical, logic, runtime and trace modules.
+- Static copper nets; per-tick union only through closed switches.
+- Discrete electrical solver with conductor masks and profile-specific shorts.
+- Catalog for Q1, F1, S1, S2, K1 and a simplified three-phase motor.
+- Pushbuttons, maintained switch, coils, contacts, TON/TOF and thermal latch.
+- Direct-online golden and reversing golden, including simultaneous S1+S2.
+- `circuit-project` JSON v1 with `next_id`, validation and round-trip.
+- `apps/cli` with `validate`, `simulate` and `test`.
+- Change-log trace, not one snapshot per tick.
 
-## M2 — Desktop editor
+**Exit criterion:** direct-online and reversing scenarios run headless with
+deterministic change-log traces; the simultaneous reversing case latches at the
+first short; JSON round-trip and CLI exit codes are tested. No GUI dependency in
+the core.
 
-- egui/eframe application.
-- Canvas and camera.
-- Component library.
-- Selection and movement.
-- Wires and junctions.
-- Undo and redo.
-- JSON load/save and initial migrations.
-- Snapshot visualization.
+## M2a — Read-only viewer
 
-**Exit criterion:** draw, save, reopen and simulate a direct-online starter.
+- `circuit-renderer` with a neutral scene.
+- `apps/desktop` with egui/eframe.
+- Load `.ocircuit`, compile and simulate.
+- Play, pause, step, reset and speed.
+- Conductor colors, closed contacts, energized coils, motor and thermal state.
+- Compile and runtime diagnostics panel.
+- `step_n` per frame and one `snapshot()` per frame.
+
+**Exit criterion:** open the direct-online fixture, play and pause, inspect the
+diagnostics and verify that the renderer does not depend on `circuit-sim`.
+
+## M2b — Editor
+
+- `circuit-commands` with transactional edits and undo/redo.
+- `circuit-editor` with selection, hit-test, insertion, movement, rotation,
+  deletion, wires and junctions.
+- Component palette, property inspector and parameter editing.
+- Save, close and reopen.
+- `egui_kittest` flows for the essential operations.
+
+**Exit criterion:** draw, save, reopen and simulate a direct-online starter,
+with undo/redo and no partially applied invalid operation.
 
 ## M3 — Advanced circuits and export
 
-- Six-terminal motor model and windings.
-- Star-delta scenario.
-- Specialized solver or MNA where required.
-- Expanded electrical diagnostics.
-- SVG and PDF export.
+- Changeover contacts and full interlocking.
+- Six-terminal motor and windings.
+- Star-delta starting without star/triangle overlap.
+- Multiple galvanically separate supply sections.
+- SVG export from the neutral scene.
+- PDF decision after a spike.
+- Benchmarks for larger documents.
 
-**Exit criterion:** star-delta scenario validated with an adequate electrical
-model and no improper contactor overlap.
+**Exit criterion:** star-delta is validated with an adequate winding model and
+no improper contactor overlap; SVG is deterministic; PDF is either chosen with a
+recorded rationale or explicitly deferred.
 
 ## M4 — Ecosystem
 
 - WASM application.
-- Modbus TCP adapter.
-- Evaluation of OPC UA and MQTT.
-- WASM plugins.
+- Plugins.
+- Modbus TCP, OPC UA and MQTT evaluation.
 - More components and examples.
+- Third-party catalog and symbol library.
 - Extension and community documentation.
 
 **Exit criterion:** extensible platform with documented integration interfaces
@@ -72,4 +96,5 @@ and explicit safety limits.
 
 Analog simulation, rigorous voltage/current/impedance calculation, transients,
 pneumatics, hydraulics, real PLC execution, industrial protocols, plugins,
-real-time collaboration and proprietary CAD import.
+real-time collaboration, proprietary CAD import and a certified compliance
+claim.

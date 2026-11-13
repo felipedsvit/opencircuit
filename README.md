@@ -11,37 +11,54 @@ depend on the GUI.
 
 ## Status
 
-Pre-implementation. The workspace currently builds:
+Pre-implementation. M0 currently builds:
 
 - `circuit-domain` — schematic entities, stable IDs, conductors and supply profiles;
 - `circuit-diagnostics` — structured diagnostic codes and subjects;
 - `xtask` — repository checks, including the architecture rule verifier.
 
-The remaining crates and applications are tracked placeholders for the
-milestones described in [`ROADMAP.md`](ROADMAP.md). The GUI is intentionally not
-started until the domain model is stable.
+The first M1 step consolidates `circuit-domain` and `circuit-diagnostics` into
+`circuit-model`, then adds `circuit-sim`, `circuit-project` and `apps/cli`. The
+GUI starts in M2a as a read-only viewer; the full editor is M2b. The remaining
+directories are tracked placeholders for the milestones in
+[`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
 
+Current M0 layout:
+
 ```text
-apps/
-  cli/                 headless validation and simulation (planned)
-  desktop/             egui/eframe application (planned)
+apps/                  placeholders
 crates/
   circuit-domain/      document model and structural validation
   circuit-diagnostics/ diagnostic codes, severity and subjects
-  ...                  remaining layers (placeholders)
-assets/                project-owned symbols, icons and themes
-examples/              reference circuits and golden scenarios
-tests/                 integration fixtures
 xtask/                 repository automation
 ```
 
-The dependency direction is enforced by `cargo run -p xtask -- check-architecture`:
+M1 target:
 
 ```text
-domain <- diagnostics <- topology <- electrical <- simulation
-                                \-> logic ------/
+apps/
+  cli/                 headless validation and simulation
+crates/
+  circuit-model/       IDs, document, catalog, diagnostics, inputs, snapshot
+  circuit-sim/         topology, electrical, logic, runtime, trace
+  circuit-project/     JSON .ocircuit, validation and migrations
+xtask/                 repository automation
+```
+
+M2a adds `circuit-renderer` and `apps/desktop`; M2b adds `circuit-editor` and
+`circuit-commands`; M3 adds `circuit-export`. `assets/`, `examples/` and
+`tests/` hold project-owned symbols, reference circuits and fixtures.
+
+The target dependency direction will be enforced by
+`cargo run -p xtask -- check-architecture`; the M0 checker currently validates
+the three M0 packages:
+
+```text
+circuit-model <- circuit-sim
+circuit-model <- circuit-project
+circuit-model <- renderer/commands/editor (M2)
 editor/renderer consume neutral contracts, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```
@@ -51,10 +68,11 @@ apps/* may depend on GUI crates; circuit-* crates may not
 Run everything from the repository root:
 
 ```sh
-cargo test --workspace
+cargo test --workspace --locked
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p xtask -- check-architecture
+cargo deny check
 ```
 
 ## Documentation
