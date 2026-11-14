@@ -120,4 +120,9 @@ document and an optional snapshot, and `apps/desktop` opens, draws and runs a
 project with operator controls, one `step_n` and one snapshot per frame.
 Symbol geometry (terminal offsets and bounds) lives in the catalog, and
 `circuit_model::layout` derives pin positions and wire paths for every view.
-M2b adds the editor: `circuit-commands` and `circuit-editor`.
+M2b is implemented: `circuit-commands` turns every user action into a
+transaction applied whole or not at all, with undo and redo;
+`circuit-editor` holds the tools, the selection and the hit-test without a
+GUI; the desktop application edits, saves atomically and reopens projects.
+Hostile input is covered by proptests (loader, compiler, transactions);
+`cargo-fuzz` is deferred.

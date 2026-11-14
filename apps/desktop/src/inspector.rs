@@ -303,7 +303,11 @@ fn supplies_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) 
     let mut request = None;
     ui.strong("Supplies");
     for supply in &doc.supplies {
-        ui.label(supply_label(supply));
+        ui.label(format!(
+            "Supply {} · {}",
+            supply.id,
+            kind_label(supply.kind)
+        ));
         if let Some(text) = state.text_field(
             ui,
             format!("supply:{}:voltage", supply.id),

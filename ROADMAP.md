@@ -57,19 +57,19 @@ spec §17.3 that apply to M1 pass. No GUI dependency in the core.
 **Exit criterion:** open the direct-online fixture, play and pause, inspect the
 diagnostics and verify that the renderer does not depend on `circuit-sim`.
 
-## M2b — Editor (next)
+## M2b — Editor (done)
 
-- `circuit-commands` with transactional edits and undo/redo.
-- `circuit-editor` with selection, hit-test, insertion, movement, rotation,
+- [x] `circuit-commands` with transactional edits and undo/redo.
+- [x] `circuit-editor` with selection, hit-test, insertion, movement, rotation,
   deletion, wires and junctions.
-- Component palette, property inspector and parameter editing.
-- Save, close and reopen.
-- `egui_kittest` flows for the essential operations.
+- [x] Component palette, property inspector and parameter editing.
+- [x] Save, close and reopen.
+- [x] `egui_kittest` flows for the essential operations.
 
 **Exit criterion:** draw, save, reopen and simulate a direct-online starter,
 with undo/redo and no partially applied invalid operation.
 
-## M3 — Advanced circuits and export
+## M3 — Advanced circuits and export (next)
 
 - Changeover contacts and full interlocking.
 - Six-terminal motor and windings.

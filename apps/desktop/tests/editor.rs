@@ -209,3 +209,16 @@ fn editing_then_simulating_starts_from_tick_zero_on_the_edited_circuit() {
     assert_eq!(session.document().devices.len(), 6);
     assert!(session.history().can_undo());
 }
+
+#[test]
+fn new_project_has_room_to_draw_left_of_and_above_the_origin() {
+    let mut harness = edit_mode(&project(|_| {}));
+
+    click_label(&mut harness, "pushbutton_no · contact");
+    click_grid(&mut harness, -6, -6);
+
+    assert_eq!(
+        document(&harness).symbols[0].position,
+        GridPoint::new(-6, -6)
+    );
+}

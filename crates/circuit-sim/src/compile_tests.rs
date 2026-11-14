@@ -794,3 +794,234 @@ proptest! {
         prop_assert_eq!(compile_doc(&doc), compile_doc(&broken_circuit()));
     }
 }
+
+mod hostile {
+    //! Documents a hostile or broken file could produce: duplicate and zero
+    //! IDs, unknown models and keys, parameters of any type and size,
+    //! dangling endpoints, extreme coordinates. Compiling and simulating
+    //! them must never panic.
+
+    use circuit_model::{
+        Device, DeviceId, Endpoint, Junction, JunctionId, ModelRef, PinRef, ProjectMeta,
+        ReferenceDesignator, Schematic, SupplyId, SupplyKind, SupplyProfile, SymbolId,
+        SymbolInstance, SymbolKey, TerminalKey, Wire, WireId,
+    };
+
+    use super::*;
+    use crate::runtime::{SimConfig, Simulator};
+
+    fn id() -> impl Strategy<Value = u64> {
+        prop_oneof![8 => 0_u64..24, 1 => Just(u64::MAX)]
+    }
+
+    fn coordinate() -> impl Strategy<Value = i32> {
+        prop_oneof![8 => -40_i32..40, 1 => Just(i32::MIN), 1 => Just(i32::MAX)]
+    }
+
+    fn text(choices: &'static [&'static str]) -> impl Strategy<Value = String> {
+        prop::sample::select(choices).prop_map(str::to_owned)
+    }
+
+    fn param() -> impl Strategy<Value = (String, ParamValue)> {
+        let key = text(&[
+            "conductor",
+            "supply",
+            "rated_voltage_mv",
+            "connection",
+            "preset_ms",
+            "initial_closed",
+            "unknown",
+        ]);
+        let value = prop_oneof![
+            any::<bool>().prop_map(ParamValue::Bool),
+            prop_oneof![
+                Just(0_i64),
+                Just(1),
+                Just(24_000),
+                Just(-1),
+                Just(i64::MAX),
+                Just(i64::MIN)
+            ]
+            .prop_map(ParamValue::Int),
+            text(&[
+                "dc_pos",
+                "dc_neg",
+                "l1",
+                "l2",
+                "l3",
+                "n",
+                "pe",
+                "dc",
+                "line_line",
+                "x"
+            ])
+            .prop_map(ParamValue::Text),
+        ];
+        (key, value)
+    }
+
+    fn supply() -> impl Strategy<Value = SupplyProfile> {
+        (
+            id(),
+            prop::sample::select(vec![
+                SupplyKind::Dc,
+                SupplyKind::SinglePhase,
+                SupplyKind::ThreePhase,
+            ]),
+            prop_oneof![Just(0_u32), Just(24_000), Just(400_000), Just(u32::MAX)],
+            prop::option::of(Just(230_000_u32)),
+            prop::option::of(Just(50_000_u32)),
+            prop::option::of(Just(PhaseSequence::L1L2L3)),
+        )
+            .prop_map(
+                |(id, kind, nominal, phase, frequency, sequence)| SupplyProfile {
+                    id: SupplyId(id),
+                    kind,
+                    nominal_voltage_mv: nominal,
+                    phase_voltage_mv: phase,
+                    frequency_millihz: frequency,
+                    phase_sequence: sequence,
+                },
+            )
+    }
+
+    fn device() -> impl Strategy<Value = Device> {
+        let models = ComponentCatalog::builtin()
+            .models()
+            .iter()
+            .map(|m| m.id().to_owned())
+            .chain(["no.such.model".to_owned()])
+            .collect::<Vec<_>>();
+        (
+            id(),
+            text(&["K1", "K2", "S1", "P24", "P0", "L1", "bad", ""]),
+            prop::sample::select(models),
+            prop_oneof![Just(1_u32), Just(2)],
+            prop::collection::btree_map(
+                param().prop_map(|(k, _)| k),
+                param().prop_map(|(_, v)| v),
+                0..4,
+            ),
+        )
+            .prop_map(|(id, reference, model, version, params)| Device {
+                id: DeviceId(id),
+                reference: ReferenceDesignator(reference),
+                model: ModelRef { id: model, version },
+                params,
+            })
+    }
+
+    fn terminal() -> impl Strategy<Value = String> {
+        text(&[
+            "a1",
+            "a2",
+            "p1",
+            "p2",
+            "x1",
+            "x2",
+            "out",
+            "u1",
+            "v1",
+            "w1",
+            "pole1.in",
+            "pole3.out",
+            "zz",
+        ])
+    }
+
+    fn symbol() -> impl Strategy<Value = SymbolInstance> {
+        (
+            id(),
+            id(),
+            text(&[
+                "coil", "contact", "main", "aux_no", "aux_nc", "element", "terminal", "motor",
+                "lamp", "link", "nope",
+            ]),
+            prop::option::of(0_u8..4),
+            coordinate(),
+            coordinate(),
+            prop::sample::select(QuarterTurn::ALL.to_vec()),
+        )
+            .prop_map(|(id, device, key, slot, x, y, rotation)| SymbolInstance {
+                id: SymbolId(id),
+                device_id: DeviceId(device),
+                symbol_key: SymbolKey(key),
+                slot,
+                position: GridPoint::new(x, y),
+                rotation,
+            })
+    }
+
+    fn endpoint() -> impl Strategy<Value = Endpoint> {
+        prop_oneof![
+            (id(), terminal()).prop_map(|(symbol, key)| Endpoint::Terminal(PinRef {
+                symbol_id: SymbolId(symbol),
+                terminal: TerminalKey(key),
+            })),
+            id().prop_map(|j| Endpoint::Junction(JunctionId(j))),
+        ]
+    }
+
+    prop_compose! {
+        fn hostile_document()(
+            next_id in prop_oneof![Just(0_u64), 1_u64..32, Just(u64::MAX)],
+            supplies in prop::collection::vec(supply(), 0..3),
+            devices in prop::collection::vec(device(), 0..8),
+            symbols in prop::collection::vec(symbol(), 0..10),
+            junctions in prop::collection::vec((id(), coordinate(), coordinate()), 0..4),
+            wires in prop::collection::vec(
+                (id(), endpoint(), endpoint(), prop::collection::vec((coordinate(), coordinate()), 0..3)),
+                0..10,
+            ),
+        ) -> Schematic {
+            Schematic {
+                schema_version: 1,
+                next_id,
+                project: ProjectMeta { name: "hostile".to_owned(), grid_unit: 10 },
+                supplies,
+                devices,
+                symbols,
+                junctions: junctions
+                    .into_iter()
+                    .map(|(id, x, y)| Junction { id: JunctionId(id), position: GridPoint::new(x, y) })
+                    .collect(),
+                wires: wires
+                    .into_iter()
+                    .map(|(id, from, to, route)| Wire {
+                        id: WireId(id),
+                        from,
+                        to,
+                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(),
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn compiling_and_simulating_any_document_never_panics(doc in hostile_document()) {
+            let output = compile(&doc, &ComponentCatalog::builtin());
+            if let Some(circuit) = output.circuit {
+                if let Ok(mut sim) = Simulator::new(circuit, SimConfig::default()) {
+                    let devices: Vec<DeviceId> = sim.circuit().devices().iter().map(|d| d.id).collect();
+                    for device in devices {
+                        let _ = sim.step(&[circuit_model::InputAction::Press(device)]);
+                        let _ = sim.step(&[circuit_model::InputAction::Trip(device)]);
+                    }
+                    let _ = sim.step_n(5, &[]);
+                    let _ = sim.snapshot();
+                }
+            }
+        }
+
+        #[test]
+        fn compiling_any_document_is_deterministic(doc in hostile_document()) {
+            let catalog = ComponentCatalog::builtin();
+
+            prop_assert_eq!(compile(&doc, &catalog), compile(&doc, &catalog));
+        }
+    }
+}
