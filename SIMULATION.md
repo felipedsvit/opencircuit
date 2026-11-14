@@ -31,7 +31,9 @@ The circuit is present exactly when no diagnostic has error severity.
 1. **Structural phase** (always complete): document rules (IDs, references,
    designators, junctions, supply profiles) and catalog rules (model and
    version, parameters, symbol keys, slots, instance limits, terminal keys).
-   An error here stops compilation.
+   An error here stops compilation. A wire with a segment that is neither
+   horizontal nor vertical is reported as the warning `OC-STR-009`
+   (`NonOrthogonalWire`); geometry never blocks compilation.
 2. **Pin table** in (symbol ID, terminal) order; **copper nets** by
    union-find over pins and junctions.
 3. **Devices and signals** in device-ID order. Each class owns at most one

@@ -495,7 +495,7 @@ pub struct Wire {
 ```
 
 - Os extremos do traçado são **derivados** dos endpoints (posição do pino ou da junção). Guardar só os waypoints evita que mover um símbolo invalide a geometria armazenada. `wire_polyline(&Schematic, &Catalog, WireId)` devolve a polilinha completa para renderização e hit-test.
-- Roteamento ortogonal: segmentos consecutivos compartilham `x` ou `y`. O editor só gera traçados ortogonais; o carregamento aceita outros com aviso (`NonOrthogonalWire`).
+- Roteamento ortogonal: segmentos consecutivos compartilham `x` ou `y`. O editor só gera traçados ortogonais; o carregamento aceita outros, e a compilação os reporta com o aviso `NonOrthogonalWire` (OC-STR-009), que nunca bloqueia a compilação.
 - **Dois fios que apenas se cruzam não se conectam.** A conexão exige uma junção explícita. Um fio que passa sobre um terminal sem endpoint nele também não o conecta.
 
 ### 6.7 Condutores e alimentação

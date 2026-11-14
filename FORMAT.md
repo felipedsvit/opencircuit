@@ -162,7 +162,8 @@ Terminal offsets, unrotated:
 The poles of a multi-pole symbol are 4 units apart and centred on its origin.
 Geometry carries no electrical meaning and does not enter the circuit
 fingerprint. The editor draws wires with horizontal and vertical segments
-only.
+only; a file may contain other wires, which load normally and compile with
+the warning `OC-STR-009` (`NonOrthogonalWire`).
 
 ## Catalog (version 1 of each model)
 

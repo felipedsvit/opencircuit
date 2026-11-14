@@ -90,9 +90,42 @@ fn wires_that_cross_without_a_junction_are_not_connected() {
 
     let output = compile_doc(&doc);
 
-    assert_eq!(output.diagnostics, []);
+    // The forced routes are diagonal, which is only a warning.
+    assert!(
+        codes(&output)
+            .iter()
+            .all(|code| *code == DiagnosticCode::NonOrthogonalWire)
+    );
     let circuit = output.circuit.unwrap();
     assert_ne!(net_of(&circuit, lamp, "x1"), net_of(&circuit, lamp, "x2"));
+}
+
+#[test]
+fn diagonal_wire_is_reported_once_and_does_not_block_compilation() {
+    let (rig, _, _, _) = lamp_circuit();
+    let mut doc = rig.finish();
+    let wire = doc.wires[0].id;
+    doc.wires[0].route.clear();
+    let ends_differ_in_both_axes = {
+        let catalog = ComponentCatalog::builtin();
+        let layout = circuit_model::LayoutIndex::new(&doc, &catalog);
+        let path = layout.wire_polyline(&doc.wires[0]).unwrap();
+        path[0].x != path[1].x && path[0].y != path[1].y
+    };
+    assert!(ends_differ_in_both_axes);
+
+    let output = compile_doc(&doc);
+
+    assert_eq!(codes(&output), [DiagnosticCode::NonOrthogonalWire]);
+    assert_eq!(output.diagnostics[0].subject(), &Subject::Wire(wire));
+    assert!(output.circuit.is_some());
+}
+
+#[test]
+fn orthogonal_wires_raise_no_geometry_warning() {
+    let output = compile_doc(&command_circuit());
+
+    assert!(!codes(&output).contains(&DiagnosticCode::NonOrthogonalWire));
 }
 
 #[test]
