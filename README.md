@@ -79,6 +79,7 @@ cargo deny check
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — implementation-facing architecture summary.
 - [`FORMAT.md`](FORMAT.md) — `.ocircuit` project format.
 - [`SIMULATION.md`](SIMULATION.md) — virtual time and tick semantics.
+- [`docs/adr/`](docs/adr/README.md) — architecture decision records (identity and IDs, tick semantics, conductor model, file format).
 - [`ROADMAP.md`](ROADMAP.md) — milestones and scope.
 
 ## Safety notice
