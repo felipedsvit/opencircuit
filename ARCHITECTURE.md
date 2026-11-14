@@ -27,7 +27,7 @@ second real consumer justifies the boundary.
 | Editor | `circuit-editor` | Editor logic without a GUI: hit-test, selection, tools (select, place, wire), drag and placement previews; returns transactions, never changes the document |
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation and golden execution |
-| Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that opens, draws, edits (palette, inspector, undo/redo through `circuit-commands` and `circuit-editor`) and runs a project with operator controls; the only package with a GUI dependency |
+| Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that creates, opens, draws, edits (palette, inspector, undo/redo through `circuit-commands` and `circuit-editor`), saves atomically and runs a project with operator controls; the only package with a GUI dependency |
 | Tooling | `xtask` | Architecture checks, generation of the example projects and benchmarks |
 
 Modules of `circuit-sim` and the imports each may use:
