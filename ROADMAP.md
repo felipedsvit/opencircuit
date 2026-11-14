@@ -23,7 +23,7 @@ tests. All checks pass at the M0 revision.
 M0 built `circuit-domain` and `circuit-diagnostics`; M1 consolidated them
 into `circuit-model`.
 
-## M1 — Headless vertical slice (implemented; exit pending CI)
+## M1 — Headless vertical slice (done)
 
 - [x] Consolidate `circuit-domain` + `circuit-diagnostics` into `circuit-model`.
 - [x] `circuit-sim` with compile, solve, logic, runtime and trace modules.
@@ -36,8 +36,8 @@ into `circuit-model`.
 - [x] `circuit-project` JSON v1 with `next_id`, strict loading and round-trip.
 - [x] `apps/cli` with `validate`, `simulate` and `test`.
 - [x] Change-log trace, not one snapshot per tick.
-- [ ] CI runs the goldens on Linux, Windows and macOS and checks the core for
-  `wasm32-unknown-unknown` (separate CI pull request).
+- [x] CI runs the goldens on Linux, Windows and macOS and checks the core for
+  `wasm32-unknown-unknown`.
 
 **Exit criterion:** direct-online and reversing scenarios run headless with
 deterministic change-log traces; the simultaneous reversing case latches at the
