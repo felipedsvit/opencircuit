@@ -18,6 +18,13 @@ allow = [
     "Zlib",
 ]
 
+# The default fonts of egui, without which it draws no text. The fonts are
+# under the SIL Open Font License and the Ubuntu Font Licence; both allow
+# redistribution with the software. Allowed for this crate only.
+[[licenses.exceptions]]
+crate = "epaint_default_fonts"
+allow = ["OFL-1.1", "Ubuntu-font-1.0"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
