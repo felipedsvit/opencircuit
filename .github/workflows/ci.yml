@@ -72,6 +72,19 @@ jobs:
       # Golden traces are compared byte for byte on every platform.
       - run: cargo run --locked -p opencircuit-cli -- test examples tests/fixtures
 
+  msrv:
+    name: Tests on the MSRV (Rust 1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml pins 1.99.1, so the MSRV is selected with `+1.85`
+      # on the command line; `rust-version` in Cargo.toml must stay equal.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +1.85 test --workspace --locked
+
   wasm:
     name: Core builds for WebAssembly
     runs-on: ubuntu-latest
