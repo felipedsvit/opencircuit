@@ -28,6 +28,7 @@ pub mod diagnostics;
 pub mod geometry;
 pub mod ids;
 pub mod input;
+pub mod layout;
 pub mod schematic;
 pub mod snapshot;
 pub mod supply;
@@ -41,11 +42,12 @@ pub use catalog::{
 pub use diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticCode, Severity, Subject, has_errors, sort_diagnostics,
 };
-pub use geometry::{GridPoint, QuarterTurn};
+pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
     DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SupplyId, SymbolId, WireId,
 };
 pub use input::{InputAction, InputEvent};
+pub use layout::{LayoutIndex, is_orthogonal};
 pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,

@@ -84,7 +84,7 @@
       "slot": null,
       "position": {
         "x": 0,
-        "y": 12
+        "y": 14
       },
       "rotation": "deg0"
     },
@@ -106,7 +106,7 @@
       "slot": null,
       "position": {
         "x": 0,
-        "y": 8
+        "y": 10
       },
       "rotation": "deg0"
     }
