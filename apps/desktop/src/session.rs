@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use circuit_commands::{CommandError, History, Transaction};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, Control, DeviceClass, DeviceId, Diagnostic, InputAction, LayoutIndex,
@@ -82,6 +83,8 @@ pub struct Session {
     /// Why the simulation stopped or refused an action, until the next
     /// successful command.
     message: Option<String>,
+    /// Undo and redo of the edits of the document.
+    history: History,
 }
 
 impl Session {
@@ -109,10 +112,40 @@ impl Session {
                 .map_or_else(|| "project".to_owned(), |p| p.display().to_string()),
             error,
         })?;
-        let catalog = ComponentCatalog::builtin();
-        let output = compile(&doc, &catalog);
+        Ok(Self::from_document(doc, path))
+    }
+
+    /// A session on a document. Its collections are sorted by ID first, as
+    /// editing requires; the order has no meaning and is the one a saved
+    /// file has anyway.
+    #[must_use]
+    pub fn from_document(mut doc: Schematic, path: Option<PathBuf>) -> Self {
+        doc.sort_canonical();
+        let mut session = Self {
+            path,
+            doc,
+            catalog: ComponentCatalog::builtin(),
+            diagnostics: Vec::new(),
+            simulator: None,
+            snapshot: None,
+            running: false,
+            clock: SimClock::default(),
+            pending: BTreeMap::new(),
+            events: VecDeque::new(),
+            message: None,
+            history: History::new(),
+        };
+        session.recompile();
+        session
+    }
+
+    /// Compile the document again and start a new simulator at tick 0. The
+    /// state of the previous simulation is dropped: it belongs to a circuit
+    /// that no longer exists.
+    fn recompile(&mut self) {
+        let output = compile(&self.doc, &self.catalog);
         let mut diagnostics = output.diagnostics;
-        let simulator = match output
+        self.simulator = match output
             .circuit
             .map(|c| Simulator::new(c, SimConfig::default()))
         {
@@ -126,19 +159,61 @@ impl Session {
             }
             None => None,
         };
-        Ok(Self {
-            path,
-            doc,
-            catalog,
-            diagnostics,
-            simulator,
-            snapshot: None,
-            running: false,
-            clock: SimClock::default(),
-            pending: BTreeMap::new(),
-            events: VecDeque::new(),
-            message: None,
-        })
+        self.diagnostics = diagnostics;
+        self.snapshot = None;
+        self.running = false;
+        self.clock.reset();
+        self.pending.clear();
+        self.events.clear();
+        self.message = None;
+    }
+
+    /// Apply an edit to the document, record it for undo and recompile.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CommandError`] when the edit is refused; nothing changes.
+    pub fn edit(&mut self, tx: Transaction) -> Result<(), CommandError> {
+        if tx.is_empty() {
+            return Ok(());
+        }
+        self.history.execute(&mut self.doc, tx)?;
+        self.recompile();
+        Ok(())
+    }
+
+    /// Undo the last edit. `Ok(false)` when there is none.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CommandError`] if the edit can no longer be undone; nothing
+    /// changes.
+    pub fn undo(&mut self) -> Result<bool, CommandError> {
+        let changed = self.history.undo(&mut self.doc)?;
+        if changed {
+            self.recompile();
+        }
+        Ok(changed)
+    }
+
+    /// Redo the last undone edit. `Ok(false)` when there is none.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CommandError`] if the edit can no longer be redone; nothing
+    /// changes.
+    pub fn redo(&mut self) -> Result<bool, CommandError> {
+        let changed = self.history.redo(&mut self.doc)?;
+        if changed {
+            self.recompile();
+        }
+        Ok(changed)
+    }
+
+    /// The edit history.
+    #[must_use]
+    pub const fn history(&self) -> &History {
+        &self.history
     }
 
     /// The file the project came from, if any.
@@ -654,6 +729,83 @@ mod tests {
         let session = Session::load(SERIES_LOADS, None).unwrap();
 
         assert_eq!(session.operable(), []);
+    }
+
+    #[test]
+    fn edit_recompiles_and_undo_restores_the_document() {
+        let mut session = Session::load(COMMAND, None).unwrap();
+        let original = session.document().clone();
+        let s1 = device(&session, "S1");
+        let tx = circuit_commands::ops::set_reference(session.document(), s1, "S9").unwrap();
+
+        session.edit(tx).unwrap();
+        assert!(
+            session
+                .document()
+                .devices
+                .iter()
+                .any(|d| d.reference.0 == "S9")
+        );
+        assert!(session.can_simulate());
+
+        assert_eq!(session.undo(), Ok(true));
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.redo(), Ok(true));
+        assert!(session.history().is_dirty());
+    }
+
+    #[test]
+    fn edit_drops_the_running_simulation() {
+        let mut session = Session::load(COMMAND, None).unwrap();
+        session.play();
+        session.advance(16_000);
+        let s1 = device(&session, "S1");
+        let tx = circuit_commands::ops::set_reference(session.document(), s1, "S9").unwrap();
+
+        session.edit(tx).unwrap();
+
+        assert_eq!(
+            (
+                session.next_tick(),
+                session.snapshot(),
+                session.is_running()
+            ),
+            (0, None, false)
+        );
+    }
+
+    #[test]
+    fn refused_edit_changes_nothing() {
+        let mut session = Session::load(COMMAND, None).unwrap();
+        let original = session.document().clone();
+        let mut tx = Transaction::new("bad", session.document().next_id);
+        tx.edits
+            .push(circuit_commands::Edit::RemoveWire(circuit_model::WireId(
+                999,
+            )));
+
+        assert!(session.edit(tx).is_err());
+        assert_eq!(session.document(), &original);
+        assert!(!session.history().is_dirty());
+    }
+
+    #[test]
+    fn edit_that_breaks_compilation_keeps_the_document_open_without_a_simulator() {
+        let mut session = Session::load(COMMAND, None).unwrap();
+        let k1 = device(&session, "K1");
+        let tx = circuit_commands::ops::set_param(
+            session.document(),
+            session.catalog(),
+            k1,
+            "rated_voltage_mv",
+            None,
+        )
+        .unwrap();
+
+        session.edit(tx).unwrap();
+
+        assert!(!session.can_simulate());
+        assert!(!session.diagnostics().is_empty());
     }
 
     #[test]

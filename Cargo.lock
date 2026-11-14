@@ -1672,6 +1672,8 @@ dependencies = [
 name = "opencircuit-desktop"
 version = "0.0.1"
 dependencies = [
+ "circuit-commands",
+ "circuit-editor",
  "circuit-model",
  "circuit-project",
  "circuit-renderer",

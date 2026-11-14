@@ -1,7 +1,8 @@
 //! OpenCircuit desktop application.
 //!
-//! The window opens a project, draws it with `circuit-renderer` and runs it
-//! with `circuit-sim`. It holds no electrical logic: it shows what the core
+//! The window opens a project, draws it with `circuit-renderer`, edits it
+//! with `circuit-editor` and `circuit-commands`, and runs it with
+//! `circuit-sim`. It holds no electrical logic: it shows what the core
 //! computes and forwards operator actions to it. egui and eframe are used
 //! here and nowhere else in the workspace.
 
@@ -21,8 +22,10 @@ pub mod camera;
 mod canvas;
 pub mod clock;
 pub mod files;
+mod inspector;
+mod palette;
 pub mod session;
 mod theme;
 
-pub use app::ViewerApp;
+pub use app::{DesktopApp, Mode};
 pub use session::{LoadError, Session};
