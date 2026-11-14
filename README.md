@@ -11,49 +11,31 @@ depend on the GUI.
 
 ## Status
 
-Pre-implementation. M0 currently builds:
-
-- `circuit-domain` — schematic entities, stable IDs, conductors and supply profiles;
-- `circuit-diagnostics` — structured diagnostic codes and subjects;
-- `xtask` — repository checks, including the architecture rule verifier.
-
-The first M1 step consolidates `circuit-domain` and `circuit-diagnostics` into
-`circuit-model`, then adds `circuit-sim`, `circuit-project` and `apps/cli`. The
-GUI starts in M2a as a read-only viewer; the full editor is M2b. The remaining
-directories are tracked placeholders for the milestones in
+M1, the headless vertical slice, is implemented: circuits are loaded,
+compiled, simulated and checked against golden traces from the command line.
+The GUI starts in M2a as a read-only viewer; the full editor is M2b. See
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
 
-Current M0 layout:
-
-```text
-apps/                  placeholders
-crates/
-  circuit-domain/      document model and structural validation
-  circuit-diagnostics/ diagnostic codes, severity and subjects
-xtask/                 repository automation
-```
-
-M1 target:
-
 ```text
 apps/
-  cli/                 headless validation and simulation
+  cli/                 `opencircuit`: validate, simulate, test
 crates/
   circuit-model/       IDs, document, catalog, diagnostics, inputs, snapshot
-  circuit-sim/         topology, electrical, logic, runtime, trace
-  circuit-project/     JSON .ocircuit, validation and migrations
-xtask/                 repository automation
+  circuit-sim/         compile, solve, logic, runtime, trace
+  circuit-project/     JSON .ocircuit: strict loading, canonical writing, migrations
+xtask/                 architecture checks and example generation
+examples/              reference projects with scenarios and golden traces
+tests/fixtures/        projects that must be rejected, with their scenarios
 ```
 
 M2a adds `circuit-renderer` and `apps/desktop`; M2b adds `circuit-editor` and
-`circuit-commands`; M3 adds `circuit-export`. `assets/`, `examples/` and
-`tests/` hold project-owned symbols, reference circuits and fixtures.
+`circuit-commands`; M3 adds `circuit-export`. The other directories are
+placeholders for those milestones.
 
-The target dependency direction will be enforced by
-`cargo run -p xtask -- check-architecture`; the M0 checker currently validates
-the three M0 packages:
+The dependency direction is enforced by
+`cargo run -p xtask -- check-architecture`:
 
 ```text
 circuit-model <- circuit-sim
@@ -63,6 +45,20 @@ editor/renderer consume neutral contracts, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```
 
+## Try it
+
+```sh
+cargo run -p opencircuit-cli -- validate examples/direct-starter/starter.ocircuit
+cargo run -p opencircuit-cli -- simulate examples/forward-reverse/reversing.ocircuit \
+    --scenario examples/forward-reverse/simultaneous.scenario.json
+cargo run -p opencircuit-cli -- test examples tests/fixtures
+```
+
+`simulate` prints the change-log trace. The simultaneous start of the
+reversing starter ends with `runtime latched` at the first short circuit;
+add `--fault-policy report` to watch it oscillate instead. Exit codes: `0`
+success, `1` validation or golden failure, `2` usage or I/O error.
+
 ## Commands
 
 Run everything from the repository root:
@@ -70,15 +66,16 @@ Run everything from the repository root:
 ```sh
 cargo test --workspace --locked
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo run -p xtask -- check-architecture
+cargo run -p xtask -- generate-examples --check
+cargo run -p opencircuit-cli -- test examples tests/fixtures
 cargo deny check
 ```
 
 ## Documentation
 
-- [`ideia.md`](ideia.md) — authoritative design notes (Portuguese).
-- [`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md) — consolidated architecture proposal.
+- [`docs/spec02.md`](docs/spec02.md) — consolidated technical specification v0.3 (Portuguese); the contract reference.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — implementation-facing architecture summary.
 - [`FORMAT.md`](FORMAT.md) — `.ocircuit` project format.
 - [`SIMULATION.md`](SIMULATION.md) — virtual time and tick semantics.

@@ -27,7 +27,7 @@ O circuito é um modelo de domínio independente da interface, compilado para um
 ### 0.1 Como ler este documento
 
 - Os blocos Rust são **ilustrativos**. Quando o código existir, os tipos reais e os testes prevalecem; o documento é corrigido na mesma PR que alterar um contrato.
-- `SIMULATION.md` e `FORMAT.md` (§22) serão **normativos**. Este documento é a visão e a justificativa.
+- `SIMULATION.md` e `FORMAT.md` (§22) são **normativos** e derivam deste documento. Este documento é a visão e a justificativa.
 - Itens são marcados como **[decidido]**, **[a validar no protótipo]** ou **[adiado]** quando o status não for óbvio pelo contexto.
 
 ---
@@ -56,7 +56,7 @@ O MVP é uma partida direta de motor — circuito de selo, contatos auxiliares, 
 - **Referência de mercado:** o CADe SIMU, ferramenta fechada e voltada a Windows (verificar licença e plataformas atuais antes de qualquer comparação pública).
 - **Diferenciais pretendidos:** open source; Linux/macOS/Windows; formato aberto, textual e diffável; testes automatizados de lógica de comando; extensibilidade.
 - **Não são diferenciais no MVP:** biblioteca ampla de símbolos, pneumática, PLC. Estão fora do escopo (§2.5).
-- **Consequência de projeto:** a adoção será decidida pela experiência do editor e pela qualidade dos símbolos, não pela CLI. Por isso o viewer read-only (M1.5) e o editor (M2) não ficam para "depois do núcleo perfeito"; o núcleo headless existe para que a GUI nunca seja dona da lógica elétrica.
+- **Consequência de projeto:** a adoção será decidida pela experiência do editor e pela qualidade dos símbolos, não pela CLI. Por isso o viewer read-only (M2a) e o editor (M2b) não ficam para "depois do núcleo perfeito"; o núcleo headless existe para que a GUI nunca seja dona da lógica elétrica.
 
 ### 2.2 Objetivos
 
@@ -157,7 +157,7 @@ O OpenCircuit será uma ferramenta de desenho, aprendizado e simulação prelimi
                                          │
                   ┌──────────────────────┴──────────────┐
                   ▼                                     ▼
-       renderer (M1.5): build_scene → Scene        CLI: trace / JSON
+       renderer (M2a): build_scene → Scene        CLI: trace / JSON
                   ▼
        egui (apps/desktop) / SVG / PDF
 ```
@@ -173,7 +173,7 @@ O diagrama é conceitual. As dependências entre crates e módulos seguem a §5.
 - **Lógica (`circuit-sim::logic`):** bobinas, temporizadores, térmico e atraso de atuação; produz os sinais do próximo tick.
 - **Runtime (`circuit-sim::runtime`):** orquestra o tick, aplica entradas, mantém estado, emite trace, snapshot e checkpoints.
 - **Projeto (`circuit-project`):** serializa, desserializa, valida schema e migra documentos. Não acessa o sistema de arquivos.
-- **Editor, comandos e renderer:** entram em M1.5/M2 (§5.3); consomem apenas tipos de `circuit-model`.
+- **Editor, comandos e renderer:** entram em M2a/M2b (§5.3); consomem apenas tipos de `circuit-model`.
 - **CLI (`apps/cli`):** executa validação, cenários, testes golden e (M3) exportação.
 
 ### 4.3 Rede de cobre e grupo: dois níveis de conectividade
@@ -208,7 +208,7 @@ opencircuit/
 ├── FORMAT.md                    # normativo: schema, IDs, chaves, migrações
 ├── apps/
 │   ├── cli/
-│   └── desktop/                 # M1.5 (viewer) / M2 (editor)
+│   └── desktop/                 # M2a (viewer) / M2b (editor)
 ├── crates/
 │   ├── circuit-model/           # ids, geometria, documento, catálogo, diagnósticos, snapshot
 │   ├── circuit-sim/             # compile, solve, logic, runtime, trace
@@ -217,7 +217,7 @@ opencircuit/
 │   └── symbols/                 # com proveniência e licença por arquivo
 ├── examples/
 │   ├── direct-starter/          # comando + força, com cenários
-│   ├── reversing-starter/
+│   ├── forward-reverse/
 │   └── star-delta/              # referência de requisitos (M3)
 ├── tests/
 │   ├── fixtures/
@@ -251,8 +251,8 @@ Divisões previstas:
 
 | Crate futuro | Origem | Gatilho esperado |
 |---|---|---|
-| `circuit-editor` (inclui comandos de edição, undo/redo, hit-test, roteamento) | novo | M2: a GUI de edição começa |
-| `circuit-render` (`Scene`, `build_scene`) | novo | M1.5: viewer e, depois, exportador |
+| `circuit-editor` (inclui comandos de edição, undo/redo, hit-test, roteamento) | novo | M2b: a GUI de edição começa |
+| `circuit-render` (`Scene`, `build_scene`) | novo | M2a: viewer e, depois, exportador |
 | `circuit-export` | novo | M3: SVG/PDF |
 | `circuit-topology` (`compiled` + `compile`) | `circuit-sim` | Segundo consumidor do `CompiledCircuit` sem runtime (lint, análise estática, netlist) |
 | `circuit-io` | novo | M4: adaptadores industriais |
@@ -265,7 +265,7 @@ circuit-sim        → circuit-model, fixedbitset
 circuit-project    → circuit-model, serde_json
 apps/cli           → crates do núcleo + clap + anyhow
 apps/desktop       → crates do núcleo + circuit-render + egui/eframe
-xtask              → cargo_metadata
+xtask              → serde_json (lê `cargo metadata`), circuit-model, circuit-project (gera os exemplos)
 ```
 
 Regras obrigatórias:
@@ -314,7 +314,7 @@ As versões abaixo são ilustrativas. Resolver com `cargo add`/`cargo update`, v
 ```toml
 [workspace]
 resolver = "3"
-members = ["apps/cli", "crates/*", "xtask"]   # apps/desktop entra no M1.5
+members = ["apps/cli", "crates/*", "xtask"]   # apps/desktop entra no M2a
 
 [workspace.package]
 edition = "2024"
@@ -338,7 +338,7 @@ insta = "1"
 tempfile = "3"
 criterion = "0.6"
 
-# UI (M1.5): não fixar no papel; usar `cargo add eframe` e deixar o Cargo.lock registrar.
+# UI (M2a): não fixar no papel; usar `cargo add eframe` e deixar o Cargo.lock registrar.
 ```
 
 **Nota sobre egui/eframe:** a versão não é fixada no documento. Em 13/11/2026 a versão mais recente observada no docs.rs era o eframe 0.36.1; a versão real é a resolvida por `cargo add` e registrada no `Cargo.lock`.
@@ -488,7 +488,7 @@ pub struct Wire {
     pub id: WireId,
     pub from: Endpoint,
     pub to: Endpoint,
-    pub waypoints: Vec<GridPoint>,    // apenas pontos intermediários
+    pub route: Vec<GridPoint>,        // apenas pontos intermediários (waypoints)
 }
 ```
 
@@ -599,8 +599,9 @@ Modelos iniciais:
 | `supply.terminal` | `PowerSupply` | `terminal` (1) | `conductor`, `supply` |
 | `pushbutton_no` / `pushbutton_nc` | `Pushbutton` | `contact` (1) | — |
 | `selector.latching` | `LatchingSwitch` | `contact` (1) | `initial_closed` |
+| `main_switch.3p` | `LatchingSwitch` | `main` (1, três polos) | `initial_closed` |
 | `contactor.generic` | `Contactor` | `coil` (1), `main` (0..1), `aux_no` (0..8), `aux_nc` (0..8) | `rated_voltage_mv`, `connection` |
-| `relay.generic` | `Relay` | `coil` (1), `aux_no`, `aux_nc`, `changeover` (0..8) | `rated_voltage_mv`, `connection` |
+| `relay.generic` | `Relay` | `coil` (1), `aux_no`, `aux_nc` (0..8); `changeover` entra no M3 | `rated_voltage_mv`, `connection` |
 | `thermal_overload.generic` | `ThermalOverload` | `element` (0..1), `aux_nc` (95/96), `aux_no` (97/98) | — |
 | `timer_on.generic` / `timer_off.generic` | `Timer` | `coil` (1), `delayed_no`, `delayed_nc` (0..4) | `preset_ms`, `rated_voltage_mv`, `connection` |
 | `fuse.generic` | `Fuse` | `link` (1) | — |
@@ -878,7 +879,7 @@ pub struct RuntimeState {
     pub signals: SignalBits,            // efetivos no início do tick
     pub timers: Vec<TimerState>,        // um por dispositivo Timer
     pub actuators: Vec<ActuatorState>,  // contadores de pickup/dropout, um por Contactor/Relay
-    pub halted: bool,
+    pub faulted: bool,
 }
 ```
 
@@ -888,7 +889,7 @@ O `next` é calculado a cada tick por função pura de `(S', sol, T)` e vive ape
 pub struct Simulator { /* config, circuit, solver, state, trace */ }
 
 #[derive(Clone, Copy)]
-pub struct StepOutcome { pub tick: u64, pub changed: bool, pub halted: bool }
+pub struct StepOutcome { pub tick: u64, pub changed: bool, pub faulted: bool }
 
 impl Simulator {
     pub fn new(circuit: CompiledCircuit, config: SimConfig) -> Result<Self, ConfigError>;
@@ -907,6 +908,7 @@ impl Simulator {
     pub fn checkpoint(&self) -> Checkpoint;
     pub fn restore(&mut self, cp: &Checkpoint) -> Result<(), RestoreError>;
     pub fn reset(&mut self);
+    pub fn reset_fault(&mut self);
     pub fn diagnostics(&self) -> &[Diagnostic];   // avisos de configuração (ex.: PresetQuantized)
 }
 ```
@@ -939,15 +941,18 @@ A oscilação de um circuito com contato NF realimentando a própria bobina é d
 
 ```rust
 pub enum FaultPolicy {
-    Report,   // padrão: reporta e continua
-    Halt,     // para ao fim do primeiro tick com falha de severidade Error
+    Halt,     // padrão (fail-closed): diagnósticos que travam interrompem a simulação
+    Report,   // registra e continua; uso didático e de diagnóstico
 }
 ```
 
-- **`Report`:** grupos em falha deixam de energizar suas cargas; o restante continua. Falhas aparecem no snapshot enquanto estiverem ativas e geram eventos de início e fim no trace (por transição, não por tick).
-- **`Halt`:** o tick em que surgir uma falha `Error` é concluído normalmente (snapshot e trace incluem a falha), `halted` passa a verdadeiro e os próximos `step` retornam `SimulationError::Halted` até `reset()` ou `restore()`.
+- Só diagnósticos com `latches_runtime()` verdadeiro travam: `OC-ELEC-001` (`ShortCircuit`, inclui mistura AC/DC) e `OC-ELEC-002` (`ProtectiveEarthFault`). Os demais nunca interrompem, em nenhuma política (§13.2).
+- Em ambas as políticas, um grupo com falha deixa de energizar suas cargas; o restante do circuito continua sendo avaliado. Falhas aparecem no snapshot enquanto estiverem ativas e geram eventos de início e fim no trace (por transição, não por tick).
+- `Halt`: o tick em que surge uma falha que trava é concluído normalmente (snapshot com `faulted = true`, trace com a falha). A partir daí o runtime fica travado: `step` e `step_n` retornam `SimulationError::AlreadyFaulted` sem alterar o estado.
+- `reset_fault()` limpa somente a trava. Não reinicia o circuito nem as entradas; se a condição que causou a falha persistir, ela é detectada de novo no tick em que se repetir. `reset()` volta ao tick 0. `restore()` volta a um checkpoint, que também carrega o estado de trava (§17.4).
+- `Report`: não há trava. O reversor com acionamento simultâneo oscila, como descrito em §17.2.
 
-A CLI expõe `--fault-policy report|halt`. A GUI usa `Report` por padrão e pode oferecer pausa automática na primeira falha.
+A CLI expõe `--fault-policy halt|report` (padrão `halt`). A GUI também usa `Halt` por padrão.
 
 ---
 
@@ -1037,11 +1042,14 @@ pub struct SimSnapshot {
     pub t_us: u64,
     pub energized_devices: Vec<DeviceId>,        // cargas em estado On neste tick
     pub active_devices: Vec<DeviceId>,           // contatores/relés com CoilActive; temporizadores com saída alta
+    pub actuated_devices: Vec<DeviceId>,         // botões pressionados e chaves com retenção fechadas
+    pub tripped_devices: Vec<DeviceId>,          // relés térmicos disparados
     pub closed_symbols: Vec<SymbolId>,           // contatos comandados efetivamente fechados no solve
     pub live_wires: Vec<Live<WireId>>,           // { id, conductors: ConductorSet }; ausente = sem condutor
     pub live_junctions: Vec<Live<JunctionId>>,
     pub motors: Vec<MotorView>,                  // { device, Stopped | Forward | Reverse }
     pub timers: Vec<TimerView>,                  // { device, elapsed_ticks, preset_ticks, out }
+    pub faulted: bool,
     pub faults: Vec<Diagnostic>,                 // falhas ativas neste tick
 }
 ```
@@ -1059,9 +1067,11 @@ pub struct TraceEvent { pub tick: u64, pub kind: TraceKind }
 
 pub enum TraceKind {
     Signal { device: DeviceId, kind: SignalKind, from: bool, to: bool },
-    Load   { device: DeviceId, symbol: SymbolId, on: bool },
-    FaultStarted { code: DiagnosticCode, subject: Subject },
-    FaultCleared { code: DiagnosticCode, subject: Subject },
+    Load   { device: DeviceId, symbol: SymbolId, activity: LoadActivity },  // Off | On | Forward | Reverse
+    FaultStarted { code: DiagnosticCode, subject: Subject, related: Vec<Subject> },
+    FaultCleared { code: DiagnosticCode, subject: Subject, related: Vec<Subject> },
+    Latched,      // o runtime travou ao fim deste tick (FaultPolicy::Halt)
+    LatchReset,   // reset_fault() antes deste tick
 }
 ```
 
@@ -1073,13 +1083,13 @@ Ordem dentro do mesmo tick (determinística): sinais de entrada, sinais derivado
 
 ### 13.1 Categorias
 
-| Categoria | Faixa | Exemplos | Momento |
+| Categoria | Prefixo | Exemplos | Momento |
 |---|---|---|---|
-| Estrutural | `OC1xxx` | ID duplicado, terminal inexistente, junção sem fios | Carregamento e compilação |
-| Semântica | `OC2xxx` | Designador duplicado, terminal obrigatório ausente | Compilação |
-| Elétrica | `OC3xxx` | Curto, falha de PE, carga incompatível | Compilação (casos estáticos) e execução |
-| Limitação do modelo | `OC4xxx` | Topologia fora do solver discreto | Compilação e execução |
-| Configuração | `OC5xxx` | Tick inválido, preset arredondado | Criação do simulador |
+| Estrutural | `OC-STR-` | ID duplicado, terminal inexistente, junção sem fios | Carregamento e compilação |
+| Semântica | `OC-SEM-` | Designador duplicado, terminal obrigatório ausente | Compilação |
+| Elétrica | `OC-ELEC-` | Curto, falha de PE, carga incompatível | Compilação (casos estáticos) e execução |
+| Limitação do modelo | `OC-MOD-` | Topologia fora do solver discreto | Compilação e execução |
+| Configuração | `OC-CFG-` | Tick inválido, preset arredondado | Criação do simulador |
 
 ### 13.2 Estrutura e códigos
 
@@ -1093,8 +1103,10 @@ pub enum DiagnosticCode {
 }
 
 impl DiagnosticCode {
-    pub const fn as_str(self) -> &'static str;           // "OC1001"
+    pub const fn as_str(self) -> &'static str;           // "OC-STR-001"
     pub const fn default_severity(self) -> Severity;
+    /// Verdadeiro só para falhas que travam o runtime sob `FaultPolicy::Halt` (§10.6).
+    pub const fn latches_runtime(self) -> bool;
 }
 
 pub enum Subject {
@@ -1113,40 +1125,46 @@ pub struct Diagnostic {
 
 Regras:
 
-- O **código textual** (`OCxxxx`) é o identificador estável. O enum em Rust é `#[non_exhaustive]` e mapeado por `as_str()`; códigos nunca são renumerados nem reutilizados, e um teste de snapshot da lista completa detecta alterações acidentais.
+- O **código textual** (`OC-<CAT>-NNN`) é o identificador estável. O enum é `#[non_exhaustive]` e mapeado por `as_str()`; códigos nunca são renumerados nem reutilizados. Um teste que lista todos os códigos detecta alterações acidentais.
 - Mensagens são derivadas do código e dos sujeitos e podem ser localizadas no futuro; nenhuma lógica depende do texto.
-- Severidade `Error` na compilação impede a emissão do `CompiledCircuit`. Em execução, falhas `Error` obedecem à `FaultPolicy`. `Warning` e `Info` nunca bloqueiam. A CLI oferece `--deny-warnings`.
+- Severidade `Error` na compilação impede a emissão do `CompiledCircuit`. Em execução, só diagnósticos com `latches_runtime()` obedecem à `FaultPolicy`; os demais nunca interrompem. `Warning` e `Info` nunca bloqueiam. A CLI oferece `--deny-warnings`.
+- Numeração: dentro de cada categoria, de `001` na ordem da tabela. Os identificadores citados em `SIMULATION.md` (`OC-ELEC-004`, `OC-ELEC-005`, `OC-MOD-002`) são os desta tabela.
 
-| Código | Nome | Sev. | Quando ocorre |
-|---|---|---|---|
-| OC1001 | `DuplicateId` | Error | ID repetido em qualquer coleção |
-| OC1002 | `DanglingReference` | Error | Referência a dispositivo, símbolo ou junção inexistente |
-| OC1003 | `UnknownModel` | Error | Modelo ou versão ausente do catálogo, sem migração |
-| OC1004 | `UnknownSymbolKey` | Error | `symbol_key` não existe no modelo |
-| OC1005 | `UnknownTerminal` | Error | Chave de terminal não existe no símbolo |
-| OC1006 | `SymbolInstanceLimit` | Error | Violação de mínimo/máximo de instâncias ou `slot` ausente/duplicado |
-| OC1007 | `JunctionUnconnected` | Error | Junção sem nenhum fio |
-| OC1008 | `JunctionDangling` | Warning | Junção com apenas um fio |
-| OC1009 | `NonOrthogonalWire` | Warning | Segmento de fio não ortogonal |
-| OC1010 | `InvalidParameter` | Error | Parâmetro fora do tipo ou do domínio do catálogo |
-| OC1011 | `IdOutOfRange` | Error | ID zero, acima de `MAX_ENTITY_ID` ou `>= next_id` |
-| OC2001 | `DuplicateReference` | Error | Designador repetido entre dispositivos distintos |
-| OC2002 | `InvalidReference` | Error | Designador fora do padrão |
-| OC2003 | `MissingRequiredTerminal` | Error | Terminal `required` sem conexão |
-| OC2004 | `ConflictingSupplies` | Error | Mesmo condutor fornecido por mais de um `SupplyId` |
-| OC2005 | `DeviceWithoutSymbols` | Warning | Dispositivo sem nenhum símbolo |
-| OC2006 | `FloatingNet` | Warning | Rede com 2+ pontos inalcançável por qualquer fonte, mesmo com todos os switches fechados |
-| OC2007 | `NoSupply` | Warning | Documento com cargas e nenhuma fonte |
-| OC2008 | `UnusedSupply` | Info | Fonte sem carga alcançável |
-| OC3001 | `ShortCircuit` | Error | Condutores incompatíveis no mesmo grupo (estático ou em execução) |
-| OC3002 | `ProtectiveEarthFault` | Error | PE em contato com condutor ativo |
-| OC3003 | `NeutralEarthBond` | Warning | N e PE no mesmo grupo |
-| OC3004 | `LoadSupplyMismatch` | Warning | Rótulo de tensão ou tipo de alimentação incompatível com a carga |
-| OC3005 | `PhaseLoss` | Warning | Motor com apenas parte das fases |
-| OC4001 | `StaticSeriesLoads` | Error | Cargas em série permanente (§9.5) |
-| OC4002 | `DynamicUnsupportedTopology` | Error | Grupo flutuante tocando 2+ cargas em execução (§9.5) |
-| OC5001 | `InvalidConfig` | Error | `tick_us` ou atraso de atuação inválido |
-| OC5002 | `PresetQuantized` | Warning | Preset de temporizador não é múltiplo do tick |
+| Código | Nome | Sev. | Trava | Quando ocorre |
+|---|---|---|---|---|
+| OC-STR-001 | `DuplicateId` | Error | não | ID repetido em qualquer coleção |
+| OC-STR-002 | `DanglingReference` | Error | não | Referência a dispositivo, símbolo ou junção inexistente |
+| OC-STR-003 | `UnknownModel` | Error | não | Modelo ou versão ausente do catálogo, sem migração |
+| OC-STR-004 | `UnknownSymbolKey` | Error | não | `symbol_key` não existe no modelo |
+| OC-STR-005 | `UnknownTerminal` | Error | não | Chave de terminal não existe no símbolo |
+| OC-STR-006 | `SymbolInstanceLimit` | Error | não | Violação de mínimo/máximo de instâncias ou `slot` ausente/duplicado |
+| OC-STR-007 | `JunctionUnconnected` | Error | não | Junção sem nenhum fio |
+| OC-STR-008 | `JunctionDangling` | Warning | não | Junção com apenas um fio |
+| OC-STR-009 | `NonOrthogonalWire` | Warning | não | Segmento de fio não ortogonal |
+| OC-STR-010 | `InvalidParameter` | Error | não | Parâmetro fora do tipo ou do domínio do catálogo |
+| OC-STR-011 | `IdOutOfRange` | Error | não | ID zero, acima de `MAX_ENTITY_ID` ou `>= next_id` |
+| OC-STR-012 | `InvalidSupplyProfile` | Error | não | Campos do perfil de alimentação incoerentes com o tipo |
+| OC-STR-013 | `SelfLoopWire` | Error | não | Fio com os dois extremos no mesmo ponto |
+| OC-STR-014 | `UnsupportedSchemaVersion` | Error | não | Documento em memória fora da versão de schema atual |
+| OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
+| OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
+| OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |
+| OC-SEM-004 | `ConflictingSupplies` | Error | não | Mesmo condutor fornecido por mais de um `SupplyId` |
+| OC-SEM-005 | `DeviceWithoutSymbols` | Warning | não | Dispositivo sem nenhum símbolo |
+| OC-SEM-006 | `FloatingNet` | Warning | não | Rede com 2+ pontos inalcançável por qualquer fonte, mesmo com todos os switches fechados |
+| OC-SEM-007 | `NoSupply` | Warning | não | Documento com cargas e nenhuma fonte |
+| OC-SEM-008 | `UnusedSupply` | Info | não | Fonte sem carga alcançável |
+| OC-ELEC-001 | `ShortCircuit` | Error | sim | Condutores incompatíveis no mesmo grupo, estático ou em execução (inclui mistura AC/DC) |
+| OC-ELEC-002 | `ProtectiveEarthFault` | Error | sim | PE em contato com condutor ativo |
+| OC-ELEC-003 | `NeutralEarthBond` | Warning | não | N e PE no mesmo grupo |
+| OC-ELEC-004 | `LoadSupplyMismatch` | Warning | não | Rótulo de tensão ou tipo de alimentação incompatível com a carga; carga fica `Off` |
+| OC-ELEC-005 | `LoadTerminalsShorted` | Warning | não | Os dois terminais de uma carga estão no mesmo grupo; carga fica `Off` |
+| OC-ELEC-006 | `PhaseLoss` | Warning | não | Motor com apenas parte das fases |
+| OC-MOD-001 | `StaticSeriesLoads` | Error | não | Cargas em série permanente (§9.5); erro de compilação |
+| OC-MOD-002 | `DynamicUnsupportedTopology` | Error | não | Grupo flutuante tocando 2+ cargas em execução (§9.5); cargas afetadas ficam `Off` |
+| OC-MOD-003 | `CircuitTooLarge` | Error | não | Documento maior do que o compilador consegue indexar |
+| OC-CFG-001 | `InvalidConfig` | Error | não | `tick_us` ou atraso de atuação inválido |
+| OC-CFG-002 | `PresetQuantized` | Warning | não | Preset de temporizador não é múltiplo do tick |
 
 ### 13.3 Terminais desconectados
 
@@ -1214,7 +1232,7 @@ pub struct SceneItem {
 
 O tema (`StyleKey` → cor e espessura) pertence à aplicação ou ao exportador. A cena é testável sem GUI e serve de entrada ao SVG (§18). Não depende de egui nem de `circuit-sim`.
 
-### 14.4 Viewer read-only (M1.5)
+### 14.4 Viewer read-only (M2a)
 
 Antes do editor, o primeiro artefato visual é um viewer: abre um `.ocircuit`, compila, roda o `Simulator`, constrói a `Scene` a cada frame com `snapshot()` e permite acionar botões e chaves (`InputAction`). Ele exercita o contrato `SimSnapshot → Scene` e permite avaliar a qualidade dos símbolos e da legibilidade antes de investir no editor.
 
@@ -1261,7 +1279,7 @@ JSON com extensão `.ocircuit`. Regras normativas (detalhadas em `FORMAT.md`):
 
 ### 15.2 Exemplo (comando da partida direta)
 
-Trecho ilustrativo: as coordenadas dependem da geometria do catálogo. O arquivo completo `examples/direct-starter` inclui o circuito de força e o motor.
+Trecho ilustrativo: as coordenadas dependem da geometria do catálogo, e campos opcionais `null` são abreviados. O formato normativo, com `null` explícito, está em `FORMAT.md`. O arquivo completo `examples/direct-starter` inclui o circuito de força e o motor.
 
 ```json
 {
@@ -1291,14 +1309,14 @@ Trecho ilustrativo: as coordenadas dependem da geometria do catálogo. O arquivo
     { "id": 14, "position": { "x": 0, "y": 13 } }
   ],
   "wires": [
-    { "id": 15, "from": { "terminal": { "symbol_id": 7,  "terminal": "out" } }, "to": { "terminal": { "symbol_id": 9,  "terminal": "p1" } }, "waypoints": [] },
-    { "id": 16, "from": { "terminal": { "symbol_id": 9,  "terminal": "p2" } }, "to": { "junction": 13 }, "waypoints": [] },
-    { "id": 17, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 10, "terminal": "p1" } }, "waypoints": [{ "x": -3, "y": 7 }] },
-    { "id": 18, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 12, "terminal": "p1" } }, "waypoints": [{ "x": 3,  "y": 7 }] },
-    { "id": 19, "from": { "terminal": { "symbol_id": 10, "terminal": "p2" } }, "to": { "junction": 14 }, "waypoints": [{ "x": -3, "y": 13 }] },
-    { "id": 20, "from": { "terminal": { "symbol_id": 12, "terminal": "p2" } }, "to": { "junction": 14 }, "waypoints": [{ "x": 3,  "y": 13 }] },
-    { "id": 21, "from": { "junction": 14 }, "to": { "terminal": { "symbol_id": 11, "terminal": "a1" } }, "waypoints": [] },
-    { "id": 22, "from": { "terminal": { "symbol_id": 11, "terminal": "a2" } }, "to": { "terminal": { "symbol_id": 8, "terminal": "out" } }, "waypoints": [] }
+    { "id": 15, "from": { "terminal": { "symbol_id": 7,  "terminal": "out" } }, "to": { "terminal": { "symbol_id": 9,  "terminal": "p1" } }, "route": [] },
+    { "id": 16, "from": { "terminal": { "symbol_id": 9,  "terminal": "p2" } }, "to": { "junction": 13 }, "route": [] },
+    { "id": 17, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 10, "terminal": "p1" } }, "route": [{ "x": -3, "y": 7 }] },
+    { "id": 18, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 12, "terminal": "p1" } }, "route": [{ "x": 3,  "y": 7 }] },
+    { "id": 19, "from": { "terminal": { "symbol_id": 10, "terminal": "p2" } }, "to": { "junction": 14 }, "route": [{ "x": -3, "y": 13 }] },
+    { "id": 20, "from": { "terminal": { "symbol_id": 12, "terminal": "p2" } }, "to": { "junction": 14 }, "route": [{ "x": 3,  "y": 13 }] },
+    { "id": 21, "from": { "junction": 14 }, "to": { "terminal": { "symbol_id": 11, "terminal": "a1" } }, "route": [] },
+    { "id": 22, "from": { "terminal": { "symbol_id": 11, "terminal": "a2" } }, "to": { "terminal": { "symbol_id": 8, "terminal": "out" } }, "route": [] }
   ]
 }
 ```
@@ -1333,7 +1351,7 @@ Em seguida, a compilação (fase estrutural, §8.1) valida modelo, versão de mo
 ```text
 opencircuit validate <projeto.ocircuit> [--format text|json] [--deny-warnings]
 opencircuit simulate <projeto.ocircuit> --scenario <cenario.json>
-                     [--tick-us N] [--fault-policy report|halt]
+                     [--tick-us N] [--fault-policy halt|report]
                      [--trace saida.trace] [--snapshot-json saida.json]
 opencircuit test <caminho>... [--update-golden]
 opencircuit export <projeto.ocircuit> --format svg [-o saida.svg]      # M3
@@ -1381,8 +1399,8 @@ Comportamento:
 - cargas: pares válidos, rótulos de tensão, motor (sentido e perda de fase);
 - regras de conflito de condutores (§9.3) e topologias não suportadas (§9.5);
 - serialização canônica, rejeição de schema mais novo, migrações;
-- transformações de coordenadas e hit-test (a partir do M1.5/M2);
-- comandos de undo/redo (M2).
+- transformações de coordenadas e hit-test (a partir do M2a/M2b);
+- comandos de undo/redo (M2b).
 
 ### 17.2 Golden tests
 
@@ -1394,7 +1412,7 @@ Cada exemplo contém: documento `.ocircuit`, cenário com eventos de entrada e c
 
 1. *Sentido normal:* S1 liga K1; K2 permanece inativo; S2 desliga tudo.
 2. *Inversão bloqueada:* com K1 ativo, S3 não energiza K2 (o NF de K1 está aberto); em nenhum tick há `CoilActive` simultâneo.
-3. *Acionamento simultâneo:* S1 e S3 pressionados no mesmo tick. Com atrasos (1, 1), as duas bobinas energizam no tick `n` (ambos os NF ainda fechados); no tick `n + 1` os dois contatores estão ativos, as duas bobinas caem e o circuito de força registra `ShortCircuit` (`OC3001`); no tick `n + 2` ambos estão inativos e o ciclo recomeça, com **período de 2 ticks enquanto os botões estiverem pressionados**. Com `--fault-policy halt` a simulação para em `n + 1`. Esse é o comportamento do modelo ideal síncrono sem intertravamento mecânico e fica registrado como esperado, não como defeito.
+3. *Acionamento simultâneo:* S1 e S3 pressionados no mesmo tick. Com atrasos (1, 1), as duas bobinas energizam no tick `n` (ambos os NF ainda fechados); no tick `n + 1` os dois contatores estão ativos, as duas bobinas caem e o circuito de força registra `ShortCircuit` (`OC-ELEC-001`); no tick `n + 2` ambos estão inativos e o ciclo recomeça, com **período de 2 ticks enquanto os botões estiverem pressionados**. Com a política padrão `halt` (fail-closed), o runtime trava em `n + 1`: o tick é concluído com `faulted = true` e os passos seguintes retornam `AlreadyFaulted` até `reset_fault()`. A oscilação descrita acima ocorre com `--fault-policy report`. Esse é o comportamento do modelo ideal síncrono sem intertravamento mecânico; a trava é o resultado esperado do golden, não um defeito a esconder.
 
 **Estrela-triângulo** — KM1 principal, KM2 triângulo, KM3 estrela, KT1 temporizador; teste de ausência de sobreposição entre estrela e triângulo. Inicialmente é apenas referência de requisitos: a execução depende do modelo de enrolamentos e de solver adequado (M3).
 
@@ -1408,7 +1426,7 @@ Com `proptest`:
 - salvar e carregar preserva a semântica (compilar antes e depois dá o mesmo resultado);
 - `step_n(n)` equivale a `n` chamadas de `step` com as mesmas entradas;
 - clone/checkpoint/restore e replay reproduzem o trace;
-- operações de conexão e desconexão (M2) não deixam referências inválidas.
+- operações de conexão e desconexão (M2b) não deixam referências inválidas.
 
 ### 17.4 Replay e rewind
 
@@ -1418,7 +1436,7 @@ Com `proptest`:
 Input Event Log ─► Checkpoints periódicos ─► Restauração ─► Replay determinístico
 ```
 
-Um `Checkpoint` contém o `fingerprint` do circuito, o hash da `SimConfig`, o tick, os sinais efetivos, os temporizadores, os contadores de atuação, o estado de `halted` e o conjunto de falhas ativas (para que as transições do trace continuem corretas). `restore` recusa um checkpoint de circuito ou configuração diferentes (`RestoreError`). Para voltar ao tick `t`, restaura-se o checkpoint mais próximo anterior e reproduz-se o log de entradas. O intervalo entre checkpoints é configurável e definido por medição **[a validar]**.
+Um `Checkpoint` contém o `fingerprint` do circuito, o hash da `SimConfig`, o tick, os sinais efetivos, os temporizadores, os contadores de atuação, o estado de `faulted` e o conjunto de falhas ativas (para que as transições do trace continuem corretas). `restore` recusa um checkpoint de circuito ou configuração diferentes (`RestoreError`). Para voltar ao tick `t`, restaura-se o checkpoint mais próximo anterior e reproduz-se o log de entradas. O intervalo entre checkpoints é configurável e definido por medição **[a validar]**.
 
 ### 17.5 UI
 
@@ -1477,7 +1495,7 @@ Um `.ocircuit` pode vir de terceiros. O loader deve:
 - impor limites configuráveis de tamanho do arquivo, profundidade e contagem de entidades (valores iniciais definidos com os benchmarks da §14.5);
 - rejeitar IDs fora do range, schema mais novo e campos desconhecidos (§15);
 - nunca executar nada a partir do arquivo (não há scripts nem plugins no MVP);
-- ter alvo de fuzzing (`cargo-fuzz`) para o parser e a fase estrutural do compilador a partir do M2 **[adiado]**.
+- ter alvo de fuzzing (`cargo-fuzz`) para o parser e a fase estrutural do compilador a partir do M2b **[adiado]**.
 
 ### 19.3 Governança
 
@@ -1507,68 +1525,74 @@ Políticas:
 
 ## 20. Roadmap
 
-### M0 — Fatia vertical headless
+A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte operacional. A ordem de trabalho é: contratos (M0), fatia headless (M1), viewer (M2a), editor (M2b). O viewer não começa antes da saída do M1.
 
-- Workspace (`circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli`, `xtask`), `rust-toolchain.toml`, `.gitattributes`, `deny.toml`.
-- IDs, `Schematic`, catálogo mínimo (`supply.terminal`, `pushbutton_no/nc`, `contactor.generic`).
-- `compile` com `CompileOutput` e diagnósticos estruturais e semânticos essenciais.
-- `Solver`, runtime com tick, commit, `DelayConfig` e trace.
-- `circuit-project`: JSON canônico v1 e leitura em duas fases.
-- CLI: `validate`, `simulate`, `test`.
-- CI em Linux, Windows e macOS, `check-architecture` e `cargo check` WASM do núcleo.
-- ADR-001 a ADR-004 escritos antes de congelar os contratos (§22).
+### M0 — Fundação e contratos (concluído)
 
-**Critério de conclusão:** o golden "comando da partida direta" (§23) passa nos três sistemas operacionais; a fixture faz round-trip byte a byte; verificações de arquitetura e de WASM verdes.
+- Workspace, toolchain, resolver 3 e membros explícitos.
+- IDs `u64` por tipo; separação dispositivo, símbolo e terminal; chaves estruturais de terminal.
+- Condutores e perfis de alimentação; diagnósticos e validação estrutural iniciais.
+- `xtask check-architecture` e CI com fmt, clippy, testes, `cargo-deny` e arquitetura.
 
-### M1 — Motor completo do MVP
+**Critério:** contratos documentados que compilam e têm testes iniciais.
 
-- TON e TOF, relé térmico, chave com retenção, fusível, lâmpada, buzzer, motor de três terminais.
-- Circuito de força: condutores, regras de conflito, cargas e rótulos de tensão.
-- Partida direta completa e reversor (três casos).
-- `FaultPolicy`, checkpoint, restore e replay.
-- `proptest` e benchmarks de compilação e de `step_n`.
+### M1 — Fatia vertical headless
 
-**Critério de conclusão:** cenários de comando e de força executados sem GUI, com traces determinísticos; propriedades da §17.3 verdes.
+- Consolidar `circuit-domain` e `circuit-diagnostics` em `circuit-model`.
+- `circuit-sim` com módulos de topologia, elétrica, lógica, runtime e trace.
+- Redes de cobre estáticas; união por tick apenas pelos switches fechados.
+- Solver elétrico discreto com máscara de condutores e regras de curto por perfil.
+- Catálogo para Q1, F1, S1, S2, K1 e motor trifásico simplificado.
+- Botões, chave com retenção, bobinas, contatos, TON/TOF e relé térmico com trava.
+- Golden da partida direta e golden do reversor, incluindo o acionamento simultâneo (§17.2, caso 3).
+- `circuit-project` JSON v1 com `next_id`, validação e round-trip.
+- `apps/cli` com `validate`, `simulate` e `test`.
+- Trace de mudanças, não um snapshot por tick.
 
-### M1.5 — Viewer read-only
+**Critério:** cenários de comando e de força rodam sem GUI com traces determinísticos; o caso simultâneo do reversor trava no primeiro curto; round-trip JSON e códigos de saída da CLI testados; propriedades da §17.3 verdes.
 
-Começa ao fim do M0 (contrato de snapshot estável) e roda em paralelo ao M1.
+### M2a — Viewer read-only
 
-- `circuit-render` (`Scene`) e `apps/desktop` (eframe) em modo leitura.
-- Abrir exemplo, animar `SimSnapshot`, acionar botões e chaves, painel de diagnósticos.
-- Primeira rodada de símbolos próprios, com proveniência.
+- `circuit-renderer` com cena neutra (§14.3).
+- `apps/desktop` com egui/eframe, em modo leitura.
+- Abrir `.ocircuit`, compilar e simular.
+- Play, pause, passo, reset e velocidade.
+- Cores por condutor, contatos fechados, bobinas energizadas, motor e estado térmico.
+- Painel de diagnósticos de compilação e de execução.
+- Um `step_n` e um `snapshot()` por frame (§12, §14.5).
 - Benchmarks de renderização com 100, 500 e 2.000 componentes.
 
-**Critério de conclusão:** abrir a partida direta e vê-la funcionando (selo, contator, motor), com o contrato `SimSnapshot → Scene` coberto por testes.
+**Critério:** abrir a partida direta, reproduzir, pausar e inspecionar diagnósticos; `circuit-renderer` não depende de `circuit-sim`.
 
-### M2 — Editor desktop
+### M2b — Editor desktop
 
-- `circuit-editor` (comandos, undo/redo, hit-test, roteamento ortogonal).
-- Canvas e câmera, biblioteca de componentes, seleção, movimentação, rotação e exclusão, fios e junções, inspetor.
-- JSON com migrações iniciais e salvamento atômico.
-- `egui_kittest` nos fluxos essenciais; fuzzing do loader.
+- `circuit-editor` e `circuit-commands`: comandos transacionais, undo/redo, hit-test e roteamento ortogonal (§14.6).
+- Canvas e câmera, biblioteca de componentes, seleção, movimentação, rotação, exclusão, fios e junções, inspetor.
+- Salvamento atômico (§15.4) e migrações iniciais do JSON.
+- `egui_kittest` nos fluxos essenciais; fuzzing do loader (§19.2).
 
-**Critério de conclusão:** desenhar, salvar, abrir e simular uma partida direta.
+**Critério:** desenhar, salvar, reabrir e simular uma partida direta, com undo/redo sem aplicação parcial.
 
 ### M3 — Circuitos avançados e exportação
 
-- Motor com seis terminais e enrolamentos.
-- Estrela-triângulo.
-- Avaliação de solver especializado ou MNA.
-- Diagnósticos elétricos ampliados.
-- Exportação SVG e PDF (`circuit-export`).
+- Contatos de comutação e intertravamento completo.
+- Motor de seis terminais e enrolamentos.
+- Estrela-triângulo sem sobreposição de contatores.
+- Múltiplas seções de alimentação galvanicamente separadas.
+- Exportação SVG a partir da cena neutra (`circuit-export`); PDF após spike (§18.1).
+- Benchmarks para documentos maiores.
 
-**Critério de conclusão:** cenário estrela-triângulo validado com modelo elétrico adequado, sem sobreposição indevida dos contatores.
+**Critério:** estrela-triângulo validada com modelo de enrolamentos adequado e sem sobreposição indevida; SVG determinístico; PDF escolhido com justificativa registrada ou explicitamente adiado.
 
 ### M4 — Ecossistema
 
 - Aplicação WASM.
-- Integração Modbus TCP por adaptador (`circuit-io`).
-- Avaliação de OPC UA e MQTT.
-- Catálogo orientado a dados e plugins WASM.
-- Mais componentes e exemplos; documentação de extensão e comunidade.
+- Plugins.
+- Modbus TCP por adaptador (`circuit-io`); avaliação de OPC UA e MQTT.
+- Catálogo orientado a dados e símbolos de terceiros; mais componentes e exemplos.
+- Documentação de extensão e comunidade.
 
-**Critério de conclusão:** plataforma extensível, com interfaces de integração documentadas e limites de segurança definidos.
+**Critério:** plataforma extensível, com interfaces de integração documentadas e limites de segurança explícitos.
 
 ---
 
@@ -1584,7 +1608,7 @@ Começa ao fim do M0 (contrato de snapshot estável) e roda em paralelo ao M1.
 | Escopo excessivo | Alto | MVP restrito; critérios de saída mensuráveis por marco |
 | Estrutura antes do código (crates, ADRs, documentos) | Médio/alto | Módulos antes de crates (§5.3); 4 ADRs; código como fonte de verdade (§22) |
 | Contratos divergirem do documento | Médio/alto | Documento corrigido na mesma PR que muda o contrato; goldens e testes de snapshot de códigos |
-| GUI tardia, sem retorno visível | Médio/alto | Viewer read-only em M1.5, em paralelo ao M1 (§14.4) |
+| GUI tardia, sem retorno visível | Médio/alto | Viewer read-only em M2a, logo após o M1 (§14.4) |
 | Fixtures divergirem entre sistemas (fim de linha) | Médio | `.gitattributes` com `eol=lf`; serialização canônica; CI em três SOs (§15.1) |
 | Forks de terceiros | Médio/alto | Preferir crates.io; fixar revisões só quando necessário (§5.5) |
 | egui em canvas CAD grande | Médio/alto | Benchmarks, culling e cache (§14.5) |
@@ -1603,7 +1627,7 @@ Documentos do projeto, com papéis distintos:
 
 - **`SIMULATION.md` (normativo):** semântica do tick, entradas, atraso de atuação, temporizadores, regras do solver, formato do trace.
 - **`FORMAT.md` (normativo):** schema JSON, IDs, chaves de terminal, canonicalização, migrações e changelog de versões.
-- Este documento é a visão e a justificativa; depois da v1.0 passa a ser o `ARCHITECTURE.md`. O roadmap fica no `README.md` até o M2.
+- Este documento é a visão e a justificativa; depois da v1.0 passa a ser o `ARCHITECTURE.md`. O roadmap fica em `ROADMAP.md`.
 
 A partir do M0, os **tipos e testes reais** no código são a fonte de verdade dos contratos; os blocos Rust deste documento são ilustrativos.
 
@@ -1622,7 +1646,7 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 
 ## 23. Primeiro incremento executável
 
-A primeira entrega de código é deliberadamente pequena: **três crates, a CLI e o `xtask`**.
+A primeira entrega de código (M1) é deliberadamente pequena: **três crates, a CLI e o `xtask`**.
 
 1. `circuit-model`
 2. `circuit-sim`
@@ -1630,7 +1654,7 @@ A primeira entrega de código é deliberadamente pequena: **três crates, a CLI 
 4. `apps/cli`
 5. `xtask`
 
-Não criar editor, renderer, exportador nem GUI nesta etapa. O viewer (M1.5) começa quando o contrato de snapshot estiver estável.
+Não criar editor, renderer, exportador nem GUI nesta etapa. O viewer (M2a) começa depois da saída do M1.
 
 ### Critério técnico
 
@@ -1638,7 +1662,7 @@ Construir um cenário headless sobre `examples/direct-starter/command.ocircuit` 
 
 1. carrega o arquivo e confirma o round-trip byte a byte;
 2. compila sem erros nem avisos;
-3. cria o `Simulator` com a configuração padrão (1 ms, atrasos 1/1, `Report`);
+3. cria o `Simulator` com a configuração padrão (1 ms, atrasos 1/1, `Halt`);
 4. no tick 2 pressiona S1 e verifica a energização de K1;
 5. no tick 6 solta S1 e verifica a retenção pelo contato de selo;
 6. no tick 10 pressiona S2 (NF) e verifica a desenergização;
@@ -1651,7 +1675,7 @@ Trace esperado (formato ilustrativo; o normativo está em `SIMULATION.md`):
 ```text
 # opencircuit trace v1
 # fingerprint <hex64>
-# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=report
+# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=halt
 t=2  input   S1.pressed  0->1
 t=2  load    K1.coil     on
 t=3  signal  K1.active   0->1
@@ -1688,6 +1712,8 @@ Questões que são decisão de contrato, pois definem arquivo e testes, estão f
 | 12 | Rearme automático e curva do térmico | **[adiado]** | §10.3 |
 | 13 | Catálogo orientado a dados e extensões | **[adiado]** (M4) | §7 |
 | 14 | Intervalo de checkpoints | **[a validar]** | §17.4 |
+| 15 | Política de falha padrão | **Decidido**: `Halt` (fail-closed); `Report` é opt-in | §10.6 |
+| 16 | Esquema de códigos de diagnóstico | **Decidido**: `OC-<CAT>-NNN`, com severidade e coluna de trava | §13.2 |
 
 Respostas ainda abertas devem ser registradas em ADR ou neste documento.
 
@@ -1709,7 +1735,7 @@ As decisões mais importantes:
 
 **A prioridade não é desenhar muitos símbolos. É provar que um circuito pequeno possui semântica correta, reproduzível e testável, e mostrá-lo funcionando cedo.**
 
-O primeiro marco é o golden do comando da partida direta rodando nos três sistemas operacionais (M0). O segundo é a partida direta completa e o reversor, também sem GUI (M1), em paralelo ao viewer (M1.5). A partir desse núcleo, o OpenCircuit cresce sem transformar a interface gráfica em dona da lógica elétrica.
+O primeiro marco é o golden do comando da partida direta rodando nos três sistemas operacionais (M1). O segundo é a partida direta completa e o reversor, também sem GUI, ainda no M1. Depois vêm o viewer (M2a) e o editor (M2b). A partir desse núcleo, o OpenCircuit cresce sem transformar a interface gráfica em dona da lógica elétrica.
 
 ---
 
@@ -1723,7 +1749,7 @@ O primeiro marco é o golden do comando da partida direta rodando nos três sist
 - [ ] Rótulos de tensão usados só para compatibilidade, nunca em cálculo.
 - [ ] Semântica do tick e do commit formalizada; snapshot coerente com o instante resolvido.
 - [ ] Atraso de atuação mínimo de 1 tick; TON e TOF com tabelas de ticks como testes.
-- [ ] `FaultPolicy` definida e testada (`Report` e `Halt`).
+- [ ] `FaultPolicy` definida e testada (`Halt` por padrão; `Report` opt-in).
 - [ ] `CompileOutput` e diagnósticos com códigos `OCxxxx` estáveis.
 - [ ] Limites do solver documentados; `StaticSeriesLoads` e `DynamicUnsupportedTopology` implementados.
 - [ ] Regras de dependência verificadas no CI (`xtask`, `clippy.toml`, `cargo-deny`).

@@ -3,7 +3,8 @@
 The roadmap follows the consolidated architecture proposal. Each milestone has
 an observable exit criterion; features outside the current milestone are not
 started early. The authoritative detail is in
-[`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md).
+[`docs/spec02.md`](docs/spec02.md); milestone numbers here are the ones used
+throughout the repository (the specification's §20 follows them).
 
 ## M0 — Foundation and contracts (done)
 
@@ -19,27 +20,29 @@ started early. The authoritative detail is in
 **Exit criterion:** documented contracts that compile and are covered by initial
 tests. All checks pass at the M0 revision.
 
-M0 builds `circuit-domain` and `circuit-diagnostics`. The first M1 step
-consolidates them into `circuit-model` and creates `circuit-sim`,
-`circuit-project` and `apps/cli`.
+M0 built `circuit-domain` and `circuit-diagnostics`; M1 consolidated them
+into `circuit-model`.
 
-## M1 — Headless vertical slice
+## M1 — Headless vertical slice (implemented; exit pending CI)
 
-- Consolidate `circuit-domain` + `circuit-diagnostics` into `circuit-model`.
-- `circuit-sim` with topology, electrical, logic, runtime and trace modules.
-- Static copper nets; per-tick union only through closed switches.
-- Discrete electrical solver with conductor masks and profile-specific shorts.
-- Catalog for Q1, F1, S1, S2, K1 and a simplified three-phase motor.
-- Pushbuttons, maintained switch, coils, contacts, TON/TOF and thermal latch.
-- Direct-online golden and reversing golden, including simultaneous S1+S2.
-- `circuit-project` JSON v1 with `next_id`, validation and round-trip.
-- `apps/cli` with `validate`, `simulate` and `test`.
-- Change-log trace, not one snapshot per tick.
+- [x] Consolidate `circuit-domain` + `circuit-diagnostics` into `circuit-model`.
+- [x] `circuit-sim` with compile, solve, logic, runtime and trace modules.
+- [x] Static copper nets; per-tick union only through closed switches.
+- [x] Discrete electrical solver with conductor sets and the conflict table.
+- [x] Catalog for Q1, F1, S1, S2, S3, K1, K2, timers, lamps and a simplified
+  three-phase motor.
+- [x] Pushbuttons, maintained switch, coils, contacts, TON/TOF and thermal latch.
+- [x] Direct-online golden and reversing golden, including simultaneous S1+S3.
+- [x] `circuit-project` JSON v1 with `next_id`, strict loading and round-trip.
+- [x] `apps/cli` with `validate`, `simulate` and `test`.
+- [x] Change-log trace, not one snapshot per tick.
+- [ ] CI runs the goldens on Linux, Windows and macOS and checks the core for
+  `wasm32-unknown-unknown` (separate CI pull request).
 
 **Exit criterion:** direct-online and reversing scenarios run headless with
 deterministic change-log traces; the simultaneous reversing case latches at the
-first short; JSON round-trip and CLI exit codes are tested. No GUI dependency in
-the core.
+first short; JSON round-trip and CLI exit codes are tested; the properties of
+spec §17.3 that apply to M1 pass. No GUI dependency in the core.
 
 ## M2a — Read-only viewer
 

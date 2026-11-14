@@ -1,112 +1,209 @@
 # Project format `.ocircuit`
 
-The first project format is JSON with the `.ocircuit` extension. The
-authoritative design rationale is in
-[`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md).
+This document is the normative contract of `circuit-project`. The design
+rationale is in [`docs/spec02.md`](docs/spec02.md) §6 and §15. When this
+document and the code disagree, the code and its tests win and this document
+is fixed in the same change.
 
-## Requirements
+## Rules
 
-- `schema_version` is mandatory;
-- `next_id` is mandatory and must be greater than every persisted ID;
-- persisted entities use stable IDs and terminal keys, never dense indices;
-- devices store `model_id` + `model_version`; terminals live in symbol models;
-- serialization order is deterministic;
-- the document is validated before loading;
-- the application layer performs atomic saves;
-- `schema_version` greater than the supported version is refused;
-- unknown fields are rejected in v1; they are not preserved;
-- round-trip is guaranteed only within the same schema version.
+- The file is JSON (UTF-8) with the `.ocircuit` extension.
+- `schema_version` is mandatory. The current version is 1.
+- `next_id` is mandatory. Every entity of every collection draws its ID from
+  this one counter: IDs start at 1, are unique across collections, are below
+  `next_id`, are at most `2^53 - 1`, and are never reused.
+- There is no floating point anywhere. Voltages are in millivolts, frequencies
+  in millihertz, times in milliseconds. `1.0` is rejected where an integer is
+  expected.
+- Devices store a versioned model reference and parameters, never a behaviour
+  class. Terminals belong to the symbols of the catalog.
+- Wires store endpoints and intermediate waypoints only. Two wires that cross
+  are not connected; a junction is an explicit entity.
+- Unknown fields, repeated fields and repeated parameter keys are rejected.
+  Unknown fields are not preserved.
 
 ## Shape (schema version 1)
 
 ```json
 {
   "schema_version": 1,
-  "next_id": 42,
-  "name": "Partida Direta",
-  "grid_unit": 10,
-  "devices": [
+  "next_id": 6,
+  "project": {
+    "name": "demo",
+    "grid_unit": 10
+  },
+  "supplies": [
     {
       "id": 1,
-      "reference": "K1",
-      "model_id": "contactor.3p",
-      "model_version": 1,
-      "parameters": {}
+      "kind": "dc",
+      "nominal_voltage_mv": 24000,
+      "phase_voltage_mv": null,
+      "frequency_millihz": null,
+      "phase_sequence": null
+    }
+  ],
+  "devices": [
+    {
+      "id": 2,
+      "reference": "P24",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_pos",
+        "supply": 1
+      }
     }
   ],
   "symbols": [
     {
-      "id": 10,
-      "device_id": 1,
-      "symbol_model_id": "contactor.3p.coil",
-      "position": { "x": 0, "y": 0 },
+      "id": 3,
+      "device_id": 2,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": -4
+      },
       "rotation": "deg0"
     }
   ],
-  "junctions": [],
-  "wires": [],
-  "supplies": []
+  "junctions": [
+    {
+      "id": 4,
+      "position": {
+        "x": 2,
+        "y": 0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 5,
+      "from": {
+        "terminal": {
+          "symbol_id": 3,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 4
+      },
+      "route": [
+        {
+          "x": 1,
+          "y": 0
+        }
+      ]
+    }
+  ]
 }
 ```
 
-Notes:
+This text is the canonical form of a small document and is checked by a unit
+test of `circuit-project`. Complete projects are in `examples/`.
 
-- arrays are serialized sorted by ID;
-- `Wire.route` stores only intermediate waypoints; the endpoints are derived
-  from `from` and `to`;
-- `next_id` is a global counter. New entities consume the next value; IDs are
-  never reused after deletion;
-- the example is minimal. A real project contains supplies, wires, junctions
-  and the remaining symbols.
+Field values:
 
-## Versioning
-
-| Found version | Behavior |
+| Field | Values |
 | --- | --- |
-| `== CURRENT` | Deserialize, validate and return. |
-| `< CURRENT` | Apply migrations in order, then validate. |
-| `> CURRENT` | Refuse with `UnsupportedSchemaVersion { found, supported }`. |
+| `supplies[].kind` | `dc`, `single_phase`, `three_phase` |
+| `supplies[].phase_sequence` | `l1_l2_l3`, `l1_l3_l2`, `null` |
+| `symbols[].rotation` | `deg0`, `deg90`, `deg180`, `deg270` |
+| `symbols[].slot` | positive integer for slotted symbols (auxiliary contacts), otherwise `null` |
+| endpoint | `{ "terminal": { "symbol_id": <id>, "terminal": <key> } }` or `{ "junction": <id> }` |
+| `params` values | boolean, integer or string |
+| supply terminal `conductor` | `l1`, `l2`, `l3`, `n`, `pe`, `dc_pos`, `dc_neg` |
+| load `connection` | `dc`, `line_neutral`, `line_line` |
 
-v1 uses `#[serde(deny_unknown_fields)]`. A field unknown to v1 is an error, not
-a silently ignored value. Adding a field requires a new `schema_version` and a
-migration. There is no promise to preserve unknown fields.
+A supply profile must be consistent with its kind: DC has no frequency, phase
+voltage or sequence; single-phase has a frequency and no sequence;
+three-phase has a frequency and a sequence; voltages are positive.
 
-Round-trip guarantee:
+## Terminal keys
 
-```text
-canonicalize(load(save(doc))) == canonicalize(doc)
-```
+Keys are structural and belong to the symbol kind; displayed numbers such as
+13/14 are labels, not keys.
 
-for valid v1 documents. Structural validation and `next_id` validation happen
-before the document is returned.
+| Symbol kind | Terminals |
+| --- | --- |
+| coil | `a1`, `a2` (both required) |
+| contact, fuse link | `p1`, `p2` |
+| main contacts, thermal element | `pole1.in`, `pole1.out`, … per pole |
+| motor | `u1`, `v1`, `w1` |
+| lamp, buzzer | `x1`, `x2` |
+| supply terminal | `out` |
+
+## Catalog (version 1 of each model)
+
+| Model | Symbols (instances) | Parameters |
+| --- | --- | --- |
+| `supply.terminal` | `terminal` (1..255) | `conductor`, `supply` |
+| `pushbutton_no`, `pushbutton_nc` | `contact` (1) | — |
+| `selector.latching` | `contact` (1, NO) | `initial_closed` (default `false`) |
+| `main_switch.3p` | `main` (1, three poles) | `initial_closed` (default `false`) |
+| `contactor.generic` | `coil` (1), `main` (0..1), `aux_no` (0..8, slotted), `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
+| `relay.generic` | `coil` (1), `aux_no`, `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
+| `thermal_overload.generic` | `element` (0..1, three poles), `aux_nc` (0..1), `aux_no` (0..1) | — |
+| `timer_on.generic`, `timer_off.generic` | `coil` (1), `delayed_no`, `delayed_nc` (0..4, slotted) | `rated_voltage_mv`, `connection`, `preset_ms` |
+| `fuse.generic` | `link` (1) | — |
+| `motor.3ph` | `motor` (1) | `rated_voltage_mv` |
+| `lamp.generic`, `buzzer.generic` | `lamp` / `buzzer` (1) | `rated_voltage_mv`, `connection` |
+
+A published `(model id, version)` never changes. Changing a terminal key, a
+parameter or a behaviour creates a new model version with a tested model
+migration.
+
+## Canonical serialization
+
+- fields in the fixed order shown above;
+- every collection sorted by ID; parameters sorted by key;
+- two spaces of indentation, `null` written explicitly, LF line endings and a
+  final newline.
+
+Saving a canonical file that was just loaded reproduces it byte for byte.
+Loading a non-canonical file (other whitespace, other collection order,
+absent `null` fields) is accepted and saves canonically. The repository keeps
+`*.ocircuit` files LF through `.gitattributes`.
+
+## Reading
+
+1. **Phase 1:** parse JSON and read only `schema_version`, which must be a
+   non-negative integer.
+   - Greater than supported: `NewerSchema { found, supported }`. Nothing else
+     is read.
+   - Smaller: apply the migrations in order.
+2. **Phase 2:** deserialize the current schema strictly.
+3. **Limits:** text at most 16 MiB; at most 100 000 entities per collection,
+   1 024 route points per wire, 64 parameters per device, 256 bytes per text
+   value.
+
+Loading checks syntax, schema and limits only. Whether the document makes
+sense (ID ranges and uniqueness, references, designators, models, terminals,
+parameters) is reported by `Schematic::validate` and the compiler as
+diagnostics, so that a broken project can still be opened and explained.
 
 ## I/O boundary
 
-`circuit-project` converts between model structures and JSON. It does not call
-`std::fs` and does not know paths. The desktop application or CLI chooses paths
-and performs atomic writes:
+`circuit-project` converts between text and the model. It does not call
+`std::fs` and does not know paths. The application writes atomically:
 
-1. write to a temporary file in the same directory;
+1. write a temporary file in the same directory;
 2. flush and `fsync`;
-3. rename over the destination;
+3. rename it over the destination;
 4. remove the temporary file on error.
 
 ## Migrations
 
-Every schema version must have a tested migration path. Changing the meaning or
-key of a terminal requires an explicit component migration; terminal semantics
-are never changed silently. The component model version may differ from the
-document schema version.
+A migration is a pure function from the JSON value of version `N` to the
+JSON value of version `N + 1`. It must set `schema_version` to `N + 1`, has a
+pair of before/after fixtures with a test, never invents IDs (it uses
+`next_id`), and is idempotent at its destination. Every schema change adds a
+migration and an entry below.
 
-A migration:
+## Changelog
 
-- receives the JSON of the previous version;
-- produces the JSON of the next version;
-- is idempotent at the destination version;
-- has a test with a real document, not only an isolated field;
-- never invents IDs; it uses `next_id` or computes the next free value.
-
-## Status
-
-The format is not implemented yet. The JSON example documents the intended v1
-schema and must be updated together with the first migration.
+| Version | Change |
+| --- | --- |
+| 1 | First schema. |

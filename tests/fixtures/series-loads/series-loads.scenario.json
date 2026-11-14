@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "circuit": "series-loads.ocircuit",
+  "until_tick": 0,
+  "expect": { "diagnostics": ["OC-MOD-001", "OC-SEM-006"] }
+}

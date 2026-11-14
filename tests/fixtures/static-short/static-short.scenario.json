@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "circuit": "static-short.ocircuit",
+  "until_tick": 0,
+  "expect": { "diagnostics": ["OC-ELEC-001"] }
+}
