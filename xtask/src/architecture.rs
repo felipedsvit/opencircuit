@@ -45,6 +45,15 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // Edits are pure document transformations: no simulator, no renderer,
+    // no I/O.
+    PackageRule {
+        name: "circuit-commands",
+        workspace: &["circuit-model"],
+        external: &["thiserror"],
+        dev: &["proptest"],
+        core: true,
+    },
     // The renderer sees the simulation only through `SimSnapshot`, a type of
     // `circuit-model`; depending on `circuit-sim` would let drawing code
     // reach compiled indices and runtime state.
@@ -79,6 +88,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
     PackageRule {
         name: "xtask",
         workspace: &[
+            "circuit-commands",
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
@@ -420,6 +430,14 @@ mod tests {
                     &[("circuit-model", None), ("proptest", Some("dev"))],
                 ),
                 (
+                    "circuit-commands",
+                    &[
+                        ("circuit-model", None),
+                        ("thiserror", None),
+                        ("proptest", Some("dev")),
+                    ],
+                ),
+                (
                     "opencircuit-desktop",
                     &[
                         ("circuit-model", None),
@@ -475,6 +493,28 @@ mod tests {
             found,
             [
                 "`circuit-renderer` must not have dependency `circuit-sim`; it is not in the allowlist"
+            ]
+        );
+    }
+
+    #[test]
+    fn commands_depending_on_circuit_sim_is_rejected() {
+        let found = violations(
+            &[
+                ("circuit-model", &[]),
+                (
+                    "circuit-commands",
+                    &[("circuit-model", None), ("circuit-sim", None)],
+                ),
+                ("circuit-sim", &[("circuit-model", None)]),
+            ],
+            REGISTRY,
+        );
+
+        assert_eq!(
+            found,
+            [
+                "`circuit-commands` must not have dependency `circuit-sim`; it is not in the allowlist"
             ]
         );
     }
