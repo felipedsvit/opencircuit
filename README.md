@@ -13,7 +13,8 @@ depend on the GUI.
 
 M1, the headless vertical slice, is implemented: circuits are loaded,
 compiled, simulated and checked against golden traces from the command line.
-The GUI starts in M2a as a read-only viewer; the full editor is M2b. See
+M2a, the read-only viewer, is in progress: the desktop application opens a
+project, draws it and runs it with operator controls. The editor is M2b. See
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
@@ -21,18 +22,19 @@ The GUI starts in M2a as a read-only viewer; the full editor is M2b. See
 ```text
 apps/
   cli/                 `opencircuit`: validate, simulate, test
+  desktop/             `opencircuit-desktop`: egui viewer (open, draw, run)
 crates/
-  circuit-model/       IDs, document, catalog, diagnostics, inputs, snapshot
+  circuit-model/       IDs, document, catalog and geometry, diagnostics, inputs, snapshot
   circuit-sim/         compile, solve, logic, runtime, trace
   circuit-project/     JSON .ocircuit: strict loading, canonical writing, migrations
+  circuit-renderer/    neutral scene: primitives with semantic styles, no GUI
 xtask/                 architecture checks and example generation
 examples/              reference projects with scenarios and golden traces
 tests/fixtures/        projects that must be rejected, with their scenarios
 ```
 
-M2a adds `circuit-renderer` and `apps/desktop`; M2b adds `circuit-editor` and
-`circuit-commands`; M3 adds `circuit-export`. The other directories are
-placeholders for those milestones.
+M2b adds `circuit-editor` and `circuit-commands`; M3 adds `circuit-export`.
+The other directories are placeholders for those milestones.
 
 The dependency direction is enforced by
 `cargo run -p xtask -- check-architecture`:
@@ -40,8 +42,8 @@ The dependency direction is enforced by
 ```text
 circuit-model <- circuit-sim
 circuit-model <- circuit-project
-circuit-model <- renderer/commands/editor (M2)
-editor/renderer consume neutral contracts, never simulator internals
+circuit-model <- circuit-renderer (and commands/editor in M2b)
+the renderer consumes SimSnapshot, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```
 
@@ -58,6 +60,21 @@ cargo run -p opencircuit-cli -- test examples tests/fixtures
 reversing starter ends with `runtime latched` at the first short circuit;
 add `--fault-policy report` to watch it oscillate instead. Exit codes: `0`
 success, `1` validation or golden failure, `2` usage or I/O error.
+
+### Running the viewer
+
+```sh
+cargo run -p opencircuit-desktop -- examples/direct-starter/starter.ocircuit
+```
+
+A project can also be dropped on the window or typed in the path field.
+Play, Pause, Step, Reset and the speed control run the simulation; the
+Operator panel (or a click on the symbol) presses S1, opens a switch or trips
+a thermal relay, and the events panel shows the trace as it happens. Wires
+take the colour of the conductors on them; a wire with more than one is drawn
+as a conflict. The right or middle button pans, the wheel zooms, a double
+click fits the sheet. The desktop needs Rust 1.95 (eframe 0.37); the other
+crates build with Rust 1.85.
 
 ## Commands
 

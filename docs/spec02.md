@@ -1455,7 +1455,8 @@ cargo test --workspace --locked
 cargo deny check
 cargo xtask check-architecture
 cargo check --locked --target wasm32-unknown-unknown \
-      -p circuit-model -p circuit-sim -p circuit-project
+      -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer
+cargo +1.85 test --workspace --exclude opencircuit-desktop --locked   # MSRV do núcleo
 ```
 
 O CI nunca executa `--update-golden`. Quando a aplicação web entrar em desenvolvimento, acrescentar build e testes do alvo WASM da aplicação; compilar o núcleo para WASM não garante a portabilidade da aplicação inteira.
