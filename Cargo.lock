@@ -3076,6 +3076,8 @@ version = "0.0.1"
 dependencies = [
  "circuit-model",
  "circuit-project",
+ "circuit-renderer",
+ "circuit-sim",
  "serde_json",
 ]
 

@@ -5,6 +5,7 @@
 //! ```text
 //! cargo run -p xtask -- check-architecture
 //! cargo run -p xtask -- generate-examples [--check]
+//! cargo run -p xtask --release -- bench
 //! ```
 
 #![forbid(unsafe_code)]
@@ -19,6 +20,7 @@
 #![cfg_attr(not(test), deny(clippy::indexing_slicing))]
 
 mod architecture;
+mod bench;
 mod examples;
 
 use std::collections::BTreeSet;
@@ -29,7 +31,8 @@ use serde_json::Value;
 
 const USAGE: &str = "\
 usage: cargo run -p xtask -- check-architecture
-       cargo run -p xtask -- generate-examples [--check]";
+       cargo run -p xtask -- generate-examples [--check]
+       cargo run -p xtask --release -- bench";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -39,6 +42,7 @@ fn main() -> ExitCode {
         (Some("generate-examples"), Some(flag)) if flag == "--check" => {
             report("example check", generate_examples(true))
         }
+        (Some("bench"), None) => report("benchmark", bench::run()),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)

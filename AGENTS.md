@@ -41,6 +41,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo run -p xtask -- check-architecture
 cargo run -p xtask -- generate-examples --check   # example projects match their generator
+cargo run -p xtask --release -- bench               # timings recorded in docs/benchmarks.md
 cargo run -p opencircuit-cli -- test examples tests/fixtures
 cargo run -p opencircuit-desktop -- examples/direct-starter/starter.ocircuit   # open the viewer
 cargo deny check

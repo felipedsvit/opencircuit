@@ -1240,7 +1240,7 @@ Antes do editor, o primeiro artefato visual é um viewer: abre um `.ocircuit`, c
 
 ### 14.5 Desempenho
 
-Criar benchmarks desde cedo com documentos de 100, 500 e 2.000 componentes, medindo: renderização, hit-test, roteamento, compilação, `step`/`step_n` e invalidação de cache. Usar culling por bounding box e invalidação seletiva. Não introduzir otimização complexa sem medição. Os orçamentos-alvo (por exemplo, quanto do frame de 16,6 ms a 60 fps o `step_n` pode consumir) são definidos após o primeiro benchmark **[a validar]**.
+Criar benchmarks desde cedo com documentos de 100, 500 e 2.000 componentes, medindo: renderização, hit-test, roteamento, compilação, `step`/`step_n` e invalidação de cache. Usar culling por bounding box e invalidação seletiva. Não introduzir otimização complexa sem medição. Os orçamentos-alvo (por exemplo, quanto do frame de 16,6 ms a 60 fps o `step_n` pode consumir) partem do primeiro benchmark, registrado em [`benchmarks.md`](benchmarks.md) e regenerado com `cargo run -p xtask --release -- bench`; o custo de pintura do egui ainda não é medido.
 
 Recompilação no editor: após cada comando concluído, com debounce; compilação incremental fica **[adiada]** até que a medição a justifique.
 
@@ -1703,7 +1703,7 @@ Questões que são decisão de contrato, pois definem arquivo e testes, estão f
 |---|---|---|---|
 | 1 | Menor modelo de rede e fontes para o MVP | **Decidido**: máscara de condutores por grupo, um perfil por condutor. Validar nos goldens da partida direta e do reversor | §9 |
 | 2 | Propriedades do motor simplificado | **Decidido**: `Stopped`/`Forward`/`Reverse` e `PhaseLoss`; sem grandezas físicas | §9.4 |
-| 3 | Tick fixo | Padrão de 1 ms **[a validar]** com benchmark de `step_n` em documentos de 500 e 2.000 componentes | §10.1, §14.5 |
+| 3 | Tick fixo | Padrão de 1 ms. Primeira medição (M2a, [`benchmarks.md`](benchmarks.md)): com 2.000 componentes, ~10 µs por tick em regime e ~2,7 ms para a cena, folga ampla no frame de 16,6 ms; reavaliar com circuitos que comutam a cada tick | §10.1, §14.5 |
 | 4 | Roteamento automático do editor | **[a validar]**: primeira versão com traçado ortogonal e waypoints manuais; roteador automático depois | §6.6, M2 |
 | 5 | Persistência e migração do catálogo | **Decidido**: recusa de campos e schema desconhecidos; `ModelRef` com versão e `ModelMigration` | §7, §15 |
 | 6 | WASM | **[a validar]**: núcleo verificado em CI; dependências e recursos de UI da aplicação ainda a avaliar | §17.6, M4 |

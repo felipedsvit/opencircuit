@@ -78,7 +78,12 @@ const PACKAGE_RULES: &[PackageRule] = &[
     },
     PackageRule {
         name: "xtask",
-        workspace: &["circuit-model", "circuit-project", "circuit-sim"],
+        workspace: &[
+            "circuit-model",
+            "circuit-project",
+            "circuit-renderer",
+            "circuit-sim",
+        ],
         external: &["serde_json"],
         dev: &[],
         core: false,
