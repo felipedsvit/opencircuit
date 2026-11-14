@@ -83,7 +83,9 @@ jobs:
         with:
           toolchain: "1.85"
       - uses: Swatinem/rust-cache@v2
-      - run: cargo +1.85 test --workspace --locked
+      # apps/desktop needs a newer Rust (its own `rust-version`); the MSRV of
+      # the core and the CLI stays 1.85.
+      - run: cargo +1.85 test --workspace --exclude opencircuit-desktop --locked
 
   wasm:
     name: Core builds for WebAssembly
@@ -95,4 +97,4 @@ jobs:
           toolchain: 1.99.1
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --locked --target wasm32-unknown-unknown -p circuit-model -p circuit-sim -p circuit-project
+      - run: cargo check --locked --target wasm32-unknown-unknown -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer
