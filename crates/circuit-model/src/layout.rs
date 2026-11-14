@@ -1,0 +1,332 @@
+//! Where things are on the sheet.
+//!
+//! A document stores the position and rotation of each symbol and the
+//! waypoints of each wire. Everything else is derived: a pin is at the symbol
+//! position plus the rotated terminal offset of the catalog, and a wire runs
+//! from the position of its first endpoint through its waypoints to the
+//! position of its second endpoint. Renderer, editor and viewer derive these
+//! positions here, so they always agree.
+//!
+//! Nothing here trusts the document. A reference that does not resolve, an
+//! unknown model or a coordinate that would overflow gives `None`; it never
+//! panics. Structural problems themselves are reported by validation and by
+//! the compiler, not here.
+
+use std::collections::BTreeMap;
+
+use crate::catalog::{ComponentCatalog, SymbolDefinition};
+use crate::geometry::{GridPoint, GridRect};
+use crate::ids::{DeviceId, JunctionId, SymbolId};
+use crate::schematic::{Device, Endpoint, PinRef, Schematic, SymbolInstance, Wire};
+
+/// Lookup tables for the geometry of one document.
+///
+/// Building the index sorts the entities by ID once, so that each query is
+/// logarithmic. When an ID appears twice (a structural error), the first
+/// entity in document order is used, which keeps the result deterministic.
+#[derive(Clone, Debug)]
+pub struct LayoutIndex<'a> {
+    catalog: &'a ComponentCatalog,
+    devices: BTreeMap<DeviceId, &'a Device>,
+    symbols: BTreeMap<SymbolId, &'a SymbolInstance>,
+    junctions: BTreeMap<JunctionId, GridPoint>,
+}
+
+impl<'a> LayoutIndex<'a> {
+    /// Index a document against a catalog.
+    #[must_use]
+    pub fn new(doc: &'a Schematic, catalog: &'a ComponentCatalog) -> Self {
+        let mut devices = BTreeMap::new();
+        for device in &doc.devices {
+            devices.entry(device.id).or_insert(device);
+        }
+        let mut symbols = BTreeMap::new();
+        for symbol in &doc.symbols {
+            symbols.entry(symbol.id).or_insert(symbol);
+        }
+        let mut junctions = BTreeMap::new();
+        for junction in &doc.junctions {
+            junctions.entry(junction.id).or_insert(junction.position);
+        }
+        Self {
+            catalog,
+            devices,
+            symbols,
+            junctions,
+        }
+    }
+
+    /// The symbol instance with this ID.
+    #[must_use]
+    pub fn symbol(&self, id: SymbolId) -> Option<&'a SymbolInstance> {
+        self.symbols.get(&id).copied()
+    }
+
+    /// The device with this ID.
+    #[must_use]
+    pub fn device(&self, id: DeviceId) -> Option<&'a Device> {
+        self.devices.get(&id).copied()
+    }
+
+    /// The catalog definition of a symbol instance: its device, the model of
+    /// that device and the symbol key must all resolve.
+    #[must_use]
+    pub fn definition(&self, id: SymbolId) -> Option<&'a SymbolDefinition> {
+        let instance = self.symbol(id)?;
+        let device = self.device(instance.device_id)?;
+        self.catalog
+            .model(&device.model)?
+            .symbol(&instance.symbol_key)
+    }
+
+    /// Position of one terminal of one symbol.
+    #[must_use]
+    pub fn pin_position(&self, pin: &PinRef) -> Option<GridPoint> {
+        let instance = self.symbol(pin.symbol_id)?;
+        let definition = self.definition(pin.symbol_id)?;
+        let terminal = definition
+            .terminals()
+            .iter()
+            .find(|terminal| terminal.key == pin.terminal)?;
+        instance
+            .rotation
+            .rotate(terminal.offset)?
+            .checked_add(instance.position)
+    }
+
+    /// Position of a wire endpoint.
+    #[must_use]
+    pub fn endpoint_position(&self, endpoint: &Endpoint) -> Option<GridPoint> {
+        match endpoint {
+            Endpoint::Terminal(pin) => self.pin_position(pin),
+            Endpoint::Junction(id) => self.junctions.get(id).copied(),
+        }
+    }
+
+    /// The full path of a wire: its first endpoint, its waypoints, then its
+    /// second endpoint. `None` when an endpoint does not resolve.
+    #[must_use]
+    pub fn wire_polyline(&self, wire: &Wire) -> Option<Vec<GridPoint>> {
+        let from = self.endpoint_position(&wire.from)?;
+        let to = self.endpoint_position(&wire.to)?;
+        let mut points = Vec::with_capacity(wire.route.len().saturating_add(2));
+        points.push(from);
+        points.extend_from_slice(&wire.route);
+        points.push(to);
+        Some(points)
+    }
+
+    /// The area a symbol instance covers on the sheet.
+    #[must_use]
+    pub fn symbol_bounds(&self, id: SymbolId) -> Option<GridRect> {
+        let instance = self.symbol(id)?;
+        let definition = self.definition(id)?;
+        definition
+            .kind()
+            .bounds()
+            .placed(instance.rotation, instance.position)
+    }
+
+    /// The symbol whose area contains the point. When several do, the one
+    /// with the highest ID wins, so the answer does not depend on document
+    /// order.
+    #[must_use]
+    pub fn symbol_at(&self, point: GridPoint) -> Option<SymbolId> {
+        self.symbols
+            .keys()
+            .rev()
+            .copied()
+            .find(|id| self.symbol_bounds(*id).is_some_and(|b| b.contains(point)))
+    }
+}
+
+/// Whether every segment of a path is horizontal or vertical. A path with
+/// fewer than two points has no segment and is orthogonal.
+#[must_use]
+pub fn is_orthogonal(points: &[GridPoint]) -> bool {
+    points
+        .windows(2)
+        .all(|pair| matches!(pair, [a, b] if a.x == b.x || a.y == b.y))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builder::{SchematicBuilder, pin};
+    use crate::geometry::QuarterTurn;
+    use crate::schematic::{ModelRef, TerminalKey};
+
+    fn point(x: i32, y: i32) -> GridPoint {
+        GridPoint::new(x, y)
+    }
+
+    /// A pushbutton at (10, 20) and a junction at (10, 30), wired with one
+    /// waypoint.
+    fn small() -> Schematic {
+        let mut builder = SchematicBuilder::new("layout");
+        let device = builder.device("S1", "pushbutton_no", &[]).unwrap();
+        let contact = builder
+            .symbol(device, "contact", None, point(10, 20))
+            .unwrap();
+        let junction = builder.junction(point(14, 30)).unwrap();
+        builder
+            .wire_routed(pin(contact, "p2"), junction, &[point(10, 30)])
+            .unwrap();
+        builder.finish()
+    }
+
+    #[test]
+    fn pin_is_the_symbol_position_plus_the_terminal_offset() {
+        let doc = small();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+        let contact = doc.symbols[0].id;
+
+        assert_eq!(
+            layout.pin_position(&PinRef {
+                symbol_id: contact,
+                terminal: TerminalKey("p1".to_owned()),
+            }),
+            Some(point(10, 18))
+        );
+    }
+
+    #[test]
+    fn pin_of_a_rotated_symbol_uses_the_rotated_offset() {
+        let mut doc = small();
+        doc.symbols[0].rotation = QuarterTurn::Deg90;
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(
+            layout.pin_position(&PinRef {
+                symbol_id: doc.symbols[0].id,
+                terminal: TerminalKey("p1".to_owned()),
+            }),
+            Some(point(12, 20))
+        );
+    }
+
+    #[test]
+    fn wire_polyline_runs_from_endpoint_through_waypoints_to_endpoint() {
+        let doc = small();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(
+            layout.wire_polyline(&doc.wires[0]),
+            Some(vec![point(10, 22), point(10, 30), point(14, 30)])
+        );
+    }
+
+    #[test]
+    fn wire_to_a_missing_junction_has_no_polyline() {
+        let mut doc = small();
+        doc.junctions.clear();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(layout.wire_polyline(&doc.wires[0]), None);
+    }
+
+    #[test]
+    fn pin_of_an_unknown_model_has_no_position() {
+        let mut doc = small();
+        doc.devices[0].model = ModelRef {
+            id: "does.not.exist".to_owned(),
+            version: 1,
+        };
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(layout.endpoint_position(&doc.wires[0].from), None);
+    }
+
+    #[test]
+    fn unknown_terminal_has_no_position() {
+        let doc = small();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(
+            layout.pin_position(&PinRef {
+                symbol_id: doc.symbols[0].id,
+                terminal: TerminalKey("a1".to_owned()),
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn pin_beyond_the_coordinate_range_has_no_position() {
+        let mut doc = small();
+        doc.symbols[0].position = point(0, i32::MAX);
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(layout.endpoint_position(&doc.wires[0].from), None);
+    }
+
+    #[test]
+    fn symbol_at_finds_the_symbol_covering_the_point() {
+        let doc = small();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(layout.symbol_at(point(11, 21)), Some(doc.symbols[0].id));
+    }
+
+    #[test]
+    fn symbol_at_an_empty_point_finds_nothing() {
+        let doc = small();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(layout.symbol_at(point(40, 40)), None);
+    }
+
+    #[test]
+    fn symbol_at_prefers_the_highest_id_among_overlapping_symbols() {
+        let mut builder = SchematicBuilder::new("overlap");
+        let device = builder.device("K1", "contactor.generic", &[]).unwrap();
+        builder.symbol(device, "coil", None, point(0, 0)).unwrap();
+        let upper = builder
+            .symbol(device, "aux_no", Some(1), point(1, 0))
+            .unwrap();
+        let doc = builder.finish();
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(layout.symbol_at(point(0, 0)), Some(upper));
+    }
+
+    #[test]
+    fn duplicate_ids_resolve_to_the_first_entity() {
+        let mut doc = small();
+        let mut copy = doc.junctions[0].clone();
+        copy.position = point(99, 99);
+        doc.junctions.push(copy);
+        let catalog = ComponentCatalog::builtin();
+        let layout = LayoutIndex::new(&doc, &catalog);
+
+        assert_eq!(
+            layout.endpoint_position(&doc.wires[0].to),
+            Some(point(14, 30))
+        );
+    }
+
+    #[test]
+    fn horizontal_and_vertical_segments_are_orthogonal() {
+        assert!(is_orthogonal(&[point(0, 0), point(0, 5), point(3, 5)]));
+    }
+
+    #[test]
+    fn diagonal_segment_is_not_orthogonal() {
+        assert!(!is_orthogonal(&[point(0, 0), point(0, 5), point(3, 6)]));
+    }
+
+    #[test]
+    fn path_without_segments_is_orthogonal() {
+        assert!(is_orthogonal(&[point(1, 1)]));
+    }
+}

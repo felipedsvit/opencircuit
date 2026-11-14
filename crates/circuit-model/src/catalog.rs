@@ -6,11 +6,14 @@
 //! devices, and a symbol's terminals are fixed by its kind so that a catalog
 //! can never describe a coil without `a1`/`a2`.
 //!
-//! The catalog is defined in Rust code for now. Symbol geometry and displayed
-//! terminal labels arrive with the viewer; nothing here draws anything.
+//! The catalog is defined in Rust code for now. It also fixes the geometry
+//! every view agrees on: where each terminal sits relative to its symbol and
+//! the area a symbol covers. It draws nothing; the artwork belongs to the
+//! renderer.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::geometry::{GridPoint, GridRect};
 use crate::schematic::{ModelRef, ParamValue, SymbolKey, TerminalKey};
 use crate::supply::Conductor;
 
@@ -99,42 +102,95 @@ pub enum SymbolKind {
     SupplyTerminal,
 }
 
+/// Vertical offset of the terminals above the origin of a symbol, in grid
+/// units.
+const ABOVE: i32 = -2;
+
+/// Vertical offset of the terminals below the origin of a symbol, in grid
+/// units.
+const BELOW: i32 = 2;
+
+/// Horizontal distance between the poles of a multi-pole symbol, in grid
+/// units.
+pub const POLE_PITCH: i32 = 4;
+
+/// Offset of the leftmost motor terminal, one pitch left of the origin.
+const MOTOR_LEFT: i32 = -4;
+
 impl SymbolKind {
-    /// The terminals of a symbol of this kind, in canonical order.
+    /// The terminals of a symbol of this kind, in canonical order, with their
+    /// offsets from the symbol origin.
     ///
     /// Two-terminal elements list their two ends; multi-pole elements list
     /// `poleN.in` then `poleN.out` for each pole; the motor lists `u1`, `v1`,
     /// `w1`.
+    ///
+    /// Unrotated, a symbol is drawn top to bottom around its origin: the
+    /// first terminal of a two-terminal element is 2 grid units above it and
+    /// the second 2 below; the poles of a multi-pole element are
+    /// [`POLE_PITCH`] apart and centred, with their inputs above and their
+    /// outputs below; the motor terminals sit above the motor; a supply
+    /// terminal is its own origin.
     #[must_use]
     pub fn terminals(self) -> Vec<TerminalDefinition> {
-        let fixed = |keys: &[&str], required: bool| {
-            keys.iter()
-                .map(|key| TerminalDefinition {
-                    key: TerminalKey((*key).to_owned()),
-                    required,
-                })
-                .collect::<Vec<_>>()
+        let pair = |first: &str, second: &str, required: bool| {
+            vec![
+                TerminalDefinition::new(first, required, GridPoint::new(0, ABOVE)),
+                TerminalDefinition::new(second, required, GridPoint::new(0, BELOW)),
+            ]
         };
         match self {
-            Self::Coil => fixed(&["a1", "a2"], true),
-            Self::ContactNo | Self::ContactNc | Self::FuseLink => fixed(&["p1", "p2"], false),
+            Self::Coil => pair("a1", "a2", true),
+            Self::ContactNo | Self::ContactNc | Self::FuseLink => pair("p1", "p2", false),
             Self::PowerContacts { poles } | Self::ThermalElement { poles } => (1..=poles)
                 .flat_map(|pole| {
+                    let x = pole_x(pole, poles);
                     [
-                        TerminalDefinition {
-                            key: TerminalKey(format!("pole{pole}.in")),
-                            required: false,
-                        },
-                        TerminalDefinition {
-                            key: TerminalKey(format!("pole{pole}.out")),
-                            required: false,
-                        },
+                        TerminalDefinition::new(
+                            &format!("pole{pole}.in"),
+                            false,
+                            GridPoint::new(x, ABOVE),
+                        ),
+                        TerminalDefinition::new(
+                            &format!("pole{pole}.out"),
+                            false,
+                            GridPoint::new(x, BELOW),
+                        ),
                     ]
                 })
                 .collect(),
-            Self::Motor => fixed(&["u1", "v1", "w1"], false),
-            Self::Lamp | Self::Buzzer => fixed(&["x1", "x2"], false),
-            Self::SupplyTerminal => fixed(&["out"], false),
+            Self::Motor => vec![
+                TerminalDefinition::new("u1", false, GridPoint::new(MOTOR_LEFT, ABOVE)),
+                TerminalDefinition::new("v1", false, GridPoint::new(0, ABOVE)),
+                TerminalDefinition::new("w1", false, GridPoint::new(POLE_PITCH, ABOVE)),
+            ],
+            Self::Lamp | Self::Buzzer => pair("x1", "x2", false),
+            Self::SupplyTerminal => {
+                vec![TerminalDefinition::new("out", false, GridPoint::new(0, 0))]
+            }
+        }
+    }
+
+    /// The area a symbol of this kind covers around its origin, unrotated,
+    /// in grid units. Its terminals lie inside it.
+    #[must_use]
+    pub fn bounds(self) -> GridRect {
+        let corners = |left: i32, top: i32, right: i32, bottom: i32| {
+            GridRect::from_corners(GridPoint::new(left, top), GridPoint::new(right, bottom))
+        };
+        match self {
+            Self::Coil
+            | Self::ContactNo
+            | Self::ContactNc
+            | Self::FuseLink
+            | Self::Lamp
+            | Self::Buzzer => corners(-2, ABOVE, 2, BELOW),
+            Self::PowerContacts { poles } | Self::ThermalElement { poles } => {
+                let outer = pole_x(poles, poles).saturating_add(2);
+                corners(outer.saturating_neg(), ABOVE, outer, BELOW)
+            }
+            Self::Motor => corners(MOTOR_LEFT, ABOVE, POLE_PITCH, 6),
+            Self::SupplyTerminal => corners(-1, -2, 1, 0),
         }
     }
 
@@ -144,6 +200,18 @@ impl SymbolKind {
             _ => None,
         }
     }
+}
+
+/// Horizontal offset of pole `pole` (1-based) of a symbol with `poles`
+/// poles: `(2 * pole - poles - 1) * POLE_PITCH / 2`, which centres the poles
+/// on the origin. Pole counts are at most [`MAX_POLES`], so the arithmetic
+/// cannot overflow; it saturates anyway.
+fn pole_x(pole: u8, poles: u8) -> i32 {
+    let steps = i32::from(pole)
+        .saturating_mul(2)
+        .saturating_sub(i32::from(poles))
+        .saturating_sub(1);
+    steps.saturating_mul(POLE_PITCH / 2)
 }
 
 /// How a two-terminal load connects to its supply.
@@ -185,6 +253,20 @@ pub struct TerminalDefinition {
     pub key: TerminalKey,
     /// Whether the terminal must have at least one wire.
     pub required: bool,
+    /// Position relative to the symbol origin, before rotation, in grid
+    /// units. Part of a published model: moving a terminal would move the
+    /// end of every wire drawn to it, so it needs a new model version.
+    pub offset: GridPoint,
+}
+
+impl TerminalDefinition {
+    fn new(key: &str, required: bool, offset: GridPoint) -> Self {
+        Self {
+            key: TerminalKey(key.to_owned()),
+            required,
+            offset,
+        }
+    }
 }
 
 /// One symbol a component model offers.
@@ -989,6 +1071,86 @@ mod tests {
             .iter()
             .map(|(key, value)| ((*key).to_owned(), value.clone()))
             .collect()
+    }
+
+    /// Every symbol kind the catalog can use, with each pole count.
+    fn every_kind() -> Vec<SymbolKind> {
+        let mut kinds = vec![
+            SymbolKind::Coil,
+            SymbolKind::ContactNo,
+            SymbolKind::ContactNc,
+            SymbolKind::FuseLink,
+            SymbolKind::Motor,
+            SymbolKind::Lamp,
+            SymbolKind::Buzzer,
+            SymbolKind::SupplyTerminal,
+        ];
+        for poles in 1..=MAX_POLES {
+            kinds.push(SymbolKind::PowerContacts { poles });
+            kinds.push(SymbolKind::ThermalElement { poles });
+        }
+        kinds
+    }
+
+    fn offsets(kind: SymbolKind) -> Vec<(i32, i32)> {
+        kind.terminals()
+            .into_iter()
+            .map(|t| (t.offset.x, t.offset.y))
+            .collect()
+    }
+
+    #[test]
+    fn terminals_of_one_symbol_never_share_a_position() {
+        for kind in every_kind() {
+            let positions: BTreeSet<(i32, i32)> = offsets(kind).into_iter().collect();
+
+            assert_eq!(positions.len(), kind.terminals().len(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn terminals_lie_inside_the_symbol_bounds() {
+        for kind in every_kind() {
+            let bounds = kind.bounds();
+            for terminal in kind.terminals() {
+                assert!(
+                    bounds.contains(terminal.offset),
+                    "{kind:?} {}",
+                    terminal.key.0
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn two_terminal_symbols_run_from_above_to_below_the_origin() {
+        assert_eq!(offsets(SymbolKind::Coil), [(0, -2), (0, 2)]);
+    }
+
+    #[test]
+    fn poles_are_centred_on_the_origin_one_pitch_apart() {
+        assert_eq!(
+            offsets(SymbolKind::PowerContacts { poles: 3 }),
+            [(-4, -2), (-4, 2), (0, -2), (0, 2), (4, -2), (4, 2)]
+        );
+    }
+
+    #[test]
+    fn two_poles_are_centred_between_grid_points() {
+        assert_eq!(
+            offsets(SymbolKind::ThermalElement { poles: 2 }),
+            [(-2, -2), (-2, 2), (2, -2), (2, 2)]
+        );
+    }
+
+    #[test]
+    fn motor_terminals_sit_above_the_motor() {
+        assert_eq!(offsets(SymbolKind::Motor), [(-4, -2), (0, -2), (4, -2)]);
+    }
+
+    #[test]
+    fn supply_terminal_is_its_own_origin() {
+        assert_eq!(offsets(SymbolKind::SupplyTerminal), [(0, 0)]);
     }
 
     #[test]

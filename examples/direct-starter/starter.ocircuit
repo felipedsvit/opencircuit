@@ -163,7 +163,7 @@
       "slot": null,
       "position": {
         "x": 0,
-        "y": 25
+        "y": 28
       },
       "rotation": "deg0"
     },
@@ -207,7 +207,7 @@
       "slot": null,
       "position": {
         "x": 24,
-        "y": 5
+        "y": 4
       },
       "rotation": "deg0"
     },
@@ -218,7 +218,7 @@
       "slot": null,
       "position": {
         "x": 24,
-        "y": 15
+        "y": 16
       },
       "rotation": "deg0"
     },
@@ -229,7 +229,7 @@
       "slot": null,
       "position": {
         "x": 0,
-        "y": 3
+        "y": 4
       },
       "rotation": "deg0"
     },
@@ -240,7 +240,7 @@
       "slot": null,
       "position": {
         "x": 0,
-        "y": 7
+        "y": 10
       },
       "rotation": "deg0"
     },
@@ -251,7 +251,7 @@
       "slot": null,
       "position": {
         "x": -4,
-        "y": 14
+        "y": 17
       },
       "rotation": "deg0"
     },
@@ -262,7 +262,7 @@
       "slot": null,
       "position": {
         "x": 0,
-        "y": 21
+        "y": 24
       },
       "rotation": "deg0"
     },
@@ -284,7 +284,7 @@
       "slot": 1,
       "position": {
         "x": 4,
-        "y": 14
+        "y": 17
       },
       "rotation": "deg0"
     },
@@ -295,7 +295,7 @@
       "slot": null,
       "position": {
         "x": 24,
-        "y": 20
+        "y": 22
       },
       "rotation": "deg0"
     }
@@ -305,14 +305,14 @@
       "id": 28,
       "position": {
         "x": 0,
-        "y": 11
+        "y": 14
       }
     },
     {
       "id": 29,
       "position": {
         "x": 0,
-        "y": 17
+        "y": 20
       }
     }
   ],
@@ -373,7 +373,12 @@
           "terminal": "p1"
         }
       },
-      "route": []
+      "route": [
+        {
+          "x": -4,
+          "y": 14
+        }
+      ]
     },
     {
       "id": 34,
@@ -386,7 +391,12 @@
           "terminal": "p1"
         }
       },
-      "route": []
+      "route": [
+        {
+          "x": 4,
+          "y": 14
+        }
+      ]
     },
     {
       "id": 35,
@@ -399,7 +409,12 @@
       "to": {
         "junction": 29
       },
-      "route": []
+      "route": [
+        {
+          "x": -4,
+          "y": 20
+        }
+      ]
     },
     {
       "id": 36,
@@ -412,7 +427,12 @@
       "to": {
         "junction": 29
       },
-      "route": []
+      "route": [
+        {
+          "x": 4,
+          "y": 20
+        }
+      ]
     },
     {
       "id": 37,

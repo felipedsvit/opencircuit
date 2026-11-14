@@ -157,12 +157,27 @@ impl SchematicBuilder {
         from: impl Into<Endpoint>,
         to: impl Into<Endpoint>,
     ) -> Result<WireId, IdExhausted> {
+        self.wire_routed(from, to, &[])
+    }
+
+    /// Add a wire through intermediate waypoints. The two ends are derived
+    /// from the endpoints and are not part of `route`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdExhausted`] when the document has no identifier left.
+    pub fn wire_routed(
+        &mut self,
+        from: impl Into<Endpoint>,
+        to: impl Into<Endpoint>,
+        route: &[GridPoint],
+    ) -> Result<WireId, IdExhausted> {
         let id = WireId(self.ids.alloc()?);
         self.doc.wires.push(Wire {
             id,
             from: from.into(),
             to: to.into(),
-            route: Vec::new(),
+            route: route.to_vec(),
         });
         Ok(id)
     }

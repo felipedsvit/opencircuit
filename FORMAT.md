@@ -137,6 +137,33 @@ Keys are structural and belong to the symbol kind; displayed numbers such as
 | lamp, buzzer | `x1`, `x2` |
 | supply terminal | `out` |
 
+## Symbol geometry
+
+Coordinates are integer grid units; `x` grows to the right and `y` grows
+downwards. A file stores the `position` and `rotation` of each symbol and the
+waypoints of each wire; every other position is derived from the catalog:
+
+- a pin is at the symbol `position` plus the terminal offset rotated by the
+  symbol `rotation`;
+- a wire runs from the position of `from`, through `route`, to the position of
+  `to`;
+- `deg90` is a quarter turn clockwise on screen: the offset `(0, -1)` becomes
+  `(1, 0)`.
+
+Terminal offsets, unrotated:
+
+| Symbol kind | Offsets |
+| --- | --- |
+| coil, contact, fuse link, lamp, buzzer | first terminal `(0, -2)`, second `(0, 2)` |
+| main contacts, thermal element (`n` poles) | pole `k`: `x = (2k - n - 1) * 2`, `in` at `y = -2`, `out` at `y = 2` |
+| motor | `u1` `(-4, -2)`, `v1` `(0, -2)`, `w1` `(4, -2)` |
+| supply terminal | `out` `(0, 0)` |
+
+The poles of a multi-pole symbol are 4 units apart and centred on its origin.
+Geometry carries no electrical meaning and does not enter the circuit
+fingerprint. The editor draws wires with horizontal and vertical segments
+only.
+
 ## Catalog (version 1 of each model)
 
 | Model | Symbols (instances) | Parameters |
@@ -154,8 +181,8 @@ Keys are structural and belong to the symbol kind; displayed numbers such as
 | `lamp.generic`, `buzzer.generic` | `lamp` / `buzzer` (1) | `rated_voltage_mv`, `connection` |
 
 A published `(model id, version)` never changes. Changing a terminal key, a
-parameter or a behaviour creates a new model version with a tested model
-migration.
+terminal offset, a parameter or a behaviour creates a new model version with a
+tested model migration.
 
 ## Canonical serialization
 
