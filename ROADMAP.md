@@ -44,20 +44,20 @@ deterministic change-log traces; the simultaneous reversing case latches at the
 first short; JSON round-trip and CLI exit codes are tested; the properties of
 spec §17.3 that apply to M1 pass. No GUI dependency in the core.
 
-## M2a — Read-only viewer
+## M2a — Read-only viewer (done)
 
-- `circuit-renderer` with a neutral scene.
-- `apps/desktop` with egui/eframe.
-- Load `.ocircuit`, compile and simulate.
-- Play, pause, step, reset and speed.
-- Conductor colors, closed contacts, energized coils, motor and thermal state.
-- Compile and runtime diagnostics panel.
-- `step_n` per frame and one `snapshot()` per frame.
+- [x] `circuit-renderer` with a neutral scene.
+- [x] `apps/desktop` with egui/eframe.
+- [x] Load `.ocircuit`, compile and simulate.
+- [x] Play, pause, step, reset and speed.
+- [x] Conductor colors, closed contacts, energized coils, motor and thermal state.
+- [x] Compile and runtime diagnostics panel.
+- [x] `step_n` per frame and one `snapshot()` per frame.
 
 **Exit criterion:** open the direct-online fixture, play and pause, inspect the
 diagnostics and verify that the renderer does not depend on `circuit-sim`.
 
-## M2b — Editor
+## M2b — Editor (next)
 
 - `circuit-commands` with transactional edits and undo/redo.
 - `circuit-editor` with selection, hit-test, insertion, movement, rotation,
