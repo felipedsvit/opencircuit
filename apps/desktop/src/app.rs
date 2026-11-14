@@ -1,14 +1,16 @@
-//! The window: a bar to open a project, the canvas, and the diagnostics.
+//! The window: a bar to open and run a project, the canvas, the operator
+//! controls with the trace, and the diagnostics.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use circuit_model::{LayoutIndex, Subject};
+use circuit_model::{Control, DeviceId, InputAction, LayoutIndex, Subject};
 use circuit_renderer::SceneOptions;
 use eframe::egui::{self, RichText, Ui};
 
 use crate::camera::Camera;
 use crate::canvas;
+use crate::clock::{SPEEDS, SimClock};
 use crate::session::Session;
 
 /// The desktop application.
@@ -25,6 +27,8 @@ pub struct ViewerApp {
     selection: BTreeSet<Subject>,
     /// Centre the camera on this subject at the next frame.
     focus: Option<Subject>,
+    /// The pushbutton held down on the canvas, released with the pointer.
+    held: Option<DeviceId>,
 }
 
 impl ViewerApp {
@@ -61,6 +65,7 @@ impl ViewerApp {
         self.error = None;
         self.selection.clear();
         self.focus = None;
+        self.held = None;
         self.fit_pending = true;
     }
 
@@ -95,11 +100,26 @@ impl ViewerApp {
             self.open_path(&path);
         }
 
+        // One `step_n` and one snapshot per frame, before anything is drawn.
+        let frame_us = SimClock::frame_us(ui.input(|input| input.stable_dt));
+        if let Some(session) = &mut self.session {
+            session.advance(frame_us);
+            if session.is_running() {
+                ui.ctx().request_repaint();
+            }
+        }
+
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("diagnostics")
             .resizable(true)
             .default_size(140.0)
             .show(ui, |ui| self.diagnostics(ui));
+        if self.session.as_ref().is_some_and(Session::can_simulate) {
+            egui::Panel::right("operator")
+                .resizable(true)
+                .default_size(260.0)
+                .show(ui, |ui| self.operator(ui));
+        }
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
     }
 
@@ -125,9 +145,44 @@ impl ViewerApp {
                 ui.label(RichText::new(&session.document().project.name).strong());
             }
         });
+        if let Some(session) = &mut self.session
+            && session.can_simulate()
+        {
+            ui.horizontal(|ui| simulation_controls(ui, session));
+        }
         if let Some(error) = &self.error {
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
+    }
+
+    fn operator(&mut self, ui: &mut Ui) {
+        let Some(session) = &mut self.session else {
+            return;
+        };
+        ui.strong("Operator");
+        let operable = session.operable();
+        if operable.is_empty() {
+            ui.label("No pushbutton, switch or thermal relay.");
+        }
+        for device in operable {
+            let engaged = session.engaged(device.device, device.control);
+            let mut label = control_label(&device.reference, device.control, engaged);
+            if session.is_pending(device.device) {
+                label.push_str(" (next tick)");
+            }
+            if ui.button(label).clicked() {
+                session.operate(device.device, device.control);
+            }
+        }
+        ui.separator();
+        ui.strong("Events");
+        egui::ScrollArea::vertical()
+            .stick_to_bottom(true)
+            .show(ui, |ui| {
+                for line in session.events() {
+                    ui.monospace(line);
+                }
+            });
     }
 
     fn diagnostics(&mut self, ui: &mut Ui) {
@@ -144,22 +199,29 @@ impl ViewerApp {
             }
         });
         let diagnostics = session.diagnostics();
-        if diagnostics.is_empty() {
+        let faults = session.snapshot().map_or(&[][..], |s| s.faults.as_slice());
+        if diagnostics.is_empty() && faults.is_empty() {
             ui.label("No diagnostics: the project compiles.");
             return;
         }
         let mut chosen = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for diagnostic in diagnostics {
-                let text = format!(
-                    "{} {} {}: {}",
-                    diagnostic.severity(),
-                    diagnostic.code(),
-                    diagnostic.subject(),
-                    diagnostic.message()
-                );
-                if ui.selectable_label(false, text).clicked() {
-                    chosen = Some(diagnostic.subject().clone());
+            for (title, list) in [("Runtime faults", faults), ("Compilation", diagnostics)] {
+                if list.is_empty() {
+                    continue;
+                }
+                ui.label(RichText::new(title).italics());
+                for diagnostic in list {
+                    let text = format!(
+                        "{} {} {}: {}",
+                        diagnostic.severity(),
+                        diagnostic.code(),
+                        diagnostic.subject(),
+                        diagnostic.message()
+                    );
+                    if ui.selectable_label(false, text).clicked() {
+                        chosen = Some(diagnostic.subject().clone());
+                    }
                 }
             }
         });
@@ -193,7 +255,7 @@ impl ViewerApp {
     }
 
     fn canvas(&mut self, ui: &mut Ui) {
-        let Some(session) = &self.session else {
+        let Some(session) = &mut self.session else {
             ui.centered_and_justified(|ui| {
                 ui.label(
                     "Open a project: pass its path on the command line, drop the file here, \
@@ -214,14 +276,95 @@ impl ViewerApp {
         {
             self.camera.center_on(bounds, events.size);
         }
-        if let Some(click) = events.clicked {
+        let symbol_at = |session: &Session, camera: &Camera, at: [f32; 2]| {
             let layout = LayoutIndex::new(session.document(), session.catalog());
-            let hit = self
-                .camera
-                .to_grid(click)
-                .and_then(|point| layout.symbol_at(point));
-            self.selection = hit.map(Subject::Symbol).into_iter().collect();
+            camera
+                .to_grid(at)
+                .and_then(|point| layout.symbol_at(point))
+                .and_then(|id| layout.symbol(id))
+                .map(|symbol| (symbol.id, symbol.device_id))
+        };
+        if let Some(click) = events.clicked {
+            let hit = symbol_at(session, &self.camera, click);
+            self.selection = hit
+                .map(|(symbol, _)| Subject::Symbol(symbol))
+                .into_iter()
+                .collect();
         }
+        // Operating a device on the canvas: a pushbutton is held while the
+        // pointer is down; a switch or a thermal relay changes on press.
+        if let Some(pressed) = events.pressed
+            && let Some((_, device)) = symbol_at(session, &self.camera, pressed)
+            && let Some(control) = session.control_of(device)
+        {
+            if control == Control::Hold {
+                session.queue(InputAction::Press(device));
+                self.held = Some(device);
+            } else {
+                session.operate(device, control);
+            }
+        }
+        if events.released
+            && let Some(device) = self.held.take()
+        {
+            session.queue(InputAction::Release(device));
+        }
+    }
+}
+
+/// The text of the button of an operator control.
+fn control_label(reference: &str, control: Control, engaged: bool) -> String {
+    let verb = match (control, engaged) {
+        (Control::Hold, false) => "press",
+        (Control::Hold, true) => "release",
+        (Control::Toggle, false) => "close",
+        (Control::Toggle, true) => "open",
+        (Control::Trip, false) => "trip",
+        (Control::Trip, true) => "reset",
+    };
+    format!("{reference}: {verb}")
+}
+
+/// Play, pause, step, reset, fault reset, speed and time.
+fn simulation_controls(ui: &mut Ui, session: &mut Session) {
+    if session.is_running() {
+        if ui.button("Pause").clicked() {
+            session.pause();
+        }
+    } else if ui
+        .add_enabled(!session.is_faulted(), egui::Button::new("Play"))
+        .clicked()
+    {
+        session.play();
+    }
+    if ui.button("Step").clicked() {
+        session.step();
+    }
+    if ui.button("Reset").clicked() {
+        session.reset();
+    }
+    if ui
+        .add_enabled(session.is_faulted(), egui::Button::new("Reset fault"))
+        .clicked()
+    {
+        session.reset_fault();
+    }
+    let mut speed = session.clock().speed_index();
+    egui::ComboBox::from_label("Speed")
+        .selected_text(session.clock().speed().label())
+        .show_ui(ui, |ui| {
+            for (index, choice) in SPEEDS.iter().enumerate() {
+                ui.selectable_value(&mut speed, index, choice.label());
+            }
+        });
+    session.clock_mut().set_speed_index(speed);
+    let elapsed_ms = session
+        .next_tick()
+        .saturating_mul(u64::from(session.tick_us()))
+        / 1_000;
+    ui.label(format!("tick {} · {elapsed_ms} ms", session.next_tick()));
+    if let Some(message) = session.message() {
+        ui.colored_label(ui.visuals().error_fg_color, message);
     }
 }
 

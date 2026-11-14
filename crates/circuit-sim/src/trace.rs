@@ -136,53 +136,66 @@ pub fn format_trace(
         header.tick_us, header.pickup_ticks, header.dropout_ticks, header.fault_policy
     );
     for event in events {
-        let _ = write!(out, "t={} ", event.tick);
-        match &event.kind {
-            TraceKind::Signal {
-                device,
-                kind,
-                from,
-                to,
-            } => {
-                let word = if kind.is_input() { "input" } else { "signal" };
-                let _ = write!(
-                    out,
-                    "{word} {}.{} {}->{}",
-                    device_name(circuit, *device),
-                    signal_name(circuit, *device, *kind),
-                    u8::from(*from),
-                    u8::from(*to)
-                );
-            }
-            TraceKind::Load {
-                device,
-                symbol,
-                activity,
-            } => {
-                let _ = write!(
-                    out,
-                    "load {}.{} {}",
-                    device_name(circuit, *device),
-                    load_name(circuit, *symbol),
-                    activity.as_str()
-                );
-            }
-            TraceKind::FaultStarted {
-                code,
-                subject,
-                related,
-            } => write_fault(&mut out, circuit, *code, "started", subject, related),
-            TraceKind::FaultCleared {
-                code,
-                subject,
-                related,
-            } => write_fault(&mut out, circuit, *code, "cleared", subject, related),
-            TraceKind::Latched => out.push_str("runtime latched"),
-            TraceKind::LatchReset => out.push_str("runtime latch-reset"),
-        }
+        write_event(&mut out, circuit, event);
         out.push('\n');
     }
     out
+}
+
+/// Render one event as a line of the trace, without the line feed: the
+/// same text as in [`format_trace`].
+#[must_use]
+pub fn format_event(circuit: &CompiledCircuit, event: &TraceEvent) -> String {
+    let mut out = String::new();
+    write_event(&mut out, circuit, event);
+    out
+}
+
+fn write_event(out: &mut String, circuit: &CompiledCircuit, event: &TraceEvent) {
+    let _ = write!(out, "t={} ", event.tick);
+    match &event.kind {
+        TraceKind::Signal {
+            device,
+            kind,
+            from,
+            to,
+        } => {
+            let word = if kind.is_input() { "input" } else { "signal" };
+            let _ = write!(
+                out,
+                "{word} {}.{} {}->{}",
+                device_name(circuit, *device),
+                signal_name(circuit, *device, *kind),
+                u8::from(*from),
+                u8::from(*to)
+            );
+        }
+        TraceKind::Load {
+            device,
+            symbol,
+            activity,
+        } => {
+            let _ = write!(
+                out,
+                "load {}.{} {}",
+                device_name(circuit, *device),
+                load_name(circuit, *symbol),
+                activity.as_str()
+            );
+        }
+        TraceKind::FaultStarted {
+            code,
+            subject,
+            related,
+        } => write_fault(out, circuit, *code, "started", subject, related),
+        TraceKind::FaultCleared {
+            code,
+            subject,
+            related,
+        } => write_fault(out, circuit, *code, "cleared", subject, related),
+        TraceKind::Latched => out.push_str("runtime latched"),
+        TraceKind::LatchReset => out.push_str("runtime latch-reset"),
+    }
 }
 
 fn write_fault(

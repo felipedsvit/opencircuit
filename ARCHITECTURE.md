@@ -25,7 +25,7 @@ second real consumer justifies the boundary.
 | Project | `circuit-project` | JSON `.ocircuit`, `schema_version`, strict loading, limits, migrations and canonical round-trip |
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation and golden execution |
-| Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that opens and draws a project; the only package with a GUI dependency |
+| Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that opens, draws and runs a project with operator controls; the only package with a GUI dependency |
 | Tooling | `xtask` | Architecture checks and generation of the example projects |
 
 Modules of `circuit-sim` and the imports each may use:

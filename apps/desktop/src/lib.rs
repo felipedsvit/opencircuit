@@ -19,6 +19,7 @@
 pub mod app;
 pub mod camera;
 mod canvas;
+pub mod clock;
 pub mod files;
 pub mod session;
 mod theme;

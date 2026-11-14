@@ -711,6 +711,65 @@ fn action_that_does_not_fit_the_device_class_is_rejected() {
 }
 
 #[test]
+fn format_event_gives_each_event_line_of_the_trace() {
+    let mut sim = default_sim(&command_circuit());
+    let s1 = id(&sim, "S1");
+    sim.step(&[InputAction::Press(s1)]).unwrap();
+    sim.step_n(3, &[InputAction::Release(s1)]).unwrap();
+    let events = sim.take_trace();
+
+    let text = format_trace(sim.circuit(), &sim.trace_header(), &events);
+    let lines: Vec<String> = events
+        .iter()
+        .map(|event| crate::trace::format_event(sim.circuit(), event))
+        .collect();
+
+    assert!(!lines.is_empty());
+    assert_eq!(text.lines().skip(3).collect::<Vec<_>>(), lines);
+}
+
+#[test]
+fn operator_controls_list_exactly_the_actions_the_simulator_accepts() {
+    let sim = default_sim(&direct_online_circuit());
+    let mut classes_seen = std::collections::BTreeSet::new();
+
+    for device in sim.circuit().devices() {
+        classes_seen.insert(device.class);
+        let offered = circuit_model::operator_controls(device.class);
+        for control in circuit_model::Control::ALL {
+            for action in control.actions(device.id) {
+                let accepted = !matches!(
+                    sim.clone().step(&[action]),
+                    Err(SimulationError::InvalidInput(InvalidInput::ClassMismatch(
+                        _
+                    )))
+                );
+
+                assert_eq!(
+                    accepted,
+                    offered.contains(&control),
+                    "{} ({:?}): {action:?}",
+                    device.reference.0,
+                    device.class
+                );
+            }
+        }
+    }
+    // The circuit covers every class that has a control, and classes that
+    // have none.
+    for class in [
+        DeviceClass::Pushbutton,
+        DeviceClass::LatchingSwitch,
+        DeviceClass::ThermalOverload,
+        DeviceClass::Contactor,
+        DeviceClass::Motor,
+        DeviceClass::PowerSupply,
+    ] {
+        assert!(classes_seen.contains(&class), "{class:?}");
+    }
+}
+
+#[test]
 fn two_actions_on_one_device_in_one_tick_are_rejected() {
     let mut sim = default_sim(&command_circuit());
     let s1 = id(&sim, "S1");

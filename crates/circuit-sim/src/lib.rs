@@ -52,4 +52,4 @@ pub use runtime::{
     RestoreError, SimConfig, SimulationError, Simulator, StepOutcome,
 };
 pub use solve::{Direction, ElectricalSolution, LoadState, Solver, SwitchMask};
-pub use trace::{LoadActivity, TraceEvent, TraceHeader, TraceKind, format_trace};
+pub use trace::{LoadActivity, TraceEvent, TraceHeader, TraceKind, format_event, format_trace};
