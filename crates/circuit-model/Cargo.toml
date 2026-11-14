@@ -1,0 +1,11 @@
+[package]
+name = "circuit-model"
+description = "OpenCircuit document model, component catalog, diagnostics and snapshot types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }

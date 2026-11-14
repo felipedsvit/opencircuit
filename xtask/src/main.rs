@@ -6,103 +6,86 @@
 //! cargo run -p xtask -- check-architecture
 //! ```
 
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unimplemented,
+    clippy::todo,
+    clippy::unreachable
+)]
+#![cfg_attr(not(test), deny(clippy::indexing_slicing))]
+
+mod architecture;
+
 use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use serde_json::Value;
 
-const SIMULATION_CORE: &[&str] = &["circuit-electrical", "circuit-logic", "circuit-simulation"];
-const RUNTIME_FORBIDDEN: &[&str] = &[
-    "circuit-commands",
-    "circuit-editor",
-    "circuit-project",
-    "circuit-renderer",
-];
-const UI_ADAPTERS: &[&str] = &["circuit-editor", "circuit-renderer"];
-const SIMULATION_FORBIDDEN: &[&str] = &["circuit-simulation"];
-const GUI_DEPENDENCIES: &[&str] = &["eframe", "egui"];
+const USAGE: &str = "usage: cargo run -p xtask -- check-architecture";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     match (args.next().as_deref(), args.next()) {
-        (Some("check-architecture"), None) => check_architecture(),
+        (Some("check-architecture"), None) => report("architecture check", check_architecture()),
         _ => {
-            eprintln!("usage: cargo run -p xtask -- check-architecture");
+            eprintln!("{USAGE}");
             ExitCode::from(2)
         }
     }
 }
 
-fn check_architecture() -> ExitCode {
-    let metadata = match cargo_metadata() {
-        Ok(metadata) => metadata,
-        Err(error) => {
-            eprintln!("architecture check: {error}");
-            return ExitCode::FAILURE;
+/// Print the outcome of a task. `Ok` carries the summary; `Err` the problems.
+fn report(task: &str, outcome: Result<String, Vec<String>>) -> ExitCode {
+    match outcome {
+        Ok(summary) => {
+            println!("{task} passed: {summary}");
+            ExitCode::SUCCESS
         }
-    };
-
-    let Some(packages) = metadata["packages"].as_array() else {
-        eprintln!("architecture check: cargo metadata did not return a package list");
-        return ExitCode::FAILURE;
-    };
-
-    let mut violations = BTreeSet::new();
-
-    for package in packages {
-        let Some(name) = package["name"].as_str() else {
-            continue;
-        };
-        let dependencies = dependency_names(package);
-
-        for dependency in &dependencies {
-            let dependency = *dependency;
-
-            if name == "circuit-domain" && dependency.starts_with("circuit-") {
-                violations.insert(format!(
-                    "circuit-domain must not depend on workspace crate `{dependency}`"
-                ));
+        Err(problems) => {
+            eprintln!("{task} failed:");
+            for problem in problems {
+                eprintln!("  - {problem}");
             }
-
-            if SIMULATION_CORE.contains(&name) && RUNTIME_FORBIDDEN.contains(&dependency) {
-                violations.insert(format!(
-                    "`{name}` must not depend on `{dependency}`; simulation and logic stay headless"
-                ));
-            }
-
-            if UI_ADAPTERS.contains(&name) && SIMULATION_FORBIDDEN.contains(&dependency) {
-                violations.insert(format!(
-                    "`{name}` must not depend on `{dependency}`; consume neutral snapshot contracts instead"
-                ));
-            }
-
-            if name.starts_with("circuit-") && GUI_DEPENDENCIES.contains(&dependency) {
-                violations.insert(format!(
-                    "`{name}` must not depend on `{dependency}`; GUI code belongs in apps/desktop"
-                ));
-            }
+            ExitCode::FAILURE
         }
     }
+}
+
+fn check_architecture() -> Result<String, Vec<String>> {
+    let metadata = cargo_metadata().map_err(|error| vec![error])?;
+    let root = workspace_root(&metadata).map_err(|error| vec![error])?;
+
+    let mut violations = architecture::dependency_violations(&metadata);
+
+    let sim_modules = sim_modules(&root).map_err(|error| vec![error])?;
+    violations.extend(architecture::module_violations(&sim_modules));
+
+    let mut core_sources = Vec::new();
+    for name in architecture::core_crates() {
+        let directory = root.join("crates").join(name).join("src");
+        collect_sources(&root, &directory, &mut core_sources).map_err(|error| vec![error])?;
+    }
+    violations.extend(architecture::forbidden_api_violations(&core_sources));
 
     if violations.is_empty() {
-        println!(
-            "architecture check passed for {} workspace package(s)",
-            packages.len()
-        );
-        ExitCode::SUCCESS
+        Ok(format!(
+            "{} circuit-sim modules and {} core source files checked",
+            sim_modules.len(),
+            core_sources.len()
+        ))
     } else {
-        eprintln!("architecture check failed:");
-        for violation in violations {
-            eprintln!("  - {violation}");
-        }
-        ExitCode::FAILURE
+        Err(violations.into_iter().collect())
     }
 }
 
 fn cargo_metadata() -> Result<Value, String> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
     let output = Command::new(cargo)
-        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .args(["metadata", "--format-version", "1", "--locked"])
         .output()
         .map_err(|error| format!("could not run `cargo metadata`: {error}"))?;
 
@@ -115,11 +98,80 @@ fn cargo_metadata() -> Result<Value, String> {
         .map_err(|error| format!("could not parse `cargo metadata` output: {error}"))
 }
 
-fn dependency_names(package: &Value) -> BTreeSet<&str> {
-    package["dependencies"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|dependency| dependency["name"].as_str())
-        .collect()
+fn workspace_root(metadata: &Value) -> Result<PathBuf, String> {
+    metadata
+        .get("workspace_root")
+        .and_then(Value::as_str)
+        .map(PathBuf::from)
+        .ok_or_else(|| "cargo metadata did not report the workspace root".to_owned())
+}
+
+/// Production modules of `circuit-sim` as `(module name, source)`. Test
+/// support files are not subject to the import rules.
+fn sim_modules(root: &Path) -> Result<Vec<(String, String)>, String> {
+    let directory = root.join("crates").join("circuit-sim").join("src");
+    let mut sources = Vec::new();
+    collect_sources(root, &directory, &mut sources)?;
+    let mut modules = Vec::new();
+    for (path, source) in sources {
+        let Some(module) = Path::new(&path).file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        if module == "lib" || module == "testkit" || module.ends_with("_tests") {
+            continue;
+        }
+        modules.push((module.to_owned(), source));
+    }
+    Ok(modules)
+}
+
+/// Read every `.rs` file under `directory`, recursively, as
+/// `(path relative to the workspace root, source)` in a stable order.
+fn collect_sources(
+    root: &Path,
+    directory: &Path,
+    out: &mut Vec<(String, String)>,
+) -> Result<(), String> {
+    collect_sources_bounded(root, directory, out, MAX_SOURCE_DEPTH)
+}
+
+/// Deepest directory nesting followed below a crate's `src`. A symbolic-link
+/// cycle must end in an error, not in unbounded recursion.
+const MAX_SOURCE_DEPTH: u32 = 16;
+
+fn collect_sources_bounded(
+    root: &Path,
+    directory: &Path,
+    out: &mut Vec<(String, String)>,
+    depth_left: u32,
+) -> Result<(), String> {
+    let Some(depth_left) = depth_left.checked_sub(1) else {
+        return Err(format!(
+            "{} is nested deeper than {MAX_SOURCE_DEPTH} directories",
+            directory.display()
+        ));
+    };
+    let entries = std::fs::read_dir(directory)
+        .map_err(|error| format!("could not read {}: {error}", directory.display()))?;
+    let mut paths = BTreeSet::new();
+    for entry in entries {
+        let entry =
+            entry.map_err(|error| format!("could not read {}: {error}", directory.display()))?;
+        paths.insert(entry.path());
+    }
+    for path in paths {
+        if path.is_dir() {
+            collect_sources_bounded(root, &path, out, depth_left)?;
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            let source = std::fs::read_to_string(&path)
+                .map_err(|error| format!("could not read {}: {error}", path.display()))?;
+            let display = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            out.push((display, source));
+        }
+    }
+    Ok(())
 }

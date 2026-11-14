@@ -1,0 +1,14 @@
+[package]
+name = "circuit-sim"
+description = "OpenCircuit topology compiler, discrete electrical solver, device logic and deterministic runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+circuit-model = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
