@@ -97,4 +97,4 @@ jobs:
           toolchain: 1.99.1
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --locked --target wasm32-unknown-unknown -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer
+      - run: cargo check --locked --target wasm32-unknown-unknown -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer -p circuit-commands -p circuit-editor
