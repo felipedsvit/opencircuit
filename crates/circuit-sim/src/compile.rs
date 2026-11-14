@@ -15,9 +15,9 @@ use circuit_model::catalog::{
 };
 use circuit_model::{
     ComponentCatalog, ComponentModel, Conductor, ConductorSet, Connection, Device, DeviceClass,
-    DeviceId, Diagnostic, DiagnosticCode, Endpoint, JunctionId, PhaseSequence, PinRef, Schematic,
-    Subject, SupplyId, SupplyKind, SupplyProfile, SymbolDefinition, SymbolId, SymbolInstance,
-    SymbolKey, SymbolKind, TimerMode, has_errors, sort_diagnostics,
+    DeviceId, Diagnostic, DiagnosticCode, Endpoint, JunctionId, LayoutIndex, PhaseSequence, PinRef,
+    Schematic, Subject, SupplyId, SupplyKind, SupplyProfile, SymbolDefinition, SymbolId,
+    SymbolInstance, SymbolKey, SymbolKind, TimerMode, has_errors, is_orthogonal, sort_diagnostics,
 };
 
 use crate::compiled::{
@@ -57,6 +57,7 @@ impl CompileOutput {
 pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutput {
     let mut diagnostics = schematic.validate();
     let resolved = resolve(schematic, catalog, &mut diagnostics);
+    report_non_orthogonal_wires(schematic, catalog, &mut diagnostics);
 
     let circuit = if has_errors(&diagnostics) {
         None
@@ -73,6 +74,32 @@ pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutp
     CompileOutput {
         circuit,
         diagnostics,
+    }
+}
+
+/// Warn about every wire with a segment that is neither horizontal nor
+/// vertical. Geometry has no electrical meaning, so this never blocks the
+/// compilation; a wire whose ends do not resolve is reported elsewhere.
+fn report_non_orthogonal_wires(
+    schematic: &Schematic,
+    catalog: &ComponentCatalog,
+    out: &mut Vec<Diagnostic>,
+) {
+    let layout = LayoutIndex::new(schematic, catalog);
+    for wire in &schematic.wires {
+        let Some(path) = layout.wire_polyline(wire) else {
+            continue;
+        };
+        if !is_orthogonal(&path) {
+            out.push(Diagnostic::new(
+                DiagnosticCode::NonOrthogonalWire,
+                Subject::Wire(wire.id),
+                format!(
+                    "wire {} has a segment that is neither horizontal nor vertical",
+                    wire.id
+                ),
+            ));
+        }
     }
 }
 

@@ -3,7 +3,8 @@
 use circuit_model::builder::pin;
 use circuit_model::{
     ComponentCatalog, DeviceId, DiagnosticCode, Endpoint, GridPoint, InputAction, JunctionId,
-    ParamValue, PhaseSequence, Schematic, SchematicBuilder, SupplyId, SymbolId,
+    LayoutIndex, ParamValue, PhaseSequence, Schematic, SchematicBuilder, SupplyId, SymbolId,
+    orthogonal_route,
 };
 
 use crate::compile::{CompileOutput, compile};
@@ -120,8 +121,35 @@ impl Rig {
         ]
     }
 
+    /// The document, with every wire given an orthogonal route: the row
+    /// layout would otherwise make most wires diagonal, and the tests are
+    /// not about `NonOrthogonalWire`.
     pub(crate) fn finish(self) -> Schematic {
-        self.builder.finish()
+        let mut doc = self.builder.finish();
+        let catalog = ComponentCatalog::builtin();
+        let routes: Vec<Option<Vec<GridPoint>>> = {
+            let layout = LayoutIndex::new(&doc, &catalog);
+            doc.wires
+                .iter()
+                .map(|wire| {
+                    match (
+                        layout.endpoint_position(&wire.from),
+                        layout.endpoint_position(&wire.to),
+                    ) {
+                        (Some(from), Some(to)) if wire.route.is_empty() => {
+                            Some(orthogonal_route(from, to))
+                        }
+                        _ => None,
+                    }
+                })
+                .collect()
+        };
+        for (wire, route) in doc.wires.iter_mut().zip(routes) {
+            if let Some(route) = route {
+                wire.route = route;
+            }
+        }
+        doc
     }
 }
 
