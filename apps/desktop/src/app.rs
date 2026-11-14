@@ -18,10 +18,47 @@ use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
 use crate::inspector::{self, InspectorState};
 use crate::palette;
-use crate::session::Session;
+use crate::session::{SaveError, Session};
 
 /// Radius of the ring marking the pin under the pointer, in subunits.
 const PIN_RING: i64 = SUBUNITS_PER_GRID / 2;
+/// Extension of project files.
+const EXTENSION: &str = "ocircuit";
+
+/// An action that would drop unsaved changes, waiting for the user to save,
+/// discard or cancel.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum Pending {
+    /// Start a new project.
+    New,
+    /// Open this file.
+    Open(PathBuf),
+    /// Choose a file to open.
+    OpenDialog,
+    /// Close the window.
+    Close,
+}
+
+/// Ask the operating system for a project to open. `None` when the user
+/// cancels or no file dialog is available; the path field remains.
+fn pick_project() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter("OpenCircuit project", &[EXTENSION])
+        .pick_file()
+}
+
+/// Ask the operating system where to save. The extension is added when the
+/// user leaves it out.
+fn choose_save_path(name: &str) -> Option<PathBuf> {
+    let mut path = rfd::FileDialog::new()
+        .add_filter("OpenCircuit project", &[EXTENSION])
+        .set_file_name(format!("{name}.{EXTENSION}"))
+        .save_file()?;
+    if path.extension().is_none() {
+        path.set_extension(EXTENSION);
+    }
+    Some(path)
+}
 
 /// What the window is for at the moment.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -54,6 +91,14 @@ pub struct DesktopApp {
     focus: Option<Subject>,
     /// The pushbutton held down on the canvas, released with the pointer.
     held: Option<DeviceId>,
+    /// The action waiting for an answer about unsaved changes.
+    confirm: Option<Pending>,
+    /// The user agreed to close the window.
+    allow_close: bool,
+    /// Close the window at the next frame.
+    close_now: bool,
+    /// The window title last sent.
+    title: String,
 }
 
 impl DesktopApp {
@@ -82,6 +127,155 @@ impl DesktopApp {
         match Session::load(text, Some(PathBuf::from(origin))) {
             Ok(session) => self.replace(session),
             Err(error) => self.error = Some(error.to_string()),
+        }
+    }
+
+    /// Start a new, empty project in edit mode, asking first when the open
+    /// project has unsaved changes.
+    pub fn new_project(&mut self) {
+        self.guard(Pending::New);
+    }
+
+    /// Open a file, asking first when the open project has unsaved changes.
+    pub fn request_open(&mut self, path: PathBuf) {
+        self.guard(Pending::Open(path));
+    }
+
+    /// Whether the window may close now. With unsaved changes it may not:
+    /// the user is asked to save, discard or cancel.
+    pub fn request_close(&mut self) -> bool {
+        if self.allow_close || !self.is_dirty() {
+            return true;
+        }
+        self.confirm = Some(Pending::Close);
+        false
+    }
+
+    /// Whether the open project has unsaved changes.
+    #[must_use]
+    pub fn is_dirty(&self) -> bool {
+        self.session.as_ref().is_some_and(Session::is_dirty)
+    }
+
+    /// Whether a question about unsaved changes is on screen.
+    #[must_use]
+    pub const fn is_asking(&self) -> bool {
+        self.confirm.is_some()
+    }
+
+    /// Save the project to its file; a project never saved asks where.
+    /// Returns whether it was saved.
+    pub fn save(&mut self) -> bool {
+        let Some(session) = &mut self.session else {
+            return false;
+        };
+        match session.save() {
+            Ok(()) => {
+                self.error = None;
+                true
+            }
+            Err(SaveError::NoPath) => self.save_as_dialog(),
+            Err(error) => {
+                self.error = Some(error.to_string());
+                false
+            }
+        }
+    }
+
+    /// Save the project to `path` and make it its file. Returns whether it
+    /// was saved.
+    pub fn save_to(&mut self, path: PathBuf) -> bool {
+        let Some(session) = &mut self.session else {
+            return false;
+        };
+        self.path_input = path.display().to_string();
+        match session.save_as(path) {
+            Ok(()) => {
+                self.error = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error.to_string());
+                false
+            }
+        }
+    }
+
+    fn save_as_dialog(&mut self) -> bool {
+        let name = self.session.as_ref().map_or_else(
+            || "project".to_owned(),
+            |s| s.document().project.name.clone(),
+        );
+        match choose_save_path(&name) {
+            Some(path) => self.save_to(path),
+            None => false,
+        }
+    }
+
+    /// Run an action now, or ask first when it would drop unsaved changes.
+    fn guard(&mut self, action: Pending) {
+        if self.is_dirty() {
+            self.confirm = Some(action);
+        } else {
+            self.perform(action);
+        }
+    }
+
+    fn perform(&mut self, action: Pending) {
+        match action {
+            Pending::New => {
+                self.replace(Session::untitled());
+                self.path_input.clear();
+                self.set_mode(Mode::Edit);
+            }
+            Pending::Open(path) => self.open_path(&path),
+            Pending::OpenDialog => {
+                if let Some(path) = pick_project() {
+                    self.open_path(&path);
+                }
+            }
+            Pending::Close => {
+                self.allow_close = true;
+                self.close_now = true;
+            }
+        }
+    }
+
+    /// The question about unsaved changes, while one is pending.
+    fn confirm_dialog(&mut self, ui: &Ui) {
+        let Some(pending) = self.confirm.clone() else {
+            return;
+        };
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("unsaved changes")).show(ui.ctx(), |ui| {
+            ui.heading("Unsaved changes");
+            ui.label("The project has changes that are not saved.");
+            ui.horizontal(|ui| {
+                if ui.button("Save and continue").clicked() {
+                    answer = Some("save");
+                }
+                if ui.button("Discard changes").clicked() {
+                    answer = Some("discard");
+                }
+                if ui.button("Cancel").clicked() {
+                    answer = Some("cancel");
+                }
+            });
+        });
+        match answer {
+            Some("save") => {
+                if self.save() {
+                    self.confirm = None;
+                    self.perform(pending);
+                }
+            }
+            Some("discard") => {
+                self.confirm = None;
+                self.perform(pending);
+            }
+            Some(_) => self.confirm = None,
+            None if modal.should_close() => self.confirm = None,
+            None => {}
         }
     }
 
@@ -148,6 +342,44 @@ impl DesktopApp {
 
     /// Draw the whole window into `ui`.
     pub fn show(&mut self, ui: &mut Ui) {
+        if ui.input(|input| input.viewport().close_requested()) && !self.request_close() {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+        if std::mem::take(&mut self.close_now) {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        let title = self.session.as_ref().map_or_else(
+            || "OpenCircuit".to_owned(),
+            |session| {
+                let marker = if session.is_dirty() { " *" } else { "" };
+                format!("{}{marker} — OpenCircuit", session.document().project.name)
+            },
+        );
+        if title != self.title {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
+        let save_as = ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                egui::Key::S,
+            ))
+        });
+        let save = ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::COMMAND,
+                egui::Key::S,
+            ))
+        });
+        if save_as {
+            self.save_as_dialog();
+        } else if save {
+            self.save();
+        }
+        self.confirm_dialog(ui);
+
         let dropped = ui.input(|input| {
             input
                 .raw
@@ -289,24 +521,57 @@ impl DesktopApp {
 
     fn toolbar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            ui.label("Project");
-            let field = ui.add(
-                egui::TextEdit::singleline(&mut self.path_input)
-                    .hint_text("path to a .ocircuit file")
-                    .desired_width(360.0),
-            );
+            if ui.button("New").clicked() {
+                self.new_project();
+            }
+            if ui.button("Open…").clicked() {
+                self.guard(Pending::OpenDialog);
+            }
+            let has_session = self.session.is_some();
+            if ui
+                .add_enabled(has_session, egui::Button::new("Save"))
+                .clicked()
+            {
+                self.save();
+            }
+            if ui
+                .add_enabled(has_session, egui::Button::new("Save as…"))
+                .clicked()
+            {
+                self.save_as_dialog();
+            }
+            ui.separator();
+            let name = ui.label("Path");
+            let field = ui
+                .add(
+                    egui::TextEdit::singleline(&mut self.path_input)
+                        .hint_text("path to a .ocircuit file")
+                        .desired_width(300.0),
+                )
+                .labelled_by(name.id);
             let entered =
                 field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
             if ui.button("Open").clicked() || entered {
                 let path = PathBuf::from(self.path_input.trim());
-                self.open_path(&path);
+                self.request_open(path);
             }
-            if self.session.is_some() && ui.button("Fit").clicked() {
+            if ui
+                .add_enabled(has_session, egui::Button::new("Save here"))
+                .clicked()
+            {
+                let path = PathBuf::from(self.path_input.trim());
+                self.save_to(path);
+            }
+            if has_session && ui.button("Fit").clicked() {
                 self.fit_pending = true;
             }
             if let Some(session) = &self.session {
                 ui.separator();
-                ui.label(RichText::new(&session.document().project.name).strong());
+                let mut name = session.document().project.name.clone();
+                if session.is_dirty() {
+                    name.push_str(" (unsaved)");
+                }
+                ui.label(RichText::new(name).strong());
                 ui.separator();
                 let mut mode = self.mode;
                 ui.selectable_value(&mut mode, Mode::Simulate, "Simulate");

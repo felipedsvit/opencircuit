@@ -22,7 +22,7 @@ use circuit_renderer::{Scene, SceneOptions, build_scene};
 use circuit_sim::{SimConfig, SimulationError, Simulator, compile, format_event};
 
 use crate::clock::SimClock;
-use crate::files::{FileError, read_text};
+use crate::files::{FileError, read_text, write_atomic};
 
 /// Most trace lines kept for the events panel; older ones are dropped.
 pub const MAX_EVENTS: usize = 1_000;
@@ -51,6 +51,29 @@ impl fmt::Display for LoadError {
 }
 
 impl std::error::Error for LoadError {}
+
+/// Why a project could not be saved.
+#[derive(Debug)]
+pub enum SaveError {
+    /// The project has never been saved and no path was given.
+    NoPath,
+    /// The document could not be written as a project.
+    Project(ProjectError),
+    /// The file could not be written.
+    File(FileError),
+}
+
+impl fmt::Display for SaveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoPath => f.write_str("choose where to save the project first"),
+            Self::Project(error) => write!(f, "the project cannot be written: {error}"),
+            Self::File(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for SaveError {}
 
 /// A device the operator can act on.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -216,10 +239,53 @@ impl Session {
         &self.history
     }
 
-    /// The file the project came from, if any.
+    /// A new, empty project that has never been saved.
+    #[must_use]
+    pub fn untitled() -> Self {
+        Self::from_document(Schematic::new("Untitled"), None)
+    }
+
+    /// The file the project came from or was last saved to, if any.
     #[must_use]
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
+    }
+
+    /// Whether the document differs from the file it was opened from or
+    /// last saved to. A new project counts as unchanged until edited.
+    #[must_use]
+    pub fn is_dirty(&self) -> bool {
+        self.history.is_dirty()
+    }
+
+    /// Save to the file of the project, atomically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SaveError`] when the project has no file yet, or cannot be
+    /// serialized or written; the file on disk is then unchanged.
+    pub fn save(&mut self) -> Result<(), SaveError> {
+        let path = self.path.clone().ok_or(SaveError::NoPath)?;
+        self.write(&path)
+    }
+
+    /// Save to `path`, atomically, and make it the file of the project.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SaveError`] when the project cannot be serialized or
+    /// written; the file of the project is then unchanged.
+    pub fn save_as(&mut self, path: PathBuf) -> Result<(), SaveError> {
+        self.write(&path)?;
+        self.path = Some(path);
+        Ok(())
+    }
+
+    fn write(&mut self, path: &Path) -> Result<(), SaveError> {
+        let text = circuit_project::to_string(&self.doc).map_err(SaveError::Project)?;
+        write_atomic(path, &text).map_err(SaveError::File)?;
+        self.history.mark_saved();
+        Ok(())
     }
 
     /// The document.
@@ -806,6 +872,87 @@ mod tests {
 
         assert!(!session.can_simulate());
         assert!(!session.diagnostics().is_empty());
+    }
+
+    /// A path in the temporary directory, removed when dropped.
+    struct TempPath(PathBuf);
+
+    impl TempPath {
+        fn new(name: &str) -> Self {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static COUNTER: AtomicU32 = AtomicU32::new(0);
+            Self(std::env::temp_dir().join(format!(
+                "opencircuit-session-{}-{}-{name}",
+                std::process::id(),
+                COUNTER.fetch_add(1, Ordering::Relaxed)
+            )))
+        }
+    }
+
+    impl Drop for TempPath {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn rename_s1(session: &mut Session) {
+        let s1 = device(session, "S1");
+        let tx = circuit_commands::ops::set_reference(session.document(), s1, "S9").unwrap();
+        session.edit(tx).unwrap();
+    }
+
+    #[test]
+    fn saved_file_is_the_canonical_text_and_reopens_to_the_same_document() {
+        let file = TempPath::new("saved.ocircuit");
+        let mut session = Session::load(COMMAND, None).unwrap();
+        rename_s1(&mut session);
+
+        session.save_as(file.0.clone()).unwrap();
+
+        let on_disk = std::fs::read_to_string(&file.0).unwrap();
+        assert_eq!(
+            on_disk,
+            circuit_project::to_string(session.document()).unwrap()
+        );
+        let reopened = Session::open(&file.0).unwrap();
+        assert_eq!(reopened.document(), session.document());
+        assert_eq!(session.path(), Some(file.0.as_path()));
+    }
+
+    #[test]
+    fn saving_clears_the_unsaved_state_and_undo_past_it_sets_it_again() {
+        let file = TempPath::new("dirty.ocircuit");
+        let mut session = Session::load(COMMAND, Some(file.0.clone())).unwrap();
+        assert!(!session.is_dirty());
+        rename_s1(&mut session);
+        assert!(session.is_dirty());
+
+        session.save().unwrap();
+        assert!(!session.is_dirty());
+
+        session.undo().unwrap();
+        assert!(session.is_dirty());
+    }
+
+    #[test]
+    fn untitled_project_cannot_be_saved_without_a_path() {
+        let mut session = Session::untitled();
+
+        assert!(!session.is_dirty());
+        assert!(matches!(session.save(), Err(SaveError::NoPath)));
+    }
+
+    #[test]
+    fn failed_save_keeps_the_project_unsaved_and_its_path() {
+        let mut session = Session::load(COMMAND, None).unwrap();
+        rename_s1(&mut session);
+        let missing = std::env::temp_dir()
+            .join(format!("opencircuit-no-such-dir-{}", std::process::id()))
+            .join("x.ocircuit");
+
+        assert!(matches!(session.save_as(missing), Err(SaveError::File(_))));
+        assert!(session.is_dirty());
+        assert_eq!(session.path(), None);
     }
 
     #[test]

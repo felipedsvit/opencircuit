@@ -24,6 +24,7 @@ circuit-sim = { workspace = true }
 # reports as unmaintained and a quick-xml with open advisories. egui still
 # builds its AccessKit tree for egui_kittest.
 eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
+rfd = "0.18"
 
 [dev-dependencies]
 egui_kittest = "0.37"

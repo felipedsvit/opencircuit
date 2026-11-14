@@ -85,7 +85,8 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-renderer",
             "circuit-sim",
         ],
-        external: &["eframe"],
+        // `rfd` gives the native file dialogs (portal over libdbus on Linux).
+        external: &["eframe", "rfd"],
         dev: &["egui_kittest"],
         core: false,
     },

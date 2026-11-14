@@ -1,11 +1,12 @@
-//! Reading project files from disk.
+//! Reading and writing project files.
 
 #![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 use std::fmt;
-use std::fs::File;
-use std::io::{self, Read as _};
+use std::fs::{self, File};
+use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A file that could not be read.
 #[derive(Debug)]
@@ -53,6 +54,50 @@ pub fn read_text(path: &Path, limit: usize) -> Result<String, FileError> {
         )));
     }
     Ok(text)
+}
+
+/// Write a file atomically: write a temporary file in the same directory,
+/// flush it to disk, then rename it over the destination. A failure leaves
+/// the destination as it was and removes the temporary file. The same rule
+/// as the command line.
+///
+/// # Errors
+///
+/// Returns [`FileError`] when the path has no file name or the file cannot
+/// be written, synced or renamed.
+pub fn write_atomic(path: &Path, contents: &str) -> Result<(), FileError> {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let error = |source| FileError {
+        path: path.to_path_buf(),
+        source,
+    };
+
+    let name = path
+        .file_name()
+        .ok_or_else(|| {
+            error(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "the path has no file name",
+            ))
+        })?
+        .to_string_lossy();
+    let temporary = path.with_file_name(format!(
+        ".{name}.tmp.{}.{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+
+    let written = (|| -> io::Result<()> {
+        let mut file = File::create(&temporary)?;
+        file.write_all(contents.as_bytes())?;
+        file.sync_all()?;
+        fs::rename(&temporary, path)
+    })();
+    written.map_err(|source| {
+        // Best effort: the write already failed and that is what is reported.
+        let _ = fs::remove_file(&temporary);
+        error(source)
+    })
 }
 
 #[cfg(test)]
@@ -106,6 +151,48 @@ mod tests {
         let error = read_text(&path, 10).unwrap_err();
 
         assert!(error.to_string().contains("does-not-exist"), "{error}");
+    }
+
+    #[test]
+    fn atomic_write_replaces_the_whole_file() {
+        let file = TempFile::with(b"old contents that are longer");
+
+        write_atomic(&file.0, "new").unwrap();
+
+        assert_eq!(read_text(&file.0, 100).unwrap(), "new");
+    }
+
+    #[test]
+    fn atomic_write_into_a_missing_directory_fails_and_leaves_nothing() {
+        let directory = std::env::temp_dir().join(format!(
+            "opencircuit-desktop-missing-{}",
+            std::process::id()
+        ));
+        let path = directory.join("project.ocircuit");
+
+        assert!(write_atomic(&path, "x").is_err());
+        assert!(!directory.exists());
+    }
+
+    #[test]
+    fn atomic_write_leaves_no_temporary_file_behind() {
+        let file = TempFile::with(b"");
+        let directory = file.0.parent().unwrap().to_path_buf();
+        let name = file.0.file_name().unwrap().to_string_lossy().to_string();
+
+        write_atomic(&file.0, "content").unwrap();
+
+        let leftovers = std::fs::read_dir(&directory)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!(".{name}.tmp."))
+            })
+            .count();
+        assert_eq!(leftovers, 0);
     }
 
     #[test]
