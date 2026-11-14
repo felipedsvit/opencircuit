@@ -374,7 +374,13 @@ pub struct ParamDefinition {
 }
 
 impl ParamDefinition {
-    fn accepts(&self, value: &ParamValue) -> Result<(), String> {
+    /// Whether a value fits the type and domain of this parameter.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message naming the parameter and what is wrong with the
+    /// value.
+    pub fn accepts(&self, value: &ParamValue) -> Result<(), String> {
         match (&self.ty, value) {
             (ParamType::Bool, ParamValue::Bool(_)) => Ok(()),
             (ParamType::Int { min, max }, ParamValue::Int(v)) => {

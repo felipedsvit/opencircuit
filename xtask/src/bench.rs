@@ -12,10 +12,13 @@ use std::fmt::Write as _;
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
+use std::collections::BTreeSet;
+
+use circuit_commands::ops;
 use circuit_model::builder::pin;
 use circuit_model::{
     ComponentCatalog, GridPoint, IdExhausted, InputAction, LayoutIndex, ParamValue, Schematic,
-    SchematicBuilder,
+    SchematicBuilder, Subject,
 };
 use circuit_renderer::{SceneOptions, build_scene};
 use circuit_sim::{CompiledCircuit, SimConfig, Simulator, compile};
@@ -100,8 +103,8 @@ fn press_all(circuit: &CompiledCircuit) -> Vec<InputAction> {
 pub(crate) fn run() -> Result<String, Vec<String>> {
     let catalog = ComponentCatalog::builtin();
     let mut table = String::from(
-        "| devices | compile | scene, at rest | scene, running | new + step_n(1000) | snapshot | symbol_at |\n\
-         | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+        "| devices | compile | scene, at rest | scene, running | new + step_n(1000) | snapshot | symbol_at | move edit |\n\
+         | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
     );
     for size in SIZES {
         let doc = ladder(size.div_ceil(DEVICES_PER_RUNG))
@@ -138,10 +141,22 @@ pub(crate) fn run() -> Result<String, Vec<String>> {
         });
         let snapshotting = time(|| sim.snapshot());
         let hit = time(|| layout.symbol_at(probe));
+        // Moving one symbol: build the transaction, then apply it to a copy
+        // with the integrity and limit checks, as the editor does.
+        let selection: BTreeSet<Subject> = doc
+            .symbols
+            .first()
+            .map(|symbol| Subject::Symbol(symbol.id))
+            .into_iter()
+            .collect();
+        let edit = time(|| {
+            ops::move_by(&doc, &catalog, &selection, GridPoint::new(1, 0))
+                .and_then(|tx| tx.apply_to(&doc))
+        });
 
         let _ = writeln!(
             table,
-            "| {} | {} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} | {} | {} |",
             doc.devices.len(),
             micros(compile_time),
             micros(rest),
@@ -149,6 +164,7 @@ pub(crate) fn run() -> Result<String, Vec<String>> {
             micros(stepping),
             micros(snapshotting),
             micros(hit),
+            micros(edit),
         );
     }
     Ok(format!("times in microseconds per call\n\n{table}"))

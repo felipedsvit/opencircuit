@@ -140,6 +140,18 @@ impl<'a> LayoutIndex<'a> {
     }
 }
 
+/// Waypoints of an orthogonal path from `from` to `to`: none when the two
+/// points share a row or a column, otherwise one bend that leaves `from`
+/// vertically, as wires run in a ladder diagram. Deterministic.
+#[must_use]
+pub fn orthogonal_route(from: GridPoint, to: GridPoint) -> Vec<GridPoint> {
+    if from.x == to.x || from.y == to.y {
+        Vec::new()
+    } else {
+        vec![GridPoint::new(from.x, to.y)]
+    }
+}
+
 /// Whether every segment of a path is horizontal or vertical. A path with
 /// fewer than two points has no segment and is orthogonal.
 #[must_use]
@@ -323,6 +335,25 @@ mod tests {
     #[test]
     fn diagonal_segment_is_not_orthogonal() {
         assert!(!is_orthogonal(&[point(0, 0), point(0, 5), point(3, 6)]));
+    }
+
+    #[test]
+    fn aligned_points_need_no_waypoint() {
+        assert_eq!(orthogonal_route(point(2, 1), point(2, 9)), []);
+        assert_eq!(orthogonal_route(point(-3, 4), point(5, 4)), []);
+    }
+
+    #[test]
+    fn route_between_unaligned_points_bends_once_after_going_vertically() {
+        let (from, to) = (point(0, 0), point(4, 6));
+
+        let route = orthogonal_route(from, to);
+
+        assert_eq!(route, [point(0, 6)]);
+        let mut path = vec![from];
+        path.extend(route);
+        path.push(to);
+        assert!(is_orthogonal(&path));
     }
 
     #[test]

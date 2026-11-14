@@ -1,75 +1,29 @@
 //! Size limits for project files.
 //!
-//! A project file may come from anyone. The limits keep a hostile file from
-//! turning into unbounded memory or work; they are far above any schematic a
-//! person draws. The values are provisional and will be revisited with the
-//! first benchmarks.
+//! The limits themselves live in `circuit_model::limits`, so that the editor
+//! refuses an edit the loader would refuse. This module applies them to a
+//! document being read or written.
 
-use circuit_model::{ParamValue, Schematic};
+use circuit_model::Schematic;
+use circuit_model::limits::LimitExceeded;
 
 use crate::ProjectError;
 
-/// Largest accepted project text, in bytes.
-pub const MAX_PROJECT_BYTES: usize = 16 * 1024 * 1024;
-/// Most entities in any one collection of the document.
-pub const MAX_ENTITIES_PER_COLLECTION: usize = 100_000;
-/// Most intermediate waypoints of one wire.
-pub const MAX_ROUTE_POINTS: usize = 1_024;
-/// Most parameters of one device.
-pub const MAX_PARAMS_PER_DEVICE: usize = 64;
-/// Longest text value (name, designator, key, text parameter), in bytes.
-pub const MAX_TEXT_BYTES: usize = 256;
+pub use circuit_model::limits::{
+    MAX_ENTITIES_PER_COLLECTION, MAX_PARAMS_PER_DEVICE, MAX_PROJECT_BYTES, MAX_ROUTE_POINTS,
+    MAX_TEXT_BYTES,
+};
 
-fn count(what: &'static str, len: usize, limit: usize) -> Result<(), ProjectError> {
-    if len > limit {
-        Err(ProjectError::LimitExceeded { what, limit })
-    } else {
-        Ok(())
+impl From<LimitExceeded> for ProjectError {
+    fn from(exceeded: LimitExceeded) -> Self {
+        Self::LimitExceeded {
+            what: exceeded.what,
+            limit: exceeded.limit,
+        }
     }
-}
-
-fn text(what: &'static str, value: &str) -> Result<(), ProjectError> {
-    count(what, value.len(), MAX_TEXT_BYTES)
 }
 
 /// Check a document against every limit.
 pub(crate) fn check(doc: &Schematic) -> Result<(), ProjectError> {
-    count("supplies", doc.supplies.len(), MAX_ENTITIES_PER_COLLECTION)?;
-    count("devices", doc.devices.len(), MAX_ENTITIES_PER_COLLECTION)?;
-    count("symbols", doc.symbols.len(), MAX_ENTITIES_PER_COLLECTION)?;
-    count(
-        "junctions",
-        doc.junctions.len(),
-        MAX_ENTITIES_PER_COLLECTION,
-    )?;
-    count("wires", doc.wires.len(), MAX_ENTITIES_PER_COLLECTION)?;
-
-    text("project name", &doc.project.name)?;
-    for device in &doc.devices {
-        text("reference designator", &device.reference.0)?;
-        text("model id", &device.model.id)?;
-        count(
-            "device parameters",
-            device.params.len(),
-            MAX_PARAMS_PER_DEVICE,
-        )?;
-        for (key, value) in &device.params {
-            text("parameter key", key)?;
-            if let ParamValue::Text(value) = value {
-                text("parameter value", value)?;
-            }
-        }
-    }
-    for symbol in &doc.symbols {
-        text("symbol key", &symbol.symbol_key.0)?;
-    }
-    for wire in &doc.wires {
-        count("wire route points", wire.route.len(), MAX_ROUTE_POINTS)?;
-        for endpoint in [&wire.from, &wire.to] {
-            if let circuit_model::Endpoint::Terminal(pin) = endpoint {
-                text("terminal key", &pin.terminal.0)?;
-            }
-        }
-    }
-    Ok(())
+    circuit_model::limits::check(doc).map_err(ProjectError::from)
 }

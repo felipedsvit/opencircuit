@@ -1260,7 +1260,8 @@ Regras:
 - O histórico é **transacional**: uma operação composta que falha no meio reverte o que já aplicou; o documento nunca fica parcialmente alterado.
 - Comandos que criam entidades guardam os IDs alocados (§6.1) e os reutilizam no redo.
 - Movimentos contínuos (arrastar) são aglutinados em um único comando.
-- Toda mutação do documento no editor passa por comandos; após cada comando, as invariantes estruturais são verificadas em testes e em `debug_assert`.
+- Toda mutação do documento no editor passa por comandos. Uma transação é aplicada a uma cópia e só a substitui se todas as edições passarem, se o resultado respeitar os limites do formato (`circuit_model::limits`, os mesmos do loader) e se não surgir erro de integridade novo (`DuplicateId`, `IdOutOfRange`, `DanglingReference`, `SelfLoopWire`, `UnsupportedSchemaVersion`) em relação ao documento anterior. A verificação é feita a cada transação, em produção; não se usa `debug_assert`, que entraria em pânico.
+- Arrastar mostra uma prévia (a transação aplicada a uma cópia, fora do histórico) e grava uma única transação ao soltar.
 
 ---
 
