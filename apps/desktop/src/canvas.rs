@@ -22,6 +22,10 @@ const MAX_TEXT_POINTS: f32 = 48.0;
 pub struct CanvasEvents {
     /// Where a primary click landed, relative to the canvas.
     pub clicked: Option<[f32; 2]>,
+    /// Where the primary button went down on the canvas this frame.
+    pub pressed: Option<[f32; 2]>,
+    /// Whether the primary button was released this frame, anywhere.
+    pub released: bool,
     /// The size of the canvas.
     pub size: [f32; 2],
 }
@@ -127,6 +131,10 @@ pub fn show(ui: &mut Ui, scene: &Scene, camera: &mut Camera, fit: bool) -> Canva
             .clicked()
             .then(|| response.interact_pointer_pos().map(local))
             .flatten(),
+        pressed: (response.hovered() && ui.input(|input| input.pointer.primary_pressed()))
+            .then(|| ui.input(|input| input.pointer.press_origin()).map(local))
+            .flatten(),
+        released: ui.input(|input| input.pointer.primary_released()),
         size,
     }
 }

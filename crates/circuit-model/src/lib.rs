@@ -46,7 +46,7 @@ pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
     DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SupplyId, SymbolId, WireId,
 };
-pub use input::{InputAction, InputEvent};
+pub use input::{Control, InputAction, InputEvent, operator_controls};
 pub use layout::{LayoutIndex, is_orthogonal};
 pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
