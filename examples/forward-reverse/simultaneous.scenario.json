@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "circuit": "reversing.ocircuit",
+  "config": { "fault_policy": "halt" },
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 2, "action": "press", "device": "S3" }
+  ],
+  "until_tick": 10,
+  "expect": { "trace": "simultaneous.trace", "diagnostics": [] }
+}

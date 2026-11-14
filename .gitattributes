@@ -1,0 +1,9 @@
+# Golden files are compared byte for byte on every platform, including
+# Windows. Keep them, and every text file they are built from, with LF.
+* text=auto eol=lf
+*.ocircuit text eol=lf
+*.trace text eol=lf
+*.json text eol=lf
+*.rs text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
