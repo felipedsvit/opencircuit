@@ -1,6 +1,6 @@
 //! The canvas: paints a scene through the camera and handles pan and zoom.
 
-use circuit_renderer::{Anchor, Scene, Shape};
+use circuit_renderer::{Anchor, Scene, ScenePoint, SceneRect, Shape};
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, StrokeKind, Ui, Vec2};
 
 use crate::camera::Camera;
@@ -45,8 +45,16 @@ pub fn show(ui: &mut Ui, scene: &Scene, camera: &mut Camera, fit: bool) -> Canva
     let origin = response.rect.min;
     let size = [response.rect.width(), response.rect.height()];
 
-    if fit && let Some(bounds) = scene.bounds {
-        camera.fit(bounds, size, FIT_MARGIN);
+    if fit {
+        match scene.bounds {
+            Some(bounds) => camera.fit(bounds, size, FIT_MARGIN),
+            // An empty sheet: put the grid origin in the middle, so that
+            // there is room to draw in every direction.
+            None => {
+                let origin = ScenePoint::new(0, 0);
+                camera.center_on(SceneRect::from_corners(origin, origin), size);
+            }
+        }
     }
     if response.double_clicked()
         && let Some(bounds) = scene.bounds

@@ -13,9 +13,9 @@ depend on the GUI.
 
 M1, the headless vertical slice, is implemented: circuits are loaded,
 compiled, simulated and checked against golden traces from the command line.
-M2a, the read-only viewer, is implemented: the desktop application opens a
-project, draws it and runs it with operator controls. The editor, M2b, is
-next. See
+M2a, the viewer, and M2b, the editor, are implemented: the desktop
+application creates, opens, edits, saves and runs a project with operator
+controls. M3 (advanced circuits and export) is next. See
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
@@ -62,7 +62,7 @@ reversing starter ends with `runtime latched` at the first short circuit;
 add `--fault-policy report` to watch it oscillate instead. Exit codes: `0`
 success, `1` validation or golden failure, `2` usage or I/O error.
 
-### Running the viewer
+### Running the desktop application
 
 ```sh
 cargo run -p opencircuit-desktop -- examples/direct-starter/starter.ocircuit
@@ -76,6 +76,30 @@ take the colour of the conductors on them; a wire with more than one is drawn
 as a conflict. The right or middle button pans, the wheel zooms, a double
 click fits the sheet. The desktop needs Rust 1.95 (eframe 0.37); the other
 crates build with Rust 1.85.
+
+### Editing
+
+New starts an empty project; **Edit** switches to the editor (Simulate goes
+back, starting at tick 0 on the edited circuit).
+
+- The palette on the left has the Select and Wire tools and every symbol of
+  the catalog. Choose a symbol, then click on the sheet to place a device;
+  R turns the next placement and Esc stops placing.
+- Select: click a symbol, Shift+click to add, drag on empty space for a box;
+  drag a selection to move it, R to rotate, Delete to remove it with its
+  wires.
+- Wire: click a pin, junction or wire to start, empty space to bend, and a
+  pin, junction or wire to finish. Ending on a wire adds a junction. Wires
+  are always horizontal and vertical.
+- The inspector on the right edits the designator and the parameters of the
+  selected device, adds symbols to it (an auxiliary contact, for example),
+  and holds the supply profiles.
+- Undo and Redo (Ctrl+Z, Ctrl+Shift+Z) cover every change. A change the
+  model does not accept is refused with a message and leaves the project as
+  it was.
+- Save (Ctrl+S) writes the file atomically; Save as… and Open… use the file
+  dialogs of the system, and the path field works too. Closing, New and Open
+  ask before dropping unsaved changes.
 
 ## Commands
 

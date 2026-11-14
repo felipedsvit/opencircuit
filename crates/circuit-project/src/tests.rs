@@ -579,3 +579,132 @@ proptest! {
         let _ = from_str(&text);
     }
 }
+
+/// Keys of the schema, so that random JSON reaches past the first checks.
+const SCHEMA_KEYS: &[&str] = &[
+    "schema_version",
+    "next_id",
+    "project",
+    "name",
+    "grid_unit",
+    "supplies",
+    "devices",
+    "symbols",
+    "junctions",
+    "wires",
+    "id",
+    "kind",
+    "nominal_voltage_mv",
+    "phase_voltage_mv",
+    "frequency_millihz",
+    "phase_sequence",
+    "reference",
+    "model",
+    "version",
+    "params",
+    "device_id",
+    "symbol_key",
+    "slot",
+    "position",
+    "x",
+    "y",
+    "rotation",
+    "from",
+    "to",
+    "route",
+    "terminal",
+    "junction",
+    "symbol_id",
+];
+
+/// Random JSON whose objects mostly use the keys of the schema.
+fn hostile_json() -> impl Strategy<Value = serde_json::Value> {
+    use serde_json::Value;
+    let leaf = prop_oneof![
+        Just(Value::Null),
+        any::<bool>().prop_map(Value::Bool),
+        any::<i64>().prop_map(Value::from),
+        any::<u64>().prop_map(Value::from),
+        (-1.0e6_f64..1.0e6).prop_map(Value::from),
+        prop::sample::select(vec![
+            "dc",
+            "three_phase",
+            "deg90",
+            "l1l2l3",
+            "K1",
+            "",
+            "pushbutton_no"
+        ])
+        .prop_map(|s| Value::from(s.to_owned())),
+    ];
+    leaf.prop_recursive(5, 96, 8, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..6).prop_map(serde_json::Value::Array),
+            prop::collection::vec((prop::sample::select(SCHEMA_KEYS.to_vec()), inner), 0..8)
+                .prop_map(|pairs| {
+                    serde_json::Value::Object(
+                        pairs
+                            .into_iter()
+                            .map(|(key, value)| (key.to_owned(), value))
+                            .collect(),
+                    )
+                }),
+        ]
+    })
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn arbitrary_json_never_panics_the_loader(value in hostile_json()) {
+        let _ = from_str(&value.to_string());
+    }
+
+    #[test]
+    fn arbitrary_json_with_the_current_schema_version_never_panics(
+        value in hostile_json(),
+        next_id in any::<u64>(),
+    ) {
+        let mut object = match value {
+            serde_json::Value::Object(map) => map,
+            other => {
+                let mut map = serde_json::Map::new();
+                map.insert("devices".to_owned(), other);
+                map
+            }
+        };
+        object.insert("schema_version".to_owned(), serde_json::Value::from(1));
+        object.insert("next_id".to_owned(), serde_json::Value::from(next_id));
+        let _ = from_str(&serde_json::Value::Object(object).to_string());
+    }
+
+    #[test]
+    fn corrupted_canonical_file_never_panics_the_loader(
+        flips in prop::collection::vec((any::<prop::sample::Index>(), any::<u8>()), 1..8),
+        cut in any::<prop::sample::Index>(),
+    ) {
+        let mut bytes = canonical_sample().into_bytes();
+        for (at, byte) in flips {
+            let position = at.index(bytes.len());
+            if let Some(slot) = bytes.get_mut(position) {
+                *slot = byte;
+            }
+        }
+        bytes.truncate(cut.index(bytes.len().saturating_add(1)));
+        let _ = from_str(&String::from_utf8_lossy(&bytes));
+    }
+}
+
+/// The canonical text of a reference document.
+fn canonical_sample() -> String {
+    to_string(&from_str(SAMPLE).unwrap()).unwrap()
+}
+
+#[test]
+fn deeply_nested_json_is_refused_without_overflowing_the_stack() {
+    let depth = 100_000;
+    let text = format!("{}{}", "[".repeat(depth), "]".repeat(depth));
+
+    assert!(from_str(&text).is_err());
+}

@@ -1456,7 +1456,8 @@ cargo test --workspace --locked
 cargo deny check
 cargo xtask check-architecture
 cargo check --locked --target wasm32-unknown-unknown \
-      -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer
+      -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer \
+      -p circuit-commands -p circuit-editor
 cargo +1.85 test --workspace --exclude opencircuit-desktop --locked   # MSRV do núcleo
 ```
 
@@ -1499,7 +1500,7 @@ Um `.ocircuit` pode vir de terceiros. O loader deve:
 - impor limites configuráveis de tamanho do arquivo, profundidade e contagem de entidades (valores iniciais definidos com os benchmarks da §14.5);
 - rejeitar IDs fora do range, schema mais novo e campos desconhecidos (§15);
 - nunca executar nada a partir do arquivo (não há scripts nem plugins no MVP);
-- ter alvo de fuzzing (`cargo-fuzz`) para o parser e a fase estrutural do compilador a partir do M2b **[adiado]**.
+- resistir a entrada arbitrária. No M2b isso é verificado por proptests no CI estável: texto e JSON arbitrários (com as chaves do schema), arquivo canônico corrompido e aninhamento profundo no loader; documentos arbitrários (IDs repetidos ou zero, modelos e chaves desconhecidos, parâmetros extremos, extremidades pendentes, coordenadas extremas) compilados e simulados; transações arbitrárias, que se aplicam por inteiro ou não se aplicam. Fuzzing com `cargo-fuzz` fica **[adiado]**: exige nightly, cria um `Cargo.lock` aninhado e o `libfuzzer-sys` usa a licença NCSA, fora do allowlist.
 
 ### 19.3 Governança
 

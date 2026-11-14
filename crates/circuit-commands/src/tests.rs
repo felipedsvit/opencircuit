@@ -1152,3 +1152,107 @@ fn placing_a_symbol_whose_area_leaves_the_coordinate_range_is_refused() {
         Err(CommandError::OutOfRange)
     );
 }
+
+/// A primitive edit with random targets, valid or not.
+fn arbitrary_edit() -> impl Strategy<Value = Edit> {
+    use circuit_model::{
+        Device, Junction, JunctionId, ReferenceDesignator, SupplyKind, SupplyProfile,
+        SymbolInstance, Wire, WireId,
+    };
+    let id = || prop_oneof![8 => 0_u64..40, 1 => Just(u64::MAX)];
+    let at = || (-30_i32..30, -30_i32..30).prop_map(|(x, y)| point(x, y));
+    let endpoint = move || {
+        prop_oneof![
+            (id(), prop::sample::select(vec!["p1", "p2", "a1", "out"]))
+                .prop_map(|(s, t)| pin(SymbolId(s), t)),
+            id().prop_map(|j| Endpoint::Junction(JunctionId(j))),
+        ]
+    };
+    prop_oneof![
+        id().prop_map(|i| Edit::InsertSupply(SupplyProfile {
+            id: SupplyId(i),
+            kind: SupplyKind::Dc,
+            nominal_voltage_mv: 24_000,
+            phase_voltage_mv: None,
+            frequency_millihz: None,
+            phase_sequence: None,
+        })),
+        id().prop_map(|i| Edit::RemoveSupply(SupplyId(i))),
+        (id(), prop::sample::select(vec!["K1", "S1", "bad name", ""])).prop_map(|(i, r)| {
+            Edit::InsertDevice(Device {
+                id: DeviceId(i),
+                reference: ReferenceDesignator(r.to_owned()),
+                model: model("pushbutton_no"),
+                params: Default::default(),
+            })
+        }),
+        id().prop_map(|i| Edit::RemoveDevice(DeviceId(i))),
+        (id(), any::<i64>()).prop_map(|(i, v)| Edit::SetParam {
+            device: DeviceId(i),
+            key: "rated_voltage_mv".to_owned(),
+            value: Some(ParamValue::Int(v)),
+        }),
+        (id(), id(), at()).prop_map(|(i, d, p)| Edit::InsertSymbol(SymbolInstance {
+            id: SymbolId(i),
+            device_id: DeviceId(d),
+            symbol_key: key("contact"),
+            slot: None,
+            position: p,
+            rotation: QuarterTurn::Deg0,
+        })),
+        id().prop_map(|i| Edit::RemoveSymbol(SymbolId(i))),
+        (id(), at()).prop_map(|(i, p)| Edit::Place {
+            symbol: SymbolId(i),
+            position: p,
+            rotation: QuarterTurn::Deg90,
+        }),
+        (id(), at()).prop_map(|(i, p)| Edit::InsertJunction(Junction {
+            id: JunctionId(i),
+            position: p,
+        })),
+        id().prop_map(|i| Edit::RemoveJunction(JunctionId(i))),
+        (id(), at()).prop_map(|(i, p)| Edit::MoveJunction {
+            junction: JunctionId(i),
+            position: p,
+        }),
+        (id(), endpoint(), endpoint()).prop_map(|(i, from, to)| Edit::InsertWire(Wire {
+            id: WireId(i),
+            from,
+            to,
+            route: Vec::new(),
+        })),
+        id().prop_map(|i| Edit::RemoveWire(WireId(i))),
+        (id(), prop::collection::vec(at(), 0..3)).prop_map(|(i, route)| Edit::SetRoute {
+            wire: WireId(i),
+            route,
+        }),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn arbitrary_transactions_apply_entirely_or_not_at_all(
+        transactions in prop::collection::vec(
+            (prop::collection::vec(arbitrary_edit(), 1..6), 0_u64..48),
+            1..12,
+        )
+    ) {
+        let (mut doc, mut history) = draw_starter_control();
+        for (edits, next_id) in transactions {
+            let before = doc.clone();
+            let mut tx = Transaction::new("arbitrary", next_id);
+            tx.edits = edits;
+            match history.execute(&mut doc, tx) {
+                Ok(()) => {
+                    prop_assert_eq!(integrity(&doc), Vec::<DiagnosticCode>::new());
+                    prop_assert!(doc.next_id >= before.next_id);
+                }
+                Err(_) => prop_assert_eq!(&doc, &before),
+            }
+        }
+        while history.undo(&mut doc).map_err(|e| TestCaseError::fail(e.to_string()))? {}
+        prop_assert_eq!(doc.devices.len(), 0);
+    }
+}
