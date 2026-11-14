@@ -4,6 +4,7 @@
 //!
 //! ```text
 //! cargo run -p xtask -- check-architecture
+//! cargo run -p xtask -- generate-examples [--check]
 //! ```
 
 #![forbid(unsafe_code)]
@@ -18,6 +19,7 @@
 #![cfg_attr(not(test), deny(clippy::indexing_slicing))]
 
 mod architecture;
+mod examples;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -25,12 +27,18 @@ use std::process::{Command, ExitCode};
 
 use serde_json::Value;
 
-const USAGE: &str = "usage: cargo run -p xtask -- check-architecture";
+const USAGE: &str = "\
+usage: cargo run -p xtask -- check-architecture
+       cargo run -p xtask -- generate-examples [--check]";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     match (args.next().as_deref(), args.next()) {
         (Some("check-architecture"), None) => report("architecture check", check_architecture()),
+        (Some("generate-examples"), None) => report("example generation", generate_examples(false)),
+        (Some("generate-examples"), Some(flag)) if flag == "--check" => {
+            report("example check", generate_examples(true))
+        }
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -79,6 +87,54 @@ fn check_architecture() -> Result<String, Vec<String>> {
         ))
     } else {
         Err(violations.into_iter().collect())
+    }
+}
+
+/// Write every generated project file, or with `check_only` verify that the
+/// files on disk are up to date without touching them.
+fn generate_examples(check_only: bool) -> Result<String, Vec<String>> {
+    let metadata = cargo_metadata().map_err(|error| vec![error])?;
+    let root = workspace_root(&metadata).map_err(|error| vec![error])?;
+
+    let mut problems = Vec::new();
+    let mut written = 0_usize;
+    for example in examples::EXAMPLES {
+        let text = match example.render() {
+            Ok(text) => text,
+            Err(error) => {
+                problems.push(error);
+                continue;
+            }
+        };
+        let path = root.join(example.path);
+        let current = std::fs::read_to_string(&path).ok();
+        if current.as_deref() == Some(text.as_str()) {
+            continue;
+        }
+        if check_only {
+            problems.push(format!(
+                "{} is stale; run `cargo run -p xtask -- generate-examples`",
+                example.path
+            ));
+            continue;
+        }
+        let result = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&path, &text));
+        match result {
+            Ok(()) => written = written.saturating_add(1),
+            Err(error) => problems.push(format!("{}: {error}", example.path)),
+        }
+    }
+
+    if problems.is_empty() {
+        Ok(format!(
+            "{} project files, {written} written",
+            examples::EXAMPLES.len()
+        ))
+    } else {
+        Err(problems)
     }
 }
 

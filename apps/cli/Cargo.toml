@@ -1,0 +1,19 @@
+[package]
+name = "opencircuit-cli"
+description = "Headless validation, simulation and golden tests for OpenCircuit projects"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "opencircuit"
+path = "src/main.rs"
+
+[dependencies]
+circuit-model = { workspace = true }
+circuit-project = { workspace = true }
+circuit-sim = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "next_id": 15,
+  "project": {
+    "name": "Fixture - permanent short circuit",
+    "grid_unit": 10
+  },
+  "supplies": [
+    {
+      "id": 1,
+      "kind": "dc",
+      "nominal_voltage_mv": 24000,
+      "phase_voltage_mv": null,
+      "frequency_millihz": null,
+      "phase_sequence": null
+    }
+  ],
+  "devices": [
+    {
+      "id": 2,
+      "reference": "P24",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_pos",
+        "supply": 1
+      }
+    },
+    {
+      "id": 4,
+      "reference": "P0",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_neg",
+        "supply": 1
+      }
+    },
+    {
+      "id": 6,
+      "reference": "H1",
+      "model": {
+        "id": "lamp.generic",
+        "version": 1
+      },
+      "params": {
+        "connection": "dc",
+        "rated_voltage_mv": 24000
+      }
+    }
+  ],
+  "symbols": [
+    {
+      "id": 3,
+      "device_id": 2,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 5,
+      "device_id": 4,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 12
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 7,
+      "device_id": 6,
+      "symbol_key": "lamp",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 6
+      },
+      "rotation": "deg0"
+    }
+  ],
+  "junctions": [
+    {
+      "id": 8,
+      "position": {
+        "x": 0,
+        "y": 3
+      }
+    },
+    {
+      "id": 9,
+      "position": {
+        "x": 0,
+        "y": 9
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 10,
+      "from": {
+        "terminal": {
+          "symbol_id": 3,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 8
+      },
+      "route": []
+    },
+    {
+      "id": 11,
+      "from": {
+        "junction": 8
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 7,
+          "terminal": "x1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 12,
+      "from": {
+        "terminal": {
+          "symbol_id": 7,
+          "terminal": "x2"
+        }
+      },
+      "to": {
+        "junction": 9
+      },
+      "route": []
+    },
+    {
+      "id": 13,
+      "from": {
+        "junction": 9
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 5,
+          "terminal": "out"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 14,
+      "from": {
+        "junction": 8
+      },
+      "to": {
+        "junction": 9
+      },
+      "route": []
+    }
+  ]
+}

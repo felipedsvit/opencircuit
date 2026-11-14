@@ -87,6 +87,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "opencircuit-cli"
+version = "0.0.1"
+dependencies = [
+ "circuit-model",
+ "circuit-project",
+ "circuit-sim",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -294,6 +305,8 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 name = "xtask"
 version = "0.0.1"
 dependencies = [
+ "circuit-model",
+ "circuit-project",
  "serde_json",
 ]
 
