@@ -1,0 +1,27 @@
+[package]
+name = "opencircuit-desktop"
+description = "OpenCircuit desktop application: open, view and simulate a project"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# eframe/egui 0.37 need Rust 1.95. The core crates and the CLI keep the
+# workspace MSRV; CI tests them on it with this package excluded.
+rust-version = "1.95"
+publish = false
+
+[[bin]]
+name = "opencircuit-desktop"
+path = "src/main.rs"
+
+[dependencies]
+circuit-model = { workspace = true }
+circuit-project = { workspace = true }
+circuit-renderer = { workspace = true }
+circuit-sim = { workspace = true }
+# Without `accesskit`: its Linux adapter pulls zbus crates that cargo-deny
+# reports as unmaintained and a quick-xml with open advisories. egui still
+# builds its AccessKit tree for egui_kittest.
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "wayland", "x11"] }
+
+[dev-dependencies]
+egui_kittest = "0.37"

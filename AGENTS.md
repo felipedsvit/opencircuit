@@ -1,12 +1,12 @@
 # AGENTS.md — instructions for agents
 
-OpenCircuit is a clean-room, open-source Rust electrical-schematic editor and simulator for industrial control circuits (contactors, relays, timers). M1, the headless vertical slice, is implemented: `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli` and `xtask`. M2a has started with `circuit-renderer`. Every other `crates/*` and `apps/*` directory is a tracked placeholder for M2/M3.
+OpenCircuit is a clean-room, open-source Rust electrical-schematic editor and simulator for industrial control circuits (contactors, relays, timers). M1, the headless vertical slice, is implemented: `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli` and `xtask`. M2a has started with `circuit-renderer` and `apps/desktop` (package and binary `opencircuit-desktop`). Every other `crates/*` and `apps/*` directory is a tracked placeholder for M2/M3.
 
 ## Start every session here
 
 Read [`ROADMAP.md`](ROADMAP.md), [`ARCHITECTURE.md`](ARCHITECTURE.md) and the milestone you are working on. The contract-level reference is [`docs/spec02.md`](docs/spec02.md) (version 0.3, Portuguese); read its §0, §2, §5.4, §6, §8–§15, §20 and §23 before touching domain or simulation contracts. [`SIMULATION.md`](SIMULATION.md) and [`FORMAT.md`](FORMAT.md) are the normative rules for the simulator and the file format.
 
-The workspace has six members: `circuit-model`, `circuit-sim`, `circuit-project`, `circuit-renderer`, `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) and `xtask`. Do not add M2/M3 crates to `members` before their milestone; `xtask check-architecture` fails for a workspace package without a rule.
+The workspace has seven members: `circuit-model`, `circuit-sim`, `circuit-project`, `circuit-renderer`, `apps/cli` (package `opencircuit-cli`, binary `opencircuit`), `apps/desktop` (package and binary `opencircuit-desktop`) and `xtask`. `apps/desktop` declares its own `rust-version` (1.95, for eframe); the other members keep the workspace MSRV 1.85. Do not add M2/M3 crates to `members` before their milestone; `xtask check-architecture` fails for a workspace package without a rule.
 
 `ROADMAP.md` is the one-page summary of milestones and exit criteria. Pick work from the current milestone only; features outside it are not started early.
 
@@ -42,6 +42,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo run -p xtask -- check-architecture
 cargo run -p xtask -- generate-examples --check   # example projects match their generator
 cargo run -p opencircuit-cli -- test examples tests/fixtures
+cargo run -p opencircuit-desktop -- examples/direct-starter/starter.ocircuit   # open the viewer
 cargo deny check
 ```
 

@@ -55,6 +55,20 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // The only package with egui/eframe, which it reaches through the eframe
+    // re-export; the GUI never enters the core.
+    PackageRule {
+        name: "opencircuit-desktop",
+        workspace: &[
+            "circuit-model",
+            "circuit-project",
+            "circuit-renderer",
+            "circuit-sim",
+        ],
+        external: &["eframe"],
+        dev: &["egui_kittest"],
+        core: false,
+    },
     PackageRule {
         name: "opencircuit-cli",
         workspace: &["circuit-model", "circuit-project", "circuit-sim"],
@@ -360,7 +374,9 @@ mod tests {
         "serde_json",
         "thiserror",
         "proptest",
+        "eframe",
         "egui",
+        "egui_kittest",
         "helper",
     ];
 
@@ -398,11 +414,25 @@ mod tests {
                     "circuit-renderer",
                     &[("circuit-model", None), ("proptest", Some("dev"))],
                 ),
+                (
+                    "opencircuit-desktop",
+                    &[
+                        ("circuit-model", None),
+                        ("circuit-project", None),
+                        ("circuit-renderer", None),
+                        ("circuit-sim", None),
+                        ("eframe", None),
+                        ("egui_kittest", Some("dev")),
+                    ],
+                ),
                 ("xtask", &[("serde_json", None)]),
                 ("serde", &[]),
                 ("serde_json", &[]),
                 ("thiserror", &[]),
                 ("proptest", &[]),
+                ("eframe", &[("egui", None)]),
+                ("egui", &[]),
+                ("egui_kittest", &[("egui", None)]),
             ],
             REGISTRY,
         );
