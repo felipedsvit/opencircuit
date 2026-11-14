@@ -54,6 +54,15 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // Editor logic works on documents and transactions only; the simulator
+    // may be used by its tests, never by the editor itself.
+    PackageRule {
+        name: "circuit-editor",
+        workspace: &["circuit-commands", "circuit-model"],
+        external: &[],
+        dev: &["circuit-sim", "proptest"],
+        core: true,
+    },
     // The renderer sees the simulation only through `SimSnapshot`, a type of
     // `circuit-model`; depending on `circuit-sim` would let drawing code
     // reach compiled indices and runtime state.
@@ -438,6 +447,15 @@ mod tests {
                     ],
                 ),
                 (
+                    "circuit-editor",
+                    &[
+                        ("circuit-commands", None),
+                        ("circuit-model", None),
+                        ("circuit-sim", Some("dev")),
+                        ("proptest", Some("dev")),
+                    ],
+                ),
+                (
                     "opencircuit-desktop",
                     &[
                         ("circuit-model", None),
@@ -516,6 +534,26 @@ mod tests {
             [
                 "`circuit-commands` must not have dependency `circuit-sim`; it is not in the allowlist"
             ]
+        );
+    }
+
+    #[test]
+    fn editor_depending_on_circuit_sim_outside_its_tests_is_rejected() {
+        let found = violations(
+            &[
+                ("circuit-model", &[]),
+                (
+                    "circuit-editor",
+                    &[("circuit-model", None), ("circuit-sim", None)],
+                ),
+                ("circuit-sim", &[("circuit-model", None)]),
+            ],
+            REGISTRY,
+        );
+
+        assert_eq!(
+            found,
+            ["`circuit-editor` must not have dependency `circuit-sim`; it is not in the allowlist"]
         );
     }
 

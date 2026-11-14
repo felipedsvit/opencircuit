@@ -1,0 +1,17 @@
+[package]
+name = "circuit-editor"
+description = "OpenCircuit editor logic without a GUI: hit-test, selection, tools and previews"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+circuit-commands = { workspace = true }
+circuit-model = { workspace = true }
+
+[dev-dependencies]
+# The tests compile and simulate what they draw; the editor itself never
+# depends on the simulator.
+circuit-sim = { workspace = true }
+proptest = { workspace = true }
