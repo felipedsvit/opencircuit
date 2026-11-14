@@ -262,6 +262,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-editor"
+version = "0.0.1"
+dependencies = [
+ "circuit-commands",
+ "circuit-model",
+ "circuit-sim",
+ "proptest",
+]
+
+[[package]]
 name = "circuit-model"
 version = "0.0.1"
 dependencies = [

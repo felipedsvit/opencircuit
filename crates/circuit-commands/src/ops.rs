@@ -13,7 +13,7 @@ use circuit_model::{
     ComponentCatalog, ComponentModel, Device, DeviceClass, DeviceId, Endpoint, GridPoint,
     IdAllocator, Junction, JunctionId, LayoutIndex, ModelRef, ParamType, ParamValue, PhaseSequence,
     QuarterTurn, ReferenceDesignator, Schematic, Subject, SupplyId, SupplyKind, SupplyProfile,
-    SymbolId, SymbolInstance, SymbolKey, Wire, WireId, orthogonal_route,
+    SymbolId, SymbolInstance, SymbolKey, Wire, WireId, orthogonal_route, segment_at,
 };
 
 use crate::edit::Edit;
@@ -292,28 +292,6 @@ pub fn add_symbol(
     Ok(tx)
 }
 
-/// Whether `p` lies on the segment from `a` to `b`, ends included.
-fn on_segment(a: GridPoint, b: GridPoint, p: GridPoint) -> bool {
-    let within = |low: i32, high: i32, value: i32| low.min(high) <= value && value <= low.max(high);
-    if !(within(a.x, b.x, p.x) && within(a.y, b.y, p.y)) {
-        return false;
-    }
-    // Collinear when the cross product is zero; i64 holds the products of
-    // differences of i32 values exactly only in i128, so widen.
-    let delta = |from: i32, to: i32| i128::from(to).checked_sub(i128::from(from));
-    match (
-        delta(a.x, b.x),
-        delta(a.y, b.y),
-        delta(a.x, p.x),
-        delta(a.y, p.y),
-    ) {
-        (Some(dx), Some(dy), Some(px), Some(py)) => {
-            matches!((dx.checked_mul(py), dy.checked_mul(px)), (Some(l), Some(r)) if l == r)
-        }
-        _ => false,
-    }
-}
-
 fn subject_of(endpoint: &Endpoint) -> Subject {
     match endpoint {
         Endpoint::Terminal(pin) => Subject::Symbol(pin.symbol_id),
@@ -351,10 +329,7 @@ fn resolve(
             if path.last() == Some(at) {
                 return Ok((split.to.clone(), *at));
             }
-            let segment = path
-                .windows(2)
-                .position(|pair| matches!(pair, [a, b] if on_segment(*a, *b, *at)))
-                .ok_or(CommandError::NotOnWire(*wire))?;
+            let segment = segment_at(&path, *at).ok_or(CommandError::NotOnWire(*wire))?;
             let junction = JunctionId(ids.alloc()?);
             let first = WireId(ids.alloc()?);
             let second = WireId(ids.alloc()?);

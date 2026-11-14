@@ -1,0 +1,16 @@
+# Core crate: no clock, no filesystem, no sockets, no threads, and no
+# iteration-order-dependent collections (architecture rules 4 and determinism).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+
+disallowed-types = [
+    { path = "std::time::Instant", reason = "the core uses virtual time only" },
+    { path = "std::time::SystemTime", reason = "the core uses virtual time only" },
+    { path = "std::collections::HashMap", reason = "iteration order is not deterministic; use BTreeMap" },
+    { path = "std::collections::HashSet", reason = "iteration order is not deterministic; use BTreeSet" },
+    { path = "std::fs::File", reason = "the core performs no filesystem access" },
+    { path = "std::net::TcpStream", reason = "the core performs no network access" },
+    { path = "std::net::UdpSocket", reason = "the core performs no network access" },
+]

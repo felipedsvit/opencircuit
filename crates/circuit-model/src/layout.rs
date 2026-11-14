@@ -152,6 +152,37 @@ pub fn orthogonal_route(from: GridPoint, to: GridPoint) -> Vec<GridPoint> {
     }
 }
 
+/// Whether `p` lies on the segment from `a` to `b`, ends included. Exact on
+/// integers: the products of coordinate differences are taken in `i128`.
+#[must_use]
+pub fn segment_contains(a: GridPoint, b: GridPoint, p: GridPoint) -> bool {
+    let within =
+        |one: i32, other: i32, value: i32| one.min(other) <= value && value <= one.max(other);
+    if !(within(a.x, b.x, p.x) && within(a.y, b.y, p.y)) {
+        return false;
+    }
+    let delta = |from: i32, to: i32| i128::from(to).checked_sub(i128::from(from));
+    match (
+        delta(a.x, b.x),
+        delta(a.y, b.y),
+        delta(a.x, p.x),
+        delta(a.y, p.y),
+    ) {
+        (Some(dx), Some(dy), Some(px), Some(py)) => {
+            matches!((dx.checked_mul(py), dy.checked_mul(px)), (Some(l), Some(r)) if l == r)
+        }
+        _ => false,
+    }
+}
+
+/// The index of the first segment of `path` that contains `p`: segment `i`
+/// runs from `path[i]` to `path[i + 1]`.
+#[must_use]
+pub fn segment_at(path: &[GridPoint], p: GridPoint) -> Option<usize> {
+    path.windows(2)
+        .position(|pair| matches!(pair, [a, b] if segment_contains(*a, *b, p)))
+}
+
 /// Whether every segment of a path is horizontal or vertical. A path with
 /// fewer than two points has no segment and is orthogonal.
 #[must_use]
@@ -354,6 +385,36 @@ mod tests {
         path.extend(route);
         path.push(to);
         assert!(is_orthogonal(&path));
+    }
+
+    #[test]
+    fn point_inside_or_at_the_end_of_a_segment_is_on_it() {
+        assert!(segment_contains(point(0, 0), point(0, 6), point(0, 3)));
+        assert!(segment_contains(point(0, 0), point(0, 6), point(0, 6)));
+        assert!(segment_contains(point(0, 0), point(4, 4), point(2, 2)));
+    }
+
+    #[test]
+    fn point_beside_or_beyond_a_segment_is_not_on_it() {
+        assert!(!segment_contains(point(0, 0), point(0, 6), point(1, 3)));
+        assert!(!segment_contains(point(0, 0), point(0, 6), point(0, 7)));
+        assert!(!segment_contains(point(0, 0), point(4, 4), point(2, 3)));
+    }
+
+    #[test]
+    fn extreme_coordinates_do_not_overflow() {
+        let (a, b) = (point(i32::MIN, i32::MIN), point(i32::MAX, i32::MAX));
+
+        assert!(segment_contains(a, b, point(0, 0)));
+        assert!(!segment_contains(a, b, point(0, 1)));
+    }
+
+    #[test]
+    fn segment_at_finds_the_segment_of_a_point() {
+        let path = [point(0, 0), point(0, 4), point(6, 4)];
+
+        assert_eq!(segment_at(&path, point(3, 4)), Some(1));
+        assert_eq!(segment_at(&path, point(3, 3)), None);
     }
 
     #[test]

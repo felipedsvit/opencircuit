@@ -24,6 +24,7 @@ second real consumer justifies the boundary.
 | Simulation | `circuit-sim` | Topology compilation, static copper nets, discrete solver, logic, timers, thermal latch, runtime, fault policy and change log |
 | Project | `circuit-project` | JSON `.ocircuit`, `schema_version`, strict loading, limits, migrations and canonical round-trip |
 | Commands | `circuit-commands` | Invertible edits, atomic transactions checked for integrity and format limits, undo/redo history, and the editing operations |
+| Editor | `circuit-editor` | Editor logic without a GUI: hit-test, selection, tools (select, place, wire), drag and placement previews; returns transactions, never changes the document |
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation and golden execution |
 | Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that opens, draws and runs a project with operator controls; the only package with a GUI dependency |
@@ -40,8 +41,8 @@ trace    -> compiled, fingerprint
 runtime  -> bitset, compiled, fingerprint, logic, solve, trace
 ```
 
-M2 adds `circuit-renderer`, `apps/desktop` and `circuit-commands` (present),
-then `circuit-editor`. M3 adds `circuit-export`. Those directories are placeholders
+M2 adds `circuit-renderer`, `apps/desktop`, `circuit-commands` and
+`circuit-editor` (all present). M3 adds `circuit-export`. Those directories are placeholders
 until their milestone; they are not workspace members before they have a real
 `src/lib.rs` and a consumer.
 
