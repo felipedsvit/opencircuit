@@ -42,8 +42,9 @@ fn symbol_of(doc: &Schematic, reference: &str, key: &str) -> SymbolId {
         .id
 }
 
-/// Relay whose coil is fed through its own normally closed contact.
-fn buzzer_relay() -> Schematic {
+/// Relay whose coil is fed through its own normally closed contact: it
+/// interrupts itself every tick, like a buzzer.
+fn self_interrupting_relay() -> Schematic {
     let mut rig = Rig::new();
     let (p24, p0) = rig.dc24();
     let k1 = rig.device("K1", "relay.generic", &dc_load());
@@ -52,6 +53,20 @@ fn buzzer_relay() -> Schematic {
     rig.wire(out(p24), pin(contact, "p1"));
     rig.wire(pin(contact, "p2"), pin(coil, "a1"));
     rig.wire(pin(coil, "a2"), out(p0));
+    rig.finish()
+}
+
+/// `P24 -> F1 97/98 -> B1 -> P0`: the signalling contact of the thermal
+/// overload relay sounds a buzzer.
+fn thermal_alarm() -> Schematic {
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let f1 = rig.device("F1", "thermal_overload.generic", &[]);
+    let signalling_contact = rig.symbol(f1, "aux_no", None);
+    let buzzer = rig.part("B1", "buzzer.generic", "buzzer", &dc_load());
+    rig.wire(out(p24), pin(signalling_contact, "p1"));
+    rig.wire(pin(signalling_contact, "p2"), pin(buzzer, "x1"));
+    rig.wire(pin(buzzer, "x2"), out(p0));
     rig.finish()
 }
 
@@ -385,7 +400,7 @@ fn report_policy_keeps_running_and_the_reverser_oscillates_every_two_ticks() {
 
 #[test]
 fn coil_fed_through_its_own_normally_closed_contact_toggles_every_tick() {
-    let mut sim = default_sim(&buzzer_relay());
+    let mut sim = default_sim(&self_interrupting_relay());
 
     let lines = run(&mut sim, 4, &[]);
 
@@ -401,6 +416,23 @@ fn coil_fed_through_its_own_normally_closed_contact_toggles_every_tick() {
             "t=3 load K1.coil off",
             "t=4 signal K1.active 1->0",
             "t=4 load K1.coil on",
+        ]
+    );
+}
+
+#[test]
+fn thermal_overload_closes_its_normally_open_contact_in_the_tick_of_the_trip() {
+    let mut sim = default_sim(&thermal_alarm());
+
+    let lines = run(&mut sim, 6, &[(2, "trip F1"), (5, "reset F1")]);
+
+    assert_eq!(
+        lines,
+        [
+            "t=2 input F1.tripped 0->1",
+            "t=2 load B1.buzzer on",
+            "t=5 input F1.tripped 1->0",
+            "t=5 load B1.buzzer off",
         ]
     );
 }
@@ -794,7 +826,7 @@ fn trace_can_be_switched_off_without_changing_behaviour() {
 
 #[test]
 fn full_trace_buffer_stops_the_run_until_the_trace_is_taken() {
-    let mut sim = default_sim(&buzzer_relay());
+    let mut sim = default_sim(&self_interrupting_relay());
     sim.set_trace_limit(3);
 
     let result = sim.step_n(10, &[]);

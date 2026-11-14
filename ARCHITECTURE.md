@@ -5,6 +5,9 @@ This document is the one-page implementation map. The authoritative contract is
 simulation and the file format are in [`SIMULATION.md`](SIMULATION.md) and
 [`FORMAT.md`](FORMAT.md), which are derived from that specification.
 
+The decisions that are hard to reverse (identity and IDs, tick semantics,
+conductor model, file format) are recorded in [`docs/adr/`](docs/adr/README.md).
+
 ## Core principle
 
 OpenCircuit is a circuit model that has a graphical representation, not a
