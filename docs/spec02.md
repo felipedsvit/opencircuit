@@ -265,7 +265,7 @@ circuit-sim        → circuit-model, fixedbitset
 circuit-project    → circuit-model, serde_json
 apps/cli           → crates do núcleo + clap + anyhow
 apps/desktop       → crates do núcleo + circuit-render + egui/eframe
-xtask              → cargo_metadata
+xtask              → serde_json (lê `cargo metadata`), circuit-model, circuit-project (gera os exemplos)
 ```
 
 Regras obrigatórias:
@@ -488,7 +488,7 @@ pub struct Wire {
     pub id: WireId,
     pub from: Endpoint,
     pub to: Endpoint,
-    pub waypoints: Vec<GridPoint>,    // apenas pontos intermediários
+    pub route: Vec<GridPoint>,        // apenas pontos intermediários (waypoints)
 }
 ```
 
@@ -599,8 +599,9 @@ Modelos iniciais:
 | `supply.terminal` | `PowerSupply` | `terminal` (1) | `conductor`, `supply` |
 | `pushbutton_no` / `pushbutton_nc` | `Pushbutton` | `contact` (1) | — |
 | `selector.latching` | `LatchingSwitch` | `contact` (1) | `initial_closed` |
+| `main_switch.3p` | `LatchingSwitch` | `main` (1, três polos) | `initial_closed` |
 | `contactor.generic` | `Contactor` | `coil` (1), `main` (0..1), `aux_no` (0..8), `aux_nc` (0..8) | `rated_voltage_mv`, `connection` |
-| `relay.generic` | `Relay` | `coil` (1), `aux_no`, `aux_nc`, `changeover` (0..8) | `rated_voltage_mv`, `connection` |
+| `relay.generic` | `Relay` | `coil` (1), `aux_no`, `aux_nc` (0..8); `changeover` entra no M3 | `rated_voltage_mv`, `connection` |
 | `thermal_overload.generic` | `ThermalOverload` | `element` (0..1), `aux_nc` (95/96), `aux_no` (97/98) | — |
 | `timer_on.generic` / `timer_off.generic` | `Timer` | `coil` (1), `delayed_no`, `delayed_nc` (0..4) | `preset_ms`, `rated_voltage_mv`, `connection` |
 | `fuse.generic` | `Fuse` | `link` (1) | — |
@@ -1041,6 +1042,8 @@ pub struct SimSnapshot {
     pub t_us: u64,
     pub energized_devices: Vec<DeviceId>,        // cargas em estado On neste tick
     pub active_devices: Vec<DeviceId>,           // contatores/relés com CoilActive; temporizadores com saída alta
+    pub actuated_devices: Vec<DeviceId>,         // botões pressionados e chaves com retenção fechadas
+    pub tripped_devices: Vec<DeviceId>,          // relés térmicos disparados
     pub closed_symbols: Vec<SymbolId>,           // contatos comandados efetivamente fechados no solve
     pub live_wires: Vec<Live<WireId>>,           // { id, conductors: ConductorSet }; ausente = sem condutor
     pub live_junctions: Vec<Live<JunctionId>>,
@@ -1064,9 +1067,11 @@ pub struct TraceEvent { pub tick: u64, pub kind: TraceKind }
 
 pub enum TraceKind {
     Signal { device: DeviceId, kind: SignalKind, from: bool, to: bool },
-    Load   { device: DeviceId, symbol: SymbolId, on: bool },
-    FaultStarted { code: DiagnosticCode, subject: Subject },
-    FaultCleared { code: DiagnosticCode, subject: Subject },
+    Load   { device: DeviceId, symbol: SymbolId, activity: LoadActivity },  // Off | On | Forward | Reverse
+    FaultStarted { code: DiagnosticCode, subject: Subject, related: Vec<Subject> },
+    FaultCleared { code: DiagnosticCode, subject: Subject, related: Vec<Subject> },
+    Latched,      // o runtime travou ao fim deste tick (FaultPolicy::Halt)
+    LatchReset,   // reset_fault() antes deste tick
 }
 ```
 
@@ -1138,6 +1143,9 @@ Regras:
 | OC-STR-009 | `NonOrthogonalWire` | Warning | não | Segmento de fio não ortogonal |
 | OC-STR-010 | `InvalidParameter` | Error | não | Parâmetro fora do tipo ou do domínio do catálogo |
 | OC-STR-011 | `IdOutOfRange` | Error | não | ID zero, acima de `MAX_ENTITY_ID` ou `>= next_id` |
+| OC-STR-012 | `InvalidSupplyProfile` | Error | não | Campos do perfil de alimentação incoerentes com o tipo |
+| OC-STR-013 | `SelfLoopWire` | Error | não | Fio com os dois extremos no mesmo ponto |
+| OC-STR-014 | `UnsupportedSchemaVersion` | Error | não | Documento em memória fora da versão de schema atual |
 | OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
 | OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
 | OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |
@@ -1154,6 +1162,7 @@ Regras:
 | OC-ELEC-006 | `PhaseLoss` | Warning | não | Motor com apenas parte das fases |
 | OC-MOD-001 | `StaticSeriesLoads` | Error | não | Cargas em série permanente (§9.5); erro de compilação |
 | OC-MOD-002 | `DynamicUnsupportedTopology` | Error | não | Grupo flutuante tocando 2+ cargas em execução (§9.5); cargas afetadas ficam `Off` |
+| OC-MOD-003 | `CircuitTooLarge` | Error | não | Documento maior do que o compilador consegue indexar |
 | OC-CFG-001 | `InvalidConfig` | Error | não | `tick_us` ou atraso de atuação inválido |
 | OC-CFG-002 | `PresetQuantized` | Warning | não | Preset de temporizador não é múltiplo do tick |
 
@@ -1300,14 +1309,14 @@ Trecho ilustrativo: as coordenadas dependem da geometria do catálogo, e campos 
     { "id": 14, "position": { "x": 0, "y": 13 } }
   ],
   "wires": [
-    { "id": 15, "from": { "terminal": { "symbol_id": 7,  "terminal": "out" } }, "to": { "terminal": { "symbol_id": 9,  "terminal": "p1" } }, "waypoints": [] },
-    { "id": 16, "from": { "terminal": { "symbol_id": 9,  "terminal": "p2" } }, "to": { "junction": 13 }, "waypoints": [] },
-    { "id": 17, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 10, "terminal": "p1" } }, "waypoints": [{ "x": -3, "y": 7 }] },
-    { "id": 18, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 12, "terminal": "p1" } }, "waypoints": [{ "x": 3,  "y": 7 }] },
-    { "id": 19, "from": { "terminal": { "symbol_id": 10, "terminal": "p2" } }, "to": { "junction": 14 }, "waypoints": [{ "x": -3, "y": 13 }] },
-    { "id": 20, "from": { "terminal": { "symbol_id": 12, "terminal": "p2" } }, "to": { "junction": 14 }, "waypoints": [{ "x": 3,  "y": 13 }] },
-    { "id": 21, "from": { "junction": 14 }, "to": { "terminal": { "symbol_id": 11, "terminal": "a1" } }, "waypoints": [] },
-    { "id": 22, "from": { "terminal": { "symbol_id": 11, "terminal": "a2" } }, "to": { "terminal": { "symbol_id": 8, "terminal": "out" } }, "waypoints": [] }
+    { "id": 15, "from": { "terminal": { "symbol_id": 7,  "terminal": "out" } }, "to": { "terminal": { "symbol_id": 9,  "terminal": "p1" } }, "route": [] },
+    { "id": 16, "from": { "terminal": { "symbol_id": 9,  "terminal": "p2" } }, "to": { "junction": 13 }, "route": [] },
+    { "id": 17, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 10, "terminal": "p1" } }, "route": [{ "x": -3, "y": 7 }] },
+    { "id": 18, "from": { "junction": 13 }, "to": { "terminal": { "symbol_id": 12, "terminal": "p1" } }, "route": [{ "x": 3,  "y": 7 }] },
+    { "id": 19, "from": { "terminal": { "symbol_id": 10, "terminal": "p2" } }, "to": { "junction": 14 }, "route": [{ "x": -3, "y": 13 }] },
+    { "id": 20, "from": { "terminal": { "symbol_id": 12, "terminal": "p2" } }, "to": { "junction": 14 }, "route": [{ "x": 3,  "y": 13 }] },
+    { "id": 21, "from": { "junction": 14 }, "to": { "terminal": { "symbol_id": 11, "terminal": "a1" } }, "route": [] },
+    { "id": 22, "from": { "terminal": { "symbol_id": 11, "terminal": "a2" } }, "to": { "terminal": { "symbol_id": 8, "terminal": "out" } }, "route": [] }
   ]
 }
 ```
