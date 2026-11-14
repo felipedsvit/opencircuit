@@ -42,16 +42,27 @@ fn fault_codes(solution: &ElectricalSolution) -> Vec<DiagnosticCode> {
     solution.faults().iter().map(|fault| fault.code()).collect()
 }
 
-/// `P24 -> S1 -> H1 -> P0` with a lamp of the given parameters.
-fn switched_lamp(params: &[(&str, ParamValue)]) -> (Schematic, SymbolId) {
+/// `P24 -> S1 -> <reference> -> P0` with a two-terminal load (`x1`, `x2`) of
+/// the given model and parameters.
+fn switched_load(
+    reference: &str,
+    model: &str,
+    symbol_key: &str,
+    params: &[(&str, ParamValue)],
+) -> (Schematic, SymbolId) {
     let mut rig = Rig::new();
     let (p24, p0) = rig.dc24();
     let button = rig.part("S1", "pushbutton_no", "contact", &[]);
-    let lamp = rig.part("H1", "lamp.generic", "lamp", params);
+    let load = rig.part(reference, model, symbol_key, params);
     rig.wire(out(p24), pin(button, "p1"));
-    rig.wire(pin(button, "p2"), pin(lamp, "x1"));
-    rig.wire(pin(lamp, "x2"), out(p0));
+    rig.wire(pin(button, "p2"), pin(load, "x1"));
+    rig.wire(pin(load, "x2"), out(p0));
     (rig.finish(), button)
+}
+
+/// `P24 -> S1 -> H1 -> P0` with a lamp of the given parameters.
+fn switched_lamp(params: &[(&str, ParamValue)]) -> (Schematic, SymbolId) {
+    switched_load("H1", "lamp.generic", "lamp", params)
 }
 
 /// Lamp across two taps of a three-phase supply with neutral.
@@ -116,6 +127,25 @@ fn load_is_energized_only_through_a_closed_contact() {
     assert_eq!(open.faults(), []);
     assert_eq!(state_of(&circuit, &closed, "H1"), LoadState::On);
     assert_eq!(closed.faults(), []);
+}
+
+#[test]
+fn buzzer_is_energized_only_through_a_closed_contact_and_with_a_matching_label() {
+    let (doc, button) = switched_load("B1", "buzzer.generic", "buzzer", &dc_load());
+    let circuit = compile_ok(&doc);
+    let open = solve(&circuit, &[]);
+    let closed = solve(&circuit, &[button]);
+
+    let (wrong_doc, wrong_button) =
+        switched_load("B1", "buzzer.generic", "buzzer", &load(12_000, "dc"));
+    let wrong_circuit = compile_ok(&wrong_doc);
+    let wrong = solve(&wrong_circuit, &[wrong_button]);
+
+    assert_eq!(state_of(&circuit, &open, "B1"), LoadState::Off);
+    assert_eq!(state_of(&circuit, &closed, "B1"), LoadState::On);
+    assert_eq!(closed.faults(), []);
+    assert_eq!(state_of(&wrong_circuit, &wrong, "B1"), LoadState::Off);
+    assert_eq!(fault_codes(&wrong), [DiagnosticCode::LoadSupplyMismatch]);
 }
 
 #[test]
