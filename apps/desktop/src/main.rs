@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use eframe::egui;
-use opencircuit_desktop::ViewerApp;
+use opencircuit_desktop::DesktopApp;
 
 const USAGE: &str = "usage: opencircuit-desktop [PROJECT.ocircuit]";
 
@@ -33,7 +33,7 @@ fn main() -> ExitCode {
     let result = eframe::run_native(
         "OpenCircuit",
         options,
-        Box::new(move |_creation| Ok(Box::new(ViewerApp::new(path.as_deref())))),
+        Box::new(move |_creation| Ok(Box::new(DesktopApp::new(path.as_deref())))),
     );
     match result {
         Ok(()) => ExitCode::SUCCESS,

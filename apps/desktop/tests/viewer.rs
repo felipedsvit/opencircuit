@@ -2,14 +2,14 @@
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use opencircuit_desktop::ViewerApp;
+use opencircuit_desktop::DesktopApp;
 
 const COMMAND: &str = include_str!("../../../examples/direct-starter/command.ocircuit");
 const SERIES_LOADS: &str =
     include_str!("../../../tests/fixtures/series-loads/series-loads.ocircuit");
 
-fn harness(app: ViewerApp) -> Harness<'static, ViewerApp> {
-    let mut harness = Harness::new_ui_state(|ui, app: &mut ViewerApp| app.show(ui), app);
+fn harness(app: DesktopApp) -> Harness<'static, DesktopApp> {
+    let mut harness = Harness::new_ui_state(|ui, app: &mut DesktopApp| app.show(ui), app);
     harness.set_size(eframe::egui::Vec2::new(1000.0, 700.0));
     harness.run();
     harness
@@ -17,7 +17,7 @@ fn harness(app: ViewerApp) -> Harness<'static, ViewerApp> {
 
 #[test]
 fn window_without_a_project_explains_how_to_open_one() {
-    let harness = harness(ViewerApp::default());
+    let harness = harness(DesktopApp::default());
 
     assert!(
         harness
@@ -28,7 +28,7 @@ fn window_without_a_project_explains_how_to_open_one() {
 
 #[test]
 fn opened_project_shows_its_name_and_that_it_compiles() {
-    let mut app = ViewerApp::default();
+    let mut app = DesktopApp::default();
     app.open_text(COMMAND, "command.ocircuit");
 
     let harness = harness(app);
@@ -47,7 +47,7 @@ fn opened_project_shows_its_name_and_that_it_compiles() {
 
 #[test]
 fn project_that_does_not_compile_lists_its_diagnostics() {
-    let mut app = ViewerApp::default();
+    let mut app = DesktopApp::default();
     app.open_text(SERIES_LOADS, "series-loads.ocircuit");
 
     let harness = harness(app);
@@ -57,7 +57,7 @@ fn project_that_does_not_compile_lists_its_diagnostics() {
 
 #[test]
 fn clicking_a_diagnostic_selects_its_subject() {
-    let mut app = ViewerApp::default();
+    let mut app = DesktopApp::default();
     app.open_text(SERIES_LOADS, "series-loads.ocircuit");
     let mut harness = harness(app);
 
@@ -70,15 +70,15 @@ fn clicking_a_diagnostic_selects_its_subject() {
 const STARTER: &str = include_str!("../../../examples/direct-starter/starter.ocircuit");
 const REVERSING: &str = include_str!("../../../examples/forward-reverse/reversing.ocircuit");
 
-fn opened(text: &str, origin: &str) -> Harness<'static, ViewerApp> {
-    let mut app = ViewerApp::default();
+fn opened(text: &str, origin: &str) -> Harness<'static, DesktopApp> {
+    let mut app = DesktopApp::default();
     app.open_text(text, origin);
     harness(app)
 }
 
 /// Whether the device with this designator is picked up in the last solved
 /// tick.
-fn active(harness: &Harness<'_, ViewerApp>, reference: &str) -> bool {
+fn active(harness: &Harness<'_, DesktopApp>, reference: &str) -> bool {
     let Some(session) = harness.state().session() else {
         return false;
     };
@@ -95,7 +95,7 @@ fn active(harness: &Harness<'_, ViewerApp>, reference: &str) -> bool {
         .is_some_and(|s| s.active_devices.contains(&device.id))
 }
 
-fn click(harness: &mut Harness<'_, ViewerApp>, label: &str) {
+fn click(harness: &mut Harness<'_, DesktopApp>, label: &str) {
     harness.get_by_label(label).click();
     harness.run();
 }
@@ -169,7 +169,7 @@ fn project_that_does_not_compile_has_no_simulation_controls() {
 
 #[test]
 fn invalid_project_text_shows_an_error_and_opens_nothing() {
-    let mut app = ViewerApp::default();
+    let mut app = DesktopApp::default();
     app.open_text("{", "broken.ocircuit");
 
     let harness = harness(app);

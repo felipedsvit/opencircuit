@@ -1242,7 +1242,7 @@ Antes do editor, o primeiro artefato visual é um viewer: abre um `.ocircuit`, c
 
 Criar benchmarks desde cedo com documentos de 100, 500 e 2.000 componentes, medindo: renderização, hit-test, roteamento, compilação, `step`/`step_n` e invalidação de cache. Usar culling por bounding box e invalidação seletiva. Não introduzir otimização complexa sem medição. Os orçamentos-alvo (por exemplo, quanto do frame de 16,6 ms a 60 fps o `step_n` pode consumir) partem do primeiro benchmark, registrado em [`benchmarks.md`](benchmarks.md) e regenerado com `cargo run -p xtask --release -- bench`; o custo de pintura do egui ainda não é medido.
 
-Recompilação no editor: após cada comando concluído, com debounce; compilação incremental fica **[adiada]** até que a medição a justifique.
+Recompilação no editor: após cada transação concluída, imediatamente. O primeiro benchmark (`docs/benchmarks.md`: cerca de 4 ms para compilar 2.000 dispositivos) dispensa o debounce no M2b; compilação incremental fica **[adiada]** até que a medição a justifique. Editar descarta a simulação em curso, que pertence a um circuito que já não existe.
 
 ### 14.6 Undo e redo
 

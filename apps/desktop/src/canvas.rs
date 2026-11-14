@@ -26,6 +26,13 @@ pub struct CanvasEvents {
     pub pressed: Option<[f32; 2]>,
     /// Whether the primary button was released this frame, anywhere.
     pub released: bool,
+    /// Where the pointer was when the primary button was released, if it
+    /// was released this frame.
+    pub released_at: Option<[f32; 2]>,
+    /// Where the pointer hovers over the canvas.
+    pub hover: Option<[f32; 2]>,
+    /// The top-left corner of the canvas on screen.
+    pub origin: [f32; 2],
     /// The size of the canvas.
     pub size: [f32; 2],
 }
@@ -135,6 +142,17 @@ pub fn show(ui: &mut Ui, scene: &Scene, camera: &mut Camera, fit: bool) -> Canva
             .then(|| ui.input(|input| input.pointer.press_origin()).map(local))
             .flatten(),
         released: ui.input(|input| input.pointer.primary_released()),
+        released_at: ui
+            .input(|input| {
+                input
+                    .pointer
+                    .primary_released()
+                    .then(|| input.pointer.latest_pos())
+                    .flatten()
+            })
+            .map(local),
+        hover: response.hover_pos().map(local),
+        origin: [origin.x, origin.y],
         size,
     }
 }

@@ -78,6 +78,8 @@ const PACKAGE_RULES: &[PackageRule] = &[
     PackageRule {
         name: "opencircuit-desktop",
         workspace: &[
+            "circuit-commands",
+            "circuit-editor",
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
