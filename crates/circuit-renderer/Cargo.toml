@@ -1,0 +1,13 @@
+[package]
+name = "circuit-renderer"
+description = "OpenCircuit neutral scene: drawing primitives with semantic styles, built from a document and a snapshot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+circuit-model = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

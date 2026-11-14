@@ -39,6 +39,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-renderer"
+version = "0.0.1"
+dependencies = [
+ "circuit-model",
+ "proptest",
+]
+
+[[package]]
 name = "circuit-sim"
 version = "0.0.1"
 dependencies = [

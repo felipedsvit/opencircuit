@@ -23,6 +23,7 @@ second real consumer justifies the boundary.
 | Model | `circuit-model` | IDs, document, catalog, conductors, diagnostics, inputs and snapshot types |
 | Simulation | `circuit-sim` | Topology compilation, static copper nets, discrete solver, logic, timers, thermal latch, runtime, fault policy and change log |
 | Project | `circuit-project` | JSON `.ocircuit`, `schema_version`, strict loading, limits, migrations and canonical round-trip |
+| Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation and golden execution |
 | Tooling | `xtask` | Architecture checks and generation of the example projects |
 
@@ -37,7 +38,7 @@ trace    -> compiled, fingerprint
 runtime  -> bitset, compiled, fingerprint, logic, solve, trace
 ```
 
-M2 adds `circuit-renderer`, `circuit-editor`, `circuit-commands` and
+M2 adds `circuit-renderer` (present), `circuit-editor`, `circuit-commands` and
 `apps/desktop`. M3 adds `circuit-export`. Those directories are placeholders
 until their milestone; they are not workspace members before they have a real
 `src/lib.rs` and a consumer.

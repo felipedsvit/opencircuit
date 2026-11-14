@@ -45,6 +45,16 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // The renderer sees the simulation only through `SimSnapshot`, a type of
+    // `circuit-model`; depending on `circuit-sim` would let drawing code
+    // reach compiled indices and runtime state.
+    PackageRule {
+        name: "circuit-renderer",
+        workspace: &["circuit-model"],
+        external: &[],
+        dev: &["proptest"],
+        core: true,
+    },
     PackageRule {
         name: "opencircuit-cli",
         workspace: &["circuit-model", "circuit-project", "circuit-sim"],
@@ -384,6 +394,10 @@ mod tests {
                         ("serde_json", None),
                     ],
                 ),
+                (
+                    "circuit-renderer",
+                    &[("circuit-model", None), ("proptest", Some("dev"))],
+                ),
                 ("xtask", &[("serde_json", None)]),
                 ("serde", &[]),
                 ("serde_json", &[]),
@@ -398,13 +412,59 @@ mod tests {
 
     #[test]
     fn unknown_workspace_crate_fails_closed() {
-        let found = violations(&[("circuit-renderer", &[])], REGISTRY);
+        let found = violations(&[("circuit-export", &[])], REGISTRY);
 
         assert_eq!(
             found,
             [
-                "workspace package `circuit-renderer` has no architecture rule; add one to xtask before adding the crate"
+                "workspace package `circuit-export` has no architecture rule; add one to xtask before adding the crate"
             ]
+        );
+    }
+
+    #[test]
+    fn renderer_depending_on_circuit_sim_is_rejected() {
+        let found = violations(
+            &[
+                ("circuit-model", &[]),
+                (
+                    "circuit-renderer",
+                    &[("circuit-model", None), ("circuit-sim", None)],
+                ),
+                ("circuit-sim", &[("circuit-model", None)]),
+            ],
+            REGISTRY,
+        );
+
+        assert_eq!(
+            found,
+            [
+                "`circuit-renderer` must not have dependency `circuit-sim`; it is not in the allowlist"
+            ]
+        );
+    }
+
+    #[test]
+    fn renderer_reaching_egui_is_rejected() {
+        let found = violations(
+            &[
+                ("circuit-model", &[]),
+                (
+                    "circuit-renderer",
+                    &[("circuit-model", None), ("helper", None)],
+                ),
+                ("helper", &[("egui", None)]),
+                ("egui", &[]),
+            ],
+            REGISTRY,
+        );
+
+        assert!(
+            found.contains(
+                &"core crate `circuit-renderer` reaches `egui`, directly or transitively"
+                    .to_owned()
+            ),
+            "{found:?}"
         );
     }
 
