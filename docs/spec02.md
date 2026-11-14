@@ -125,7 +125,7 @@ O OpenCircuit será uma ferramenta de desenho, aprendizado e simulação prelimi
 5. **Tempo virtual:** o motor não lê o relógio do sistema.
 6. **Snapshot coerente:** cada snapshot representa um único tick resolvido.
 7. **Persistência versionada:** o formato tem `schema_version`, migrações testadas e política explícita para versões desconhecidas.
-8. **Diagnóstico estruturado:** erros têm códigos estáveis (`OCxxxx`) e referências aos elementos envolvidos.
+8. **Diagnóstico estruturado:** erros têm códigos estáveis (`OC-<CAT>-NNN`, por exemplo `OC-ELEC-001`) e referências aos elementos envolvidos.
 9. **Testabilidade headless:** toda a simulação roda sem GUI.
 10. **Evolução incremental:** o MVP não simula grandezas físicas que o solver não calcula; casos fora do modelo são rejeitados com diagnóstico, nunca "aproximados".
 11. **Módulos antes de crates:** fronteiras nascem como módulos com regras de import verificadas; viram crates quando um gatilho objetivo for atingido (§5.3).
@@ -225,15 +225,15 @@ opencircuit/
 └── xtask/                       # check-architecture, update-golden
 ```
 
-`circuit-editor`/`circuit-commands`, `circuit-render` e `circuit-export` **não existem** no início. Entram quando houver consumidor real (§5.3).
+`circuit-editor`/`circuit-commands`, `circuit-renderer` e `circuit-export` **não existem** no início. Entram quando houver consumidor real (§5.3).
 
 ### 5.2 Responsabilidade de crates e módulos
 
 | Unidade | Módulos | Responsabilidade |
 |---|---|---|
-| `circuit-model` | `ids`, `geometry`, `supply`, `schematic`, `catalog`, `diagnostics`, `snapshot` | Tipos do domínio, catálogo versionado, códigos de diagnóstico, tipos de snapshot e de falha |
-| `circuit-sim` | `compiled`, `compile`, `solve`, `logic`, `runtime`, `trace` | Compilação, solver discreto, lógica de dispositivos, tick, estado, trace, replay |
-| `circuit-project` | `schema`, `migrate`, `io` | JSON canônico, leitura em duas fases, migrações |
+| `circuit-model` | `ids`, `geometry`, `supply`, `schematic`, `validate`, `catalog`, `input`, `diagnostics`, `snapshot`, `builder` | Tipos do domínio, validação estrutural do documento, catálogo versionado, entradas do operador, códigos de diagnóstico, tipos de snapshot e de falha; `builder` monta documentos por código (fixtures, exemplos, testes) |
+| `circuit-sim` | `bitset`, `union_find`, `fingerprint`, `compiled`, `compile`, `solve`, `logic`, `runtime`, `trace` | Compilação, solver discreto, lógica de dispositivos, tick, estado, trace, checkpoint e replay; `bitset`, `union_find` e `fingerprint` são primitivas internas sem dependências |
+| `circuit-project` | raiz do crate (`from_str`, `to_string`), `limits`, `migrate` | JSON canônico, leitura em duas fases, limites de tamanho, migrações |
 | `apps/cli` | — | `validate`, `simulate`, `test` (e `export` em M3) |
 | `xtask` | — | Verificação de arquitetura e atualização controlada de goldens |
 
@@ -252,7 +252,7 @@ Divisões previstas:
 | Crate futuro | Origem | Gatilho esperado |
 |---|---|---|
 | `circuit-editor` (inclui comandos de edição, undo/redo, hit-test, roteamento) | novo | M2b: a GUI de edição começa |
-| `circuit-render` (`Scene`, `build_scene`) | novo | M2a: viewer e, depois, exportador |
+| `circuit-renderer` (`Scene`, `build_scene`) | novo | M2a: viewer e, depois, exportador |
 | `circuit-export` | novo | M3: SVG/PDF |
 | `circuit-topology` (`compiled` + `compile`) | `circuit-sim` | Segundo consumidor do `CompiledCircuit` sem runtime (lint, análise estática, netlist) |
 | `circuit-io` | novo | M4: adaptadores industriais |
@@ -261,12 +261,14 @@ Divisões previstas:
 
 ```text
 circuit-model      → serde, thiserror (allowlist em xtask)
-circuit-sim        → circuit-model, fixedbitset
-circuit-project    → circuit-model, serde_json
-apps/cli           → crates do núcleo + clap + anyhow
-apps/desktop       → crates do núcleo + circuit-render + egui/eframe
+circuit-sim        → circuit-model, thiserror
+circuit-project    → circuit-model, serde_json, thiserror
+apps/cli           → crates do núcleo + serde, serde_json (parser de argumentos próprio)
+apps/desktop       → crates do núcleo + circuit-renderer + egui/eframe
 xtask              → serde_json (lê `cargo metadata`), circuit-model, circuit-project (gera os exemplos)
 ```
+
+Decisão do M1: o conjunto de bits do solver é um módulo próprio e pequeno (`bitset`) em vez de `fixedbitset`, e a CLI tem só os subcomandos `validate`, `simulate` e `test` com poucas opções, então usa um parser próprio em vez de `clap`/`anyhow`. Ambos mantêm a árvore de dependências mínima (§5.5). `clap` entra quando a CLI crescer o bastante para justificá-lo (gatilho 2 de §5.3), sem tocar nos crates do núcleo.
 
 Regras obrigatórias:
 
@@ -278,17 +280,17 @@ Regras obrigatórias:
 6. Dentro de `circuit-sim`:
 
 ```text
-compiled   → (nada)
-compile    → compiled
-solve      → compiled
-logic      → compiled
-runtime    → compiled, solve, logic
-trace      → compiled
+bitset, union_find, fingerprint, logic → (nada)
+compiled   → fingerprint
+compile    → compiled, fingerprint, union_find
+solve      → bitset, compiled, union_find
+trace      → compiled, fingerprint
+runtime    → bitset, compiled, fingerprint, logic, solve, trace
 ```
 
 Mecanismos de verificação:
 
-- `cargo xtask check-architecture`: usa `cargo metadata --locked` para checar as regras 1, 2, 3 e 5 (grafo de dependências, inclusive transitivas) e examina os `use crate::…` de cada módulo de `circuit-sim` para a regra 6. A análise de módulos é textual (não resolve macros nem re-exports com glob); `pub(crate)` e revisão cobrem o resto.
+- `cargo run -p xtask -- check-architecture`: usa `cargo metadata --locked` para checar as regras 1, 2, 3 e 5 (grafo de dependências resolvido, inclusive transitivas, contra allowlists que falham fechadas: um pacote ou módulo sem regra é violação) e examina os `use crate::…` de cada módulo de `circuit-sim` para a regra 6. A análise de módulos é textual (não resolve macros nem re-exports com glob); `pub(crate)` e revisão cobrem o resto.
 - `clippy.toml` em cada crate do núcleo, com `disallowed-types` (`std::time::Instant`, `std::time::SystemTime`, `std::collections::HashMap`) e `disallowed-methods` para I/O. O uso interno e ordenado de `HashMap` exige `#[allow]` com comentário (regra 4 e determinismo de saída).
 - `cargo-deny` complementa com políticas de fontes, advisories e licenças; não substitui a validação das camadas internas.
 
@@ -314,29 +316,29 @@ As versões abaixo são ilustrativas. Resolver com `cargo add`/`cargo update`, v
 ```toml
 [workspace]
 resolver = "3"
-members = ["apps/cli", "crates/*", "xtask"]   # apps/desktop entra no M2a
+members = [                     # explícito, sem glob: um crate novo exige uma regra no xtask
+    "apps/cli",
+    "crates/circuit-model",
+    "crates/circuit-project",
+    "crates/circuit-sim",
+    "xtask",
+]                               # apps/desktop entra no M2a
 
 [workspace.package]
 edition = "2024"
 license = "MIT OR Apache-2.0"
-# rust-version: medir o MSRV real (cargo-msrv) antes de fixar.
-# A edição 2024 exige Rust >= 1.85.
+rust-version = "1.85"           # a edição 2024 exige >= 1.85; a suíte passa nessa versão
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-fixedbitset = "0.5"
 
-# apps e xtask
-anyhow = "1"
-clap = { version = "4", features = ["derive"] }
+# testes (usados no M1)
+proptest = { version = "1", default-features = false, features = ["std"] }
 
-# testes e benchmarks
-proptest = "1"
-insta = "1"
-tempfile = "3"
-criterion = "0.6"
+# candidatos de marcos futuros, ainda não usados: clap, anyhow (CLI maior),
+# insta, tempfile, criterion (benchmarks)
 
 # UI (M2a): não fixar no papel; usar `cargo add eframe` e deixar o Cargo.lock registrar.
 ```
@@ -1185,7 +1187,7 @@ Nem todo terminal desconectado é erro; a obrigatoriedade é definida no catálo
 
 ### 14.1 UI
 
-A aplicação desktop usa egui/eframe. Todo código de UI fica em `apps/desktop`; `circuit-editor` e `circuit-render` (quando existirem) não dependem de egui.
+A aplicação desktop usa egui/eframe. Todo código de UI fica em `apps/desktop`; `circuit-editor` e `circuit-renderer` (quando existirem) não dependem de egui.
 
 Regiões sugeridas:
 
@@ -1193,7 +1195,7 @@ Regiões sugeridas:
 - biblioteca de componentes;
 - canvas;
 - inspetor de propriedades;
-- painel inferior de diagnósticos e eventos (com os códigos `OCxxxx` e navegação até o sujeito);
+- painel inferior de diagnósticos e eventos (com os códigos `OC-<CAT>-NNN` e navegação até o sujeito);
 - controles de simulação (executar, pausar, passo, acionamento de botões e chaves).
 
 ### 14.2 Coordenadas e câmera
@@ -1273,7 +1275,7 @@ JSON com extensão `.ocircuit`. Regras normativas (detalhadas em `FORMAT.md`):
 - IDs são inteiros `<= MAX_ENTITY_ID` (2^53 − 1), seguros para consumidores JavaScript.
 - Serialização **canônica**: campos em ordem fixa da struct; coleções ordenadas por ID; `BTreeMap` para parâmetros; indentação de 2 espaços; fim de linha LF; newline final. Salvar um arquivo canônico recém-carregado produz **os mesmos bytes**.
 - `.gitattributes` fixa `eol=lf` para `*.ocircuit`, traces e fixtures, para que o CI em Windows não quebre comparações byte a byte.
-- Validação antes de usar: o loader aplica `deny_unknown_fields` ao schema **atual** e confere ranges de ID.
+- Validação antes de usar: o loader aplica `deny_unknown_fields` ao schema **atual** e os limites de tamanho (`FORMAT.md`). Ranges, unicidade e referências de ID **não** são checados pelo loader: são diagnósticos de `Schematic::validate` e do compilador (`OC-STR-001`, `OC-STR-002`, `OC-STR-011`), para que um projeto quebrado ainda abra e seja explicado.
 - Campos desconhecidos **não são preservados**. Preservá-los exigiria `flatten` em toda struct e conflitaria com a validação estrita. Decisão: recusar o que não se entende (§15.3).
 - A versão do modelo de componente (`model.version`) é independente do `schema_version` do documento.
 
@@ -1328,7 +1330,7 @@ Lido como circuito: P24 → S2 (NF) → junção → [S1 (NA) em paralelo com o 
 1. **Fase 1 (permissiva):** ler apenas `schema_version`, ignorando o restante.
    - `schema_version` **maior** que o suportado: erro `ProjectError::NewerSchema { found, supported }`, com mensagem clara. Não há tentativa de leitura parcial.
    - `schema_version` **menor**: aplicar as migrações em sequência sobre `serde_json::Value`.
-2. **Fase 2 (estrita):** desserializar o `Value` já migrado para as structs do schema atual, com `deny_unknown_fields` e verificação de ranges de IDs.
+2. **Fase 2 (estrita):** desserializar o `Value` já migrado para as structs do schema atual, com `deny_unknown_fields` e os limites de tamanho. A verificação de ranges de IDs fica na validação do documento (§8.1), não no loader.
 
 Em seguida, a compilação (fase estrutural, §8.1) valida modelo, versão de modelo, símbolos e terminais contra o catálogo.
 
@@ -1637,10 +1639,10 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 
 | ADR | Decisão |
 |---|---|
-| ADR-001 | IDs `u64` com contador persistido, vínculo por `DeviceId`, separação Device/SymbolInstance/Terminal e chaves estruturais de terminal |
-| ADR-002 | Semântica do tick e do commit: entradas efetivas no mesmo tick, atraso mínimo de 1 tick, snapshot pré-commit, trace como log de mudanças, replay e checkpoint |
-| ADR-003 | Modelo de condutores (máscara de bits, um perfil por condutor), regras de conflito e limites do solver discreto |
-| ADR-004 | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
+| [ADR-001](adr/0001-identity-and-ids.md) | IDs `u64` com contador persistido, vínculo por `DeviceId`, separação Device/SymbolInstance/Terminal e chaves estruturais de terminal |
+| [ADR-002](adr/0002-tick-and-commit.md) | Semântica do tick e do commit: entradas efetivas no mesmo tick, atraso mínimo de 1 tick, snapshot pré-commit, trace como log de mudanças, replay e checkpoint |
+| [ADR-003](adr/0003-conductor-model.md) | Modelo de condutores (máscara de bits, um perfil por condutor), regras de conflito e limites do solver discreto |
+| [ADR-004](adr/0004-canonical-json-format.md) | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
 
 ---
 
@@ -1750,7 +1752,7 @@ O primeiro marco é o golden do comando da partida direta rodando nos três sist
 - [ ] Semântica do tick e do commit formalizada; snapshot coerente com o instante resolvido.
 - [ ] Atraso de atuação mínimo de 1 tick; TON e TOF com tabelas de ticks como testes.
 - [ ] `FaultPolicy` definida e testada (`Halt` por padrão; `Report` opt-in).
-- [ ] `CompileOutput` e diagnósticos com códigos `OCxxxx` estáveis.
+- [ ] `CompileOutput` e diagnósticos com códigos `OC-<CAT>-NNN` estáveis.
 - [ ] Limites do solver documentados; `StaticSeriesLoads` e `DynamicUnsupportedTopology` implementados.
 - [ ] Regras de dependência verificadas no CI (`xtask`, `clippy.toml`, `cargo-deny`).
 - [ ] Formato JSON canônico, sem ponto flutuante, versionado, com leitura em duas fases e migrações.
@@ -1769,7 +1771,6 @@ As versões e APIs devem ser verificadas novamente durante a implementação. Re
 - eframe: https://docs.rs/eframe/
 - serde: https://serde.rs/
 - serde_json: https://docs.rs/serde_json/
-- fixedbitset: https://docs.rs/fixedbitset/
 - cargo-deny: https://embarkstudios.github.io/cargo-deny/
 - proptest: https://docs.rs/proptest/
 - insta: https://insta.rs/
