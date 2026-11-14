@@ -321,3 +321,39 @@ fn directory_without_scenarios_is_a_usage_error() {
     assert_eq!(code(&output), 2);
     assert!(stderr(&output).contains("no `*.scenario.json` file found"));
 }
+
+/// Every file below `directory`, in a stable order.
+fn files_below(directory: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![directory.to_path_buf()];
+    while let Some(current) = pending.pop() {
+        for entry in fs::read_dir(&current).expect("directory is readable") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn examples_and_fixtures_contain_no_carriage_return() {
+    // Goldens are compared byte for byte. A checkout that rewrites line
+    // endings (for example `core.autocrlf` without `.gitattributes`) would
+    // turn every golden into an unreadable diff; this names the file instead.
+    let mut offenders = Vec::new();
+    for directory in ["examples", "tests/fixtures"] {
+        for path in files_below(&root().join(directory)) {
+            let bytes = fs::read(&path).expect("file is readable");
+            if bytes.contains(&b'\r') {
+                offenders.push(path);
+            }
+        }
+    }
+
+    assert_eq!(offenders, Vec::<PathBuf>::new());
+}

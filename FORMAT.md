@@ -101,8 +101,10 @@ is fixed in the same change.
 }
 ```
 
-This text is the canonical form of a small document and is checked by a unit
-test of `circuit-project`. Complete projects are in `examples/`.
+This text is the canonical form of a small document. Unit tests of
+`circuit-project` compare it with the test document byte for byte, and compare
+the catalog table below with the built-in catalog (every model, symbol key and
+parameter key must appear in its row). Complete projects are in `examples/`.
 
 Field values:
 

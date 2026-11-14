@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use circuit_model::builder::pin;
 use circuit_model::{
-    Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue,
-    PhaseSequence, PinRef, ProjectMeta, QuarterTurn, ReferenceDesignator, SchematicBuilder,
-    SupplyId, SupplyKind, SupplyProfile, SymbolId, SymbolInstance, SymbolKey, TerminalKey, Wire,
-    WireId,
+    ComponentCatalog, Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef,
+    ParamValue, PhaseSequence, PinRef, ProjectMeta, QuarterTurn, ReferenceDesignator,
+    SchematicBuilder, SupplyId, SupplyKind, SupplyProfile, SymbolId, SymbolInstance, SymbolKey,
+    TerminalKey, Wire, WireId,
 };
 use proptest::prelude::*;
 
@@ -131,6 +131,47 @@ fn schema_message(result: Result<Schematic, ProjectError>) -> String {
 #[test]
 fn document_is_written_in_canonical_form() {
     assert_eq!(to_string(&sample()).unwrap(), SAMPLE);
+}
+
+/// The normative format document, read at compile time so that a drifting
+/// example or catalog table fails a test.
+const FORMAT_MD: &str = include_str!("../../../FORMAT.md");
+
+#[test]
+fn format_document_example_is_the_canonical_sample() {
+    let block = FORMAT_MD
+        .split_once("```json\n")
+        .and_then(|(_, rest)| rest.split_once("```"))
+        .map(|(block, _)| block);
+
+    assert_eq!(block, Some(SAMPLE));
+}
+
+#[test]
+fn format_document_catalog_table_matches_the_builtin_catalog() {
+    let section = FORMAT_MD
+        .split_once("## Catalog")
+        .and_then(|(_, rest)| rest.split_once("\n## "))
+        .map(|(section, _)| section)
+        .expect("FORMAT.md has a catalog section");
+
+    for model in ComponentCatalog::builtin().models() {
+        let id = format!("`{}`", model.id());
+        let row = section
+            .lines()
+            .find(|line| line.starts_with('|') && line.contains(&id))
+            .unwrap_or_else(|| panic!("FORMAT.md does not list {}", model.id()));
+        let symbols = model.symbols().iter().map(|symbol| symbol.key().0.as_str());
+        let params = model.params().iter().map(|param| param.key.as_str());
+        for key in symbols.chain(params) {
+            assert!(
+                row.contains(&format!("`{key}`")),
+                "FORMAT.md row of {} does not mention `{key}`",
+                model.id()
+            );
+        }
+        assert_eq!(model.version(), 1, "FORMAT.md documents version 1 only");
+    }
 }
 
 #[test]
