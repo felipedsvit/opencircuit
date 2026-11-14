@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/circuit-model",
+    "crates/circuit-project",
     "crates/circuit-sim",
     "xtask",
 ]

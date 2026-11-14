@@ -29,6 +29,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-project"
+version = "0.0.1"
+dependencies = [
+ "circuit-model",
+ "proptest",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "circuit-sim"
 version = "0.0.1"
 dependencies = [

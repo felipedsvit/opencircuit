@@ -1,0 +1,15 @@
+[package]
+name = "circuit-project"
+description = "OpenCircuit .ocircuit JSON format: canonical serialization, strict loading and migrations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+circuit-model = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

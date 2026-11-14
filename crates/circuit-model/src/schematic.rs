@@ -9,7 +9,9 @@
 //! behaviour class of a device.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
+use serde::de::{Deserializer, Error as _, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::Diagnostic;
@@ -102,7 +104,41 @@ pub struct Device {
     /// Component model that defines symbols, terminals and behaviour.
     pub model: ModelRef,
     /// Parameter values, validated against the model.
+    #[serde(deserialize_with = "unique_params")]
     pub params: BTreeMap<String, ParamValue>,
+}
+
+/// Deserialize device parameters, refusing a key that appears twice. A plain
+/// map would silently keep the last value, and a file must not mean two
+/// things.
+fn unique_params<'de, D>(deserializer: D) -> Result<BTreeMap<String, ParamValue>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct UniqueParams;
+
+    impl<'de> Visitor<'de> for UniqueParams {
+        type Value = BTreeMap<String, ParamValue>;
+
+        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("a map of device parameters with unique keys")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> Result<Self::Value, A::Error> {
+            let mut params = BTreeMap::new();
+            while let Some((key, value)) = access.next_entry::<String, ParamValue>()? {
+                if params.contains_key(&key) {
+                    return Err(A::Error::custom(format_args!(
+                        "duplicate parameter `{key}`"
+                    )));
+                }
+                params.insert(key, value);
+            }
+            Ok(params)
+        }
+    }
+
+    deserializer.deserialize_map(UniqueParams)
 }
 
 /// One graphical instance of a symbol of a device.
