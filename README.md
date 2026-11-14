@@ -13,8 +13,9 @@ depend on the GUI.
 
 M1, the headless vertical slice, is implemented: circuits are loaded,
 compiled, simulated and checked against golden traces from the command line.
-M2a, the read-only viewer, is in progress: the desktop application opens a
-project, draws it and runs it with operator controls. The editor is M2b. See
+M2a, the read-only viewer, is implemented: the desktop application opens a
+project, draws it and runs it with operator controls. The editor, M2b, is
+next. See
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace

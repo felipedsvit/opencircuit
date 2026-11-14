@@ -1,6 +1,6 @@
 # AGENTS.md — instructions for agents
 
-OpenCircuit is a clean-room, open-source Rust electrical-schematic editor and simulator for industrial control circuits (contactors, relays, timers). M1, the headless vertical slice, is implemented: `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli` and `xtask`. M2a has started with `circuit-renderer` and `apps/desktop` (package and binary `opencircuit-desktop`). Every other `crates/*` and `apps/*` directory is a tracked placeholder for M2/M3.
+OpenCircuit is a clean-room, open-source Rust electrical-schematic editor and simulator for industrial control circuits (contactors, relays, timers). M1, the headless vertical slice, is implemented: `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli` and `xtask`. M2a, the read-only viewer, is implemented: `circuit-renderer` and `apps/desktop` (package and binary `opencircuit-desktop`). M2b, the editor, is the current milestone. Every other `crates/*` and `apps/*` directory is a tracked placeholder for M2b/M3.
 
 ## Start every session here
 
