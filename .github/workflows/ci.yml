@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -31,7 +34,7 @@ jobs:
           toolchain: 1.99.1
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   architecture:
     name: Architecture
@@ -42,7 +45,8 @@ jobs:
         with:
           toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
-      - run: cargo run -p xtask -- check-architecture
+      - run: cargo run --locked -p xtask -- check-architecture
+      - run: cargo run --locked -p xtask -- generate-examples --check
 
   deny:
     name: Licenses and sources
@@ -65,3 +69,30 @@ jobs:
           toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
+      # Golden traces are compared byte for byte on every platform.
+      - run: cargo run --locked -p opencircuit-cli -- test examples tests/fixtures
+
+  msrv:
+    name: Tests on the MSRV (Rust 1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml pins 1.99.1, so the MSRV is selected with `+1.85`
+      # on the command line; `rust-version` in Cargo.toml must stay equal.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +1.85 test --workspace --locked
+
+  wasm:
+    name: Core builds for WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked --target wasm32-unknown-unknown -p circuit-model -p circuit-sim -p circuit-project
