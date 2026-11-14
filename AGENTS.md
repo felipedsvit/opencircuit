@@ -4,7 +4,7 @@ OpenCircuit is a clean-room, open-source Rust electrical-schematic editor and si
 
 ## Start every session here
 
-Read [`ROADMAP.md`](ROADMAP.md), [`ARCHITECTURE.md`](ARCHITECTURE.md) and the milestone you are working on. The contract-level reference is `OpenCircuit_Arquitetura_Tecnica_v0.2.md` (document version 0.2.1); read its §0, §2, §5.6, §6, §8–§15, §20 and §23 before touching domain or simulation contracts. `ideia.md` is the original design review (Portuguese). `SIMULATION.md` and `FORMAT.md` cover simulator and file-format rules.
+Read [`ROADMAP.md`](ROADMAP.md), [`ARCHITECTURE.md`](ARCHITECTURE.md) and the milestone you are working on. The contract-level reference is [`docs/spec02.md`](docs/spec02.md) (version 0.3, Portuguese); read its §0, §2, §5.4, §6, §8–§15, §20 and §23 before touching domain or simulation contracts. [`SIMULATION.md`](SIMULATION.md) and [`FORMAT.md`](FORMAT.md) are the normative rules for the simulator and the file format.
 
 The M1 target is five workspace members: `circuit-model`, `circuit-sim`, `circuit-project`, `apps/cli` and `xtask`. At the start of M1, `circuit-domain` and `circuit-diagnostics` are consolidated into `circuit-model`; `circuit-topology`, `circuit-electrical`, `circuit-logic` and `circuit-simulation` become modules of `circuit-sim`. Do not add M2/M3 crates to `members` before their milestone. Existing M0 code implements the identity, geometry and supply contracts; the architecture document records the M1 migration rather than pretending the repo already has the target layout.
 
@@ -72,7 +72,7 @@ cargo deny check
 
 ## Conventions
 
-- Code identifiers, test names, and diagnostic messages are English even though `ideia.md` is Portuguese.
+- Code identifiers, test names, and diagnostic messages are English even though `docs/spec02.md` is Portuguese.
 - IDs are newtypes; derives follow `crates/circuit-model/src/ids.rs` after the M1 consolidation (currently `crates/circuit-domain/src/ids.rs`): `Clone, Copy, Debug, Eq, Hash, PartialEq`, plus `Ord/PartialOrd` when sorted.
 - Tests are inline `#[cfg(test)] mod tests` next to the code they cover (module file or `src/lib.rs`); golden fixtures live under `tests/fixtures` and `tests/integration`; golden scenarios live under `examples/` too.
 - Every behaviour change needs a regression test. Every schema change needs a migration. Every component declares its terminals and provenance.

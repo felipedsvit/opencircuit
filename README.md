@@ -77,8 +77,7 @@ cargo deny check
 
 ## Documentation
 
-- [`ideia.md`](ideia.md) — authoritative design notes (Portuguese).
-- [`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md) — consolidated architecture proposal.
+- [`docs/spec02.md`](docs/spec02.md) — consolidated technical specification v0.3 (Portuguese); the contract reference.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — implementation-facing architecture summary.
 - [`FORMAT.md`](FORMAT.md) — `.ocircuit` project format.
 - [`SIMULATION.md`](SIMULATION.md) — virtual time and tick semantics.

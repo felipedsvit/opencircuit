@@ -1,9 +1,9 @@
 # Architecture
 
-This document is the one-page implementation map. The authoritative design
-proposal is
-[`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md);
-the original design notes are in [`ideia.md`](ideia.md).
+This document is the one-page implementation map. The authoritative contract is
+[`docs/spec02.md`](docs/spec02.md) (v0.3, Portuguese). The normative rules for
+simulation and the file format are in [`SIMULATION.md`](SIMULATION.md) and
+[`FORMAT.md`](FORMAT.md), which are derived from that specification.
 
 ## Core principle
 

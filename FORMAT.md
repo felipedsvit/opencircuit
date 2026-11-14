@@ -1,8 +1,7 @@
 # Project format `.ocircuit`
 
 The first project format is JSON with the `.ocircuit` extension. The
-authoritative design rationale is in
-[`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md).
+authoritative design rationale is in [`docs/spec02.md`](docs/spec02.md).
 
 ## Requirements
 

@@ -3,7 +3,7 @@
 ## Before you start
 
 Read [`ARCHITECTURE.md`](ARCHITECTURE.md) and the relevant sections of
-`ideia.md`. The project is pre-implementation; contracts are still being
+[`docs/spec02.md`](docs/spec02.md). The project is pre-implementation; contracts are still being
 stabilized, so open an issue before large changes.
 
 ## Development setup

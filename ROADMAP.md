@@ -3,7 +3,8 @@
 The roadmap follows the consolidated architecture proposal. Each milestone has
 an observable exit criterion; features outside the current milestone are not
 started early. The authoritative detail is in
-[`OpenCircuit_Arquitetura_Tecnica_v0.2.md`](OpenCircuit_Arquitetura_Tecnica_v0.2.md).
+[`docs/spec02.md`](docs/spec02.md); milestone numbers here are the ones used
+throughout the repository (the specification's §20 follows them).
 
 ## M0 — Foundation and contracts (done)
 
