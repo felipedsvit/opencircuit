@@ -2,7 +2,8 @@
 //!
 //! A front end converts pointer and key events to grid points and passes
 //! them to an [`Editor`]. The editor tracks the tool, the selection and the
-//! gesture in progress, answers what lies under a point ([`hit_test`]), and
+//! gesture in progress, answers what lies under a point ([`hit_test`]) and
+//! where a pointer finer than the grid snaps ([`snap`]), and
 //! returns the [`Transaction`](circuit_commands::Transaction) of each user
 //! action for the caller to apply through a `History`. It never changes the
 //! document itself, and [`Editor::preview`] shows what a drag or a placement
@@ -27,9 +28,11 @@
 
 mod editor;
 mod hit;
+mod snap;
 
 #[cfg(test)]
 mod tests;
 
 pub use editor::{Editor, Key, Modifiers, Outcome, Preview, Tool};
 pub use hit::{Hit, hit_test};
+pub use snap::{Pointer, Snap, SnapTarget, snap};

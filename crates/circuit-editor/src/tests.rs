@@ -10,7 +10,7 @@ use circuit_model::{
 use circuit_sim::{SimConfig, Simulator, compile};
 use proptest::prelude::*;
 
-use crate::{Editor, Hit, Key, Modifiers, Tool, hit_test};
+use crate::{Editor, Hit, Key, Modifiers, Pointer, SnapTarget, Tool, hit_test, snap};
 
 fn point(x: i32, y: i32) -> GridPoint {
     GridPoint::new(x, y)
@@ -166,6 +166,163 @@ fn junction_wins_over_the_wire_it_sits_on_and_a_wire_over_empty_space() {
         Some(Hit::Wire { at, .. }) if at == point(0, 8)
     ));
     assert_eq!(hit_test(&bench.doc, &bench.catalog, point(30, 30)), None);
+}
+
+/// Ten steps per grid unit, like the scene subunits of the renderer.
+fn pointer(x: i64, y: i64) -> Pointer {
+    Pointer { x, y, per_grid: 10 }
+}
+
+#[test]
+fn snap_reaches_a_pin_from_outside_its_grid_cell() {
+    let mut bench = Bench::new();
+    let contact = bench.place("pushbutton_no", "contact", point(0, 0));
+    // Pin p1 is at (0, -2), that is (0, -20) in steps; the pointer is 13
+    // steps away, so rounding alone would give (1, -2).
+    let found = snap(&bench.doc, &bench.catalog, pointer(13, -20), 15).unwrap();
+
+    assert_eq!(found.point, point(0, -2));
+    assert_eq!(
+        found.target,
+        SnapTarget::Pin(circuit_model::PinRef {
+            symbol_id: contact,
+            terminal: circuit_model::TerminalKey("p1".to_owned()),
+        })
+    );
+}
+
+#[test]
+fn snap_falls_back_to_the_nearest_grid_point_outside_the_radius() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+
+    let found = snap(&bench.doc, &bench.catalog, pointer(13, -20), 5).unwrap();
+
+    assert_eq!(found.point, point(1, -2));
+    assert_eq!(found.target, SnapTarget::Grid);
+}
+
+#[test]
+fn snap_prefers_a_pin_to_a_nearer_junction_and_a_junction_to_a_wire() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.place("contactor.generic", "coil", point(0, 12));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(0, 2));
+    bench.click(point(0, 10));
+    bench.place("pushbutton_no", "contact", point(6, 6));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(6, 4));
+    bench.click(point(0, 5));
+
+    // Between the pin at (0, 2) and the junction at (0, 5), nearer the
+    // junction: the pin still wins.
+    let pin_side = snap(&bench.doc, &bench.catalog, pointer(4, 40), 25).unwrap();
+    assert!(matches!(pin_side.target, SnapTarget::Pin(_)));
+    assert_eq!(pin_side.point, point(0, 2));
+
+    let junction = snap(&bench.doc, &bench.catalog, pointer(4, 52), 15).unwrap();
+    assert!(matches!(junction.target, SnapTarget::Junction(_)));
+    assert_eq!(junction.point, point(0, 5));
+
+    // Beside the wire, away from pins and the junction: the grid point of the
+    // wire nearest to the pointer.
+    let wire = snap(&bench.doc, &bench.catalog, pointer(7, 78), 9).unwrap();
+    assert_eq!(wire.point, point(0, 8));
+    let SnapTarget::Wire(id) = wire.target else {
+        panic!("not a wire: {:?}", wire.target);
+    };
+    assert_eq!(
+        hit_test(&bench.doc, &bench.catalog, wire.point),
+        Some(Hit::Wire {
+            wire: id,
+            at: point(0, 8),
+        })
+    );
+}
+
+#[test]
+fn snap_refuses_a_pointer_outside_the_coordinate_range_or_a_bad_scale() {
+    let bench = Bench::new();
+
+    assert_eq!(
+        snap(&bench.doc, &bench.catalog, pointer(i64::MAX, 0), 10),
+        None
+    );
+    assert_eq!(
+        snap(
+            &bench.doc,
+            &bench.catalog,
+            Pointer {
+                x: 0,
+                y: 0,
+                per_grid: 0
+            },
+            10
+        ),
+        None
+    );
+}
+
+proptest! {
+    /// Any pointer and radius: no panic, the result is on the grid within
+    /// the radius of the pointer (or the rounded point), and a target other
+    /// than the grid is really under that point.
+    #[test]
+    fn snap_lands_on_what_it_names(
+        x in -2_000_i64..2_000,
+        y in -2_000_i64..2_000,
+        radius in -10_i64..200,
+    ) {
+        let mut bench = Bench::new();
+        bench.place("pushbutton_no", "contact", point(0, 0));
+        bench.place("contactor.generic", "coil", point(0, 12));
+        bench.editor.set_tool(Tool::Wire);
+        bench.click(point(0, 2));
+        bench.click(point(0, 10));
+
+        let found = snap(&bench.doc, &bench.catalog, pointer(x, y), radius).unwrap();
+        let hit = hit_test(&bench.doc, &bench.catalog, found.point);
+        match &found.target {
+            SnapTarget::Pin(pin) => prop_assert_eq!(hit, Some(Hit::Pin(pin.clone()))),
+            SnapTarget::Junction(id) => prop_assert_eq!(hit, Some(Hit::Junction(*id))),
+            SnapTarget::Wire(id) => {
+                let on_wire = matches!(hit, Some(Hit::Wire { wire, .. }) if wire == *id);
+                prop_assert!(on_wire);
+            }
+            SnapTarget::Grid => {
+                prop_assert_eq!(found.point.x, i32::try_from((x + 5).div_euclid(10)).unwrap());
+                prop_assert_eq!(found.point.y, i32::try_from((y + 5).div_euclid(10)).unwrap());
+            }
+        }
+        if found.target != SnapTarget::Grid {
+            let dx = i64::from(found.point.x) * 10 - x;
+            let dy = i64::from(found.point.y) * 10 - y;
+            prop_assert!(dx * dx + dy * dy <= radius.max(0) * radius.max(0));
+        }
+    }
+}
+
+#[test]
+fn snap_does_not_depend_on_the_order_of_the_collections() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.place("pushbutton_no", "contact", point(2, 0));
+    bench.place("contactor.generic", "coil", point(0, 12));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(0, 2));
+    bench.click(point(0, 10));
+    let mut reversed = bench.doc.clone();
+    reversed.symbols.reverse();
+    reversed.wires.reverse();
+    reversed.junctions.reverse();
+
+    for (x, y) in [(10, -20), (10, 20), (3, 60), (0, 0), (11, -19)] {
+        assert_eq!(
+            snap(&bench.doc, &bench.catalog, pointer(x, y), 20),
+            snap(&reversed, &bench.catalog, pointer(x, y), 20)
+        );
+    }
 }
 
 #[test]
