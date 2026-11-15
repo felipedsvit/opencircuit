@@ -32,6 +32,8 @@ const SNAP_POINTS: f32 = 12.0;
 /// The largest snapping radius in subunits, so that a zoomed-out view does
 /// not jump across several grid units.
 const SNAP_MAX: i64 = 2 * SUBUNITS_PER_GRID;
+/// Zoom factor of one press of `+`.
+const KEY_ZOOM: f32 = 1.25;
 
 /// An action that would drop unsaved changes, waiting for the user to save,
 /// discard or cancel.
@@ -78,6 +80,10 @@ pub struct DesktopApp {
     fit_pending: bool,
     /// Centre the camera on this subject at the next frame.
     focus: Option<Subject>,
+    /// Zoom by this factor about the centre of the canvas at the next frame.
+    zoom_request: Option<f32>,
+    /// Frame the selection at the next frame.
+    frame_selection: bool,
     /// The pushbutton held down on the canvas, released with the pointer.
     held: Option<DeviceId>,
     /// The action waiting for an answer about unsaved changes.
@@ -559,6 +565,7 @@ impl DesktopApp {
         if self.mode == Mode::Edit {
             self.shortcuts(ui);
         }
+        self.view_keys(ui);
 
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("diagnostics")
@@ -609,20 +616,72 @@ impl DesktopApp {
         } else if pressed(ui, egui::Modifiers::COMMAND, egui::Key::Z) {
             self.undo();
         }
+        if pressed(ui, egui::Modifiers::NONE, egui::Key::W) {
+            self.editor.set_tool(Tool::Wire);
+        }
+        let mut actions = Vec::new();
+        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::A) {
+            actions.push(Key::SelectAll);
+        }
+        // Shift moves five grid units; the plain arrow one.
+        for (modifiers, step) in [(egui::Modifiers::SHIFT, 5), (egui::Modifiers::NONE, 1)] {
+            for (key, dx, dy) in [
+                (egui::Key::ArrowLeft, -1, 0),
+                (egui::Key::ArrowRight, 1, 0),
+                (egui::Key::ArrowUp, 0, -1),
+                (egui::Key::ArrowDown, 0, 1),
+            ] {
+                if pressed(ui, modifiers, key) {
+                    actions.push(Key::Nudge {
+                        dx: dx * step,
+                        dy: dy * step,
+                    });
+                }
+            }
+        }
         for (key, action) in [
             (egui::Key::Delete, Key::Delete),
             (egui::Key::Backspace, Key::Delete),
             (egui::Key::R, Key::Rotate),
             (egui::Key::Escape, Key::Escape),
         ] {
-            if pressed(ui, egui::Modifiers::NONE, key)
-                && let Some(session) = &self.session
-            {
+            if pressed(ui, egui::Modifiers::NONE, key) {
+                actions.push(action);
+            }
+        }
+        for action in actions {
+            if let Some(session) = &self.session {
                 let outcome = self
                     .editor
                     .key(session.document(), session.catalog(), action);
                 self.apply(outcome);
             }
+        }
+    }
+
+    /// Zoom and framing keys, in both modes, unless a text field has the
+    /// keyboard: `+` and `-` zoom about the centre, `0` frames the whole
+    /// drawing and `F` the selection.
+    fn view_keys(&mut self, ui: &mut Ui) {
+        if ui.ctx().egui_wants_keyboard_input() {
+            return;
+        }
+        let pressed = |ui: &mut Ui, key: egui::Key| {
+            ui.input_mut(|input| {
+                input.consume_shortcut(&KeyboardShortcut::new(egui::Modifiers::NONE, key))
+            })
+        };
+        if pressed(ui, egui::Key::Plus) || pressed(ui, egui::Key::Equals) {
+            self.zoom_request = Some(KEY_ZOOM);
+        }
+        if pressed(ui, egui::Key::Minus) {
+            self.zoom_request = Some(1.0 / KEY_ZOOM);
+        }
+        if pressed(ui, egui::Key::Num0) {
+            self.fit_pending = true;
+        }
+        if pressed(ui, egui::Key::F) && !self.editor.selection().is_empty() {
+            self.frame_selection = true;
         }
     }
 
@@ -1003,8 +1062,26 @@ impl DesktopApp {
         };
         let scene = self.scene(session);
         let fit = std::mem::take(&mut self.fit_pending);
-        let events = canvas::show(ui, &scene, &mut self.camera, fit);
+        let grid = self.mode == Mode::Edit;
+        let events = canvas::show(ui, &scene, &mut self.camera, fit, grid);
         self.canvas_origin = Some(events.origin);
+
+        if let Some(factor) = self.zoom_request.take() {
+            let [width, height] = events.size;
+            self.camera.zoom_at([width / 2.0, height / 2.0], factor);
+        }
+        if std::mem::take(&mut self.frame_selection) {
+            let selected = SceneRect::around(
+                self.editor
+                    .selection()
+                    .iter()
+                    .filter_map(|subject| scene.subject_bounds(subject))
+                    .flat_map(|rect| [rect.min, rect.max]),
+            );
+            if let Some(bounds) = selected {
+                self.camera.fit(bounds, events.size, canvas::FIT_MARGIN);
+            }
+        }
 
         if let Some(subject) = self.focus.take()
             && let Some(bounds) = scene.subject_bounds(&subject)

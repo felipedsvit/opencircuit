@@ -1,13 +1,18 @@
 //! The canvas: paints a scene through the camera and handles pan and zoom.
 
-use circuit_renderer::{Anchor, Scene, ScenePoint, SceneRect, Shape};
+use circuit_renderer::{Anchor, SUBUNITS_PER_GRID, Scene, ScenePoint, SceneRect, Shape};
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, StrokeKind, Ui, Vec2};
 
 use crate::camera::Camera;
 use crate::theme;
 
 /// Free space kept around the scene when fitting it.
-const FIT_MARGIN: f32 = 24.0;
+pub const FIT_MARGIN: f32 = 24.0;
+/// Grid dots are drawn only when grid units are at least this far apart on
+/// screen, so a zoomed-out view is not a grey wash.
+const MIN_GRID_POINTS: f32 = 8.0;
+/// Radius of a grid dot on screen.
+const GRID_DOT: f32 = 0.8;
 /// Zoom change per scrolled point.
 const SCROLL_ZOOM: f32 = 0.0015;
 /// Texts are drawn at this height in subunits, then scaled with the zoom.
@@ -38,8 +43,15 @@ pub struct CanvasEvents {
 }
 
 /// Paint `scene` in the remaining space of `ui` and apply pan and zoom.
-/// With `fit` set, the camera first frames the whole scene.
-pub fn show(ui: &mut Ui, scene: &Scene, camera: &mut Camera, fit: bool) -> CanvasEvents {
+/// With `fit` set, the camera first frames the whole scene; with `grid` set,
+/// the grid points are drawn as dots under the scene.
+pub fn show(
+    ui: &mut Ui,
+    scene: &Scene,
+    camera: &mut Camera,
+    fit: bool,
+    grid: bool,
+) -> CanvasEvents {
     let size = ui.available_size();
     let (response, painter) = ui.allocate_painter(size, Sense::click_and_drag());
     let origin = response.rect.min;
@@ -83,6 +95,15 @@ pub fn show(ui: &mut Ui, scene: &Scene, camera: &mut Camera, fit: bool) -> Canva
     };
     let visible = camera.visible(size);
     let dark = ui.visuals().dark_mode;
+    if grid {
+        paint_grid(
+            &painter,
+            camera,
+            visible,
+            to_screen,
+            ui.visuals().weak_text_color(),
+        );
+    }
     let text_points = (TEXT_HEIGHT * camera.zoom).min(MAX_TEXT_POINTS);
 
     for item in &scene.items {
@@ -162,5 +183,31 @@ pub fn show(ui: &mut Ui, scene: &Scene, camera: &mut Camera, fit: bool) -> Canva
         hover: response.hover_pos().map(local),
         origin: [origin.x, origin.y],
         size,
+    }
+}
+
+/// Draw a dot on every grid point of the visible area, when grid units are
+/// far enough apart on screen.
+fn paint_grid(
+    painter: &egui::Painter,
+    camera: &Camera,
+    visible: Option<SceneRect>,
+    to_screen: impl Fn(ScenePoint) -> Pos2,
+    color: egui::Color32,
+) {
+    let step = SUBUNITS_PER_GRID;
+    let (Some(visible), true) = (visible, camera.to_screen_length(step) >= MIN_GRID_POINTS) else {
+        return;
+    };
+    let first = |value: i64| value.div_euclid(step).saturating_mul(step);
+    let color = color.gamma_multiply(0.5);
+    let mut y = first(visible.min.y);
+    while y <= visible.max.y {
+        let mut x = first(visible.min.x);
+        while x <= visible.max.x {
+            painter.circle_filled(to_screen(ScenePoint::new(x, y)), GRID_DOT, color);
+            x = x.saturating_add(step);
+        }
+        y = y.saturating_add(step);
     }
 }

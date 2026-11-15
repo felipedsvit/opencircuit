@@ -117,9 +117,12 @@ back, starting at tick 0 on the edited circuit).
 - The palette on the left has the Select and Wire tools and every symbol of
   the catalog. Choose a symbol, then click on the sheet to place a device;
   R turns the next placement and Esc stops placing.
-- Select: click a symbol, Shift+click to add, drag on empty space for a box;
-  drag a selection to move it, R to rotate, Delete to remove it with its
-  wires.
+- Select: click a symbol, Shift+click to add, drag on empty space for a box,
+  Ctrl+A for everything; drag a selection or press the arrow keys (Shift for
+  five grid units) to move it, R to rotate, Delete to remove it with its
+  wires. W chooses the wire tool. The grid is shown as dots while editing.
+- View: + and - zoom about the centre, 0 frames the drawing and F the
+  selection, in both modes. The palette lists the keys under **Keys**.
 - Wire: click a pin, junction or wire to start, empty space to bend, and a
   pin, junction or wire to finish. Ending on a wire adds a junction. Wires
   are always horizontal and vertical. The pointer snaps to the nearest pin,

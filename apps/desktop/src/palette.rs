@@ -5,6 +5,20 @@ use circuit_editor::{Editor, Tool};
 use circuit_model::{ComponentCatalog, ModelRef, QuarterTurn};
 use eframe::egui::{self, Ui};
 
+/// The keyboard of the editor, shown under the tools.
+const KEYS: &[(&str, &str)] = &[
+    ("W", "wire tool"),
+    ("Esc", "cancel, then select tool, then clear"),
+    ("Arrows", "move the selection (Shift: 5)"),
+    ("R", "rotate"),
+    ("Del", "delete"),
+    ("Ctrl+A", "select all"),
+    ("Ctrl+Z / Ctrl+Y", "undo / redo"),
+    ("+ / -", "zoom"),
+    ("0", "fit the drawing"),
+    ("F", "fit the selection"),
+];
+
 /// Draw the palette; choosing an entry changes the tool of the editor.
 pub fn show(ui: &mut Ui, catalog: &ComponentCatalog, editor: &mut Editor) {
     ui.strong("Tools");
@@ -18,6 +32,16 @@ pub fn show(ui: &mut Ui, catalog: &ComponentCatalog, editor: &mut Editor) {
     if ui.selectable_label(tool == Tool::Wire, "Wire").clicked() {
         editor.set_tool(Tool::Wire);
     }
+    egui::CollapsingHeader::new("Keys")
+        .default_open(false)
+        .show(ui, |ui| {
+            for (keys, action) in KEYS {
+                ui.horizontal(|ui| {
+                    ui.monospace(*keys);
+                    ui.label(*action);
+                });
+            }
+        });
     ui.separator();
     ui.strong("Components");
     egui::ScrollArea::vertical().show(ui, |ui| {
