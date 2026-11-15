@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
-    ComponentCatalog, ConductorSet, DeviceClass, DeviceId, JunctionId, LayoutIndex, MotorState,
-    Operator, Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView,
-    WindingConnection, Wire, WireId,
+    ComponentCatalog, ComponentModel, ConductorSet, DeviceClass, DeviceId, JunctionId, LayoutIndex,
+    MotorState, Operator, PinRef, Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance,
+    SymbolKind, TimerView, WindingConnection, Wire, WireId, terminal_label,
 };
 
 use crate::scene::{Anchor, Scene, ScenePoint, SceneRect, Shape, StyleKey};
@@ -23,6 +23,8 @@ const LABEL_GAP: i64 = 4;
 const LABEL_LINE: i64 = 12;
 /// Radius of the ring outlining a pin or a junction.
 const RING_RADIUS: i64 = 5;
+/// Gap between a terminal and its number, to the right of the lead.
+const TERMINAL_LABEL_GAP: i64 = 3;
 
 /// What to show besides the document and the simulation state.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -315,6 +317,7 @@ fn draw_label(
         StyleKey::Label,
         subject.clone(),
     );
+    draw_terminal_labels(scene, layout, catalog, symbol);
 
     let is_coil = layout
         .definition(symbol.id)
@@ -331,6 +334,48 @@ fn draw_label(
             },
             StyleKey::Label,
             subject,
+        );
+    }
+}
+
+/// The number of every marked terminal of a symbol (A1, 13, 95, ...), just
+/// right of the terminal. See [`terminal_label`] for the markings.
+fn draw_terminal_labels(
+    scene: &mut Scene,
+    layout: &LayoutIndex<'_>,
+    catalog: &ComponentCatalog,
+    symbol: &SymbolInstance,
+) {
+    let (Some(definition), Some(class)) = (
+        layout.definition(symbol.id),
+        layout
+            .device(symbol.device_id)
+            .and_then(|device| catalog.model(&device.model))
+            .map(ComponentModel::class),
+    ) else {
+        return;
+    };
+    for terminal in definition.terminals() {
+        let Some(text) = terminal_label(class, definition.kind(), symbol.slot, &terminal.key)
+        else {
+            continue;
+        };
+        let pin = PinRef {
+            symbol_id: symbol.id,
+            terminal: terminal.key.clone(),
+        };
+        let Some(at) = layout.pin_position(&pin) else {
+            continue;
+        };
+        let at = ScenePoint::from_grid(at);
+        scene.push(
+            Shape::Text {
+                at: ScenePoint::new(at.x.saturating_add(TERMINAL_LABEL_GAP), at.y),
+                text,
+                anchor: Anchor::Left,
+            },
+            StyleKey::Label,
+            Some(Subject::Symbol(symbol.id)),
         );
     }
 }

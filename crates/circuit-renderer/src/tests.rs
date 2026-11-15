@@ -4,13 +4,13 @@ use std::collections::BTreeSet;
 
 use circuit_model::builder::pin;
 use circuit_model::{
-    ComponentCatalog, Conductor, ConductorSet, Diagnostic, DiagnosticCode, GridPoint, Live,
-    ModelRef, MotorState, MotorView, ParamValue, QuarterTurn, Schematic, SchematicBuilder,
+    ComponentCatalog, Conductor, ConductorSet, Diagnostic, DiagnosticCode, GridPoint, LayoutIndex,
+    Live, ModelRef, MotorState, MotorView, ParamValue, QuarterTurn, Schematic, SchematicBuilder,
     SimSnapshot, Subject, SymbolId, TimerView, WindingConnection,
 };
 use proptest::prelude::*;
 
-use crate::{SceneOptions, Shape, StyleKey, build_scene};
+use crate::{SceneOptions, ScenePoint, Shape, StyleKey, build_scene};
 
 /// Symbols and wires of the control circuit of a direct-online starter.
 struct Starter {
@@ -356,7 +356,49 @@ fn every_symbol_is_labelled_with_its_designator() {
             _ => None,
         })
         .collect();
-    assert_eq!(labels, BTreeSet::from(["K1", "P0", "P24", "S1", "S2"]));
+    // The designators, plus the terminal numbers of the next test.
+    assert!(labels.is_superset(&BTreeSet::from(["K1", "P0", "P24", "S1", "S2"])));
+}
+
+#[test]
+fn terminals_are_numbered_next_to_their_pins() {
+    let catalog = ComponentCatalog::builtin();
+    let starter = starter();
+    let layout = LayoutIndex::new(&starter.doc, &catalog);
+
+    let scene = build_scene(&starter.doc, &catalog, None, &SceneOptions::default());
+
+    let texts: Vec<(&str, ScenePoint)> = scene
+        .items
+        .iter()
+        .filter_map(|item| match &item.shape {
+            Shape::Text { text, at, .. } if item.style == StyleKey::Label => {
+                Some((text.as_str(), *at))
+            }
+            _ => None,
+        })
+        .collect();
+    let numbers: BTreeSet<&str> = texts.iter().map(|(text, _)| *text).collect();
+    for expected in ["A1", "A2", "11", "12", "13", "14"] {
+        assert!(numbers.contains(expected), "{expected} in {numbers:?}");
+    }
+    // A1 sits three subunits right of the a1 pin of the coil.
+    let coil = starter
+        .doc
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol_key.0 == "coil")
+        .unwrap();
+    let a1 = layout
+        .pin_position(&circuit_model::PinRef {
+            symbol_id: coil.id,
+            terminal: circuit_model::TerminalKey("a1".to_owned()),
+        })
+        .map(ScenePoint::from_grid)
+        .unwrap();
+    assert!(texts.contains(&("A1", ScenePoint::new(a1.x + 3, a1.y))));
+    // Supply terminals carry no number.
+    assert!(!numbers.contains("out"));
 }
 
 #[test]
