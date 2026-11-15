@@ -60,6 +60,19 @@ fn choose_save_path(name: &str) -> Option<PathBuf> {
     Some(path)
 }
 
+/// Ask the operating system where to write a drawing. The extension is
+/// added when the user leaves it out.
+fn choose_export_path(name: &str) -> Option<PathBuf> {
+    let mut path = rfd::FileDialog::new()
+        .add_filter("SVG drawing", &["svg"])
+        .set_file_name(format!("{name}.svg"))
+        .save_file()?;
+    if path.extension().is_none() {
+        path.set_extension("svg");
+    }
+    Some(path)
+}
+
 /// What the window is for at the moment.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Mode {
@@ -198,6 +211,20 @@ impl DesktopApp {
                 self.error = Some(error.to_string());
                 false
             }
+        }
+    }
+
+    /// Export the drawing. While simulating the current tick is shown in
+    /// colour; while editing the document is drawn at rest for printing.
+    fn export_dialog(&mut self) {
+        let Some(session) = self.session.as_ref() else {
+            return;
+        };
+        let with_state = self.mode == Mode::Simulate;
+        if let Some(path) = choose_export_path(&session.document().project.name)
+            && let Err(error) = session.export_svg(&path, with_state)
+        {
+            self.error = Some(error.to_string());
         }
     }
 
@@ -539,6 +566,15 @@ impl DesktopApp {
                 .clicked()
             {
                 self.save_as_dialog();
+            }
+            if ui
+                .add_enabled(has_session, egui::Button::new("SVG…"))
+                .on_hover_text(
+                    "Export the drawing as SVG. While simulating: the current tick in colour. While editing: the drawing at rest, black on white.",
+                )
+                .clicked()
+            {
+                self.export_dialog();
             }
             ui.separator();
             let name = ui.label("Path");

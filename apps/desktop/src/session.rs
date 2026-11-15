@@ -324,6 +324,34 @@ impl Session {
         build_scene(&self.doc, &self.catalog, self.snapshot.as_ref(), options)
     }
 
+    /// The document as SVG text. With `with_state` and a solved tick, the
+    /// drawing shows that tick in the live theme; otherwise the document at
+    /// rest in the print theme. The same exporter as the command line.
+    #[must_use]
+    pub fn svg(&self, with_state: bool) -> String {
+        let options = SceneOptions::default();
+        match (with_state, self.snapshot.as_ref()) {
+            (true, Some(snapshot)) => circuit_export::svg(
+                &build_scene(&self.doc, &self.catalog, Some(snapshot), &options),
+                circuit_export::Theme::Live,
+            ),
+            _ => circuit_export::svg(
+                &build_scene(&self.doc, &self.catalog, None, &options),
+                circuit_export::Theme::Print,
+            ),
+        }
+    }
+
+    /// Write [`Session::svg`] to `path`, atomically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FileError`] when the file cannot be written; nothing is
+    /// left behind then.
+    pub fn export_svg(&self, path: &Path, with_state: bool) -> Result<(), FileError> {
+        write_atomic(path, &self.svg(with_state))
+    }
+
     /// Whether the simulation advances with real time.
     #[must_use]
     pub const fn is_running(&self) -> bool {
@@ -599,6 +627,20 @@ mod tests {
         session
             .snapshot()
             .is_some_and(|s| s.active_devices.contains(&id))
+    }
+
+    #[test]
+    fn svg_at_rest_is_the_committed_drawing_and_with_state_shows_the_tick() {
+        let mut session = Session::load(COMMAND, None).unwrap();
+        let committed = include_str!("../../../examples/direct-starter/command.svg");
+
+        assert_eq!(session.svg(true), committed);
+        session.step();
+        let live = session.svg(true);
+
+        assert_ne!(live, committed);
+        assert_eq!(session.svg(false), committed);
+        assert_eq!(live, session.svg(true));
     }
 
     #[test]
