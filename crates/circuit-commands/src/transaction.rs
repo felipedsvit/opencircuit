@@ -85,6 +85,33 @@ impl Transaction {
             .collect()
     }
 
+    /// Apply the edits to a copy of `doc` without the size and integrity
+    /// checks of [`apply_to`](Self::apply_to).
+    ///
+    /// Returns the copy, sorted by ID, and the edits that undo the
+    /// transaction. It is for intermediate documents that only feed a
+    /// geometric computation, such as routing the wires of a move; whatever
+    /// is committed goes through `apply_to`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CommandError`] when an edit is refused.
+    pub(crate) fn apply_edits(
+        &self,
+        doc: &Schematic,
+    ) -> Result<(Schematic, Vec<Edit>), CommandError> {
+        let mut draft = doc.clone();
+        draft.sort_canonical();
+
+        let mut inverse = Vec::with_capacity(self.edits.len());
+        for edit in &self.edits {
+            inverse.push(edit.clone().apply(&mut draft)?);
+        }
+        inverse.reverse();
+        draft.next_id = draft.next_id.max(self.next_id);
+        Ok((draft, inverse))
+    }
+
     /// Apply the transaction to a copy of `doc`.
     ///
     /// Returns the edited copy and the transaction that undoes it. The
@@ -99,23 +126,20 @@ impl Transaction {
     /// `SelfLoopWire`, `UnsupportedSchemaVersion`) that `doc` does not
     /// already have.
     pub fn apply_to(&self, doc: &Schematic) -> Result<(Schematic, Self), CommandError> {
-        let before = integrity_errors(doc);
-        let mut draft = doc.clone();
-        draft.sort_canonical();
-
-        let mut inverse = Vec::with_capacity(self.edits.len());
-        for edit in &self.edits {
-            inverse.push(edit.clone().apply(&mut draft)?);
-        }
-        inverse.reverse();
-        draft.next_id = draft.next_id.max(self.next_id);
+        let (draft, inverse) = self.apply_edits(doc)?;
 
         circuit_model::limits::check(&draft)?;
+        // A document without integrity errors cannot have gained one, so the
+        // original is only inspected when the result has some. This keeps the
+        // common case, which runs on every frame of a drag, to one validation.
         let after = integrity_errors(&draft);
-        if let Some((code, subject)) = after.difference(&before).next() {
-            return Err(CommandError::BreaksIntegrity(format!(
-                "{code} on {subject}"
-            )));
+        if !after.is_empty() {
+            let before = integrity_errors(doc);
+            if let Some((code, subject)) = after.difference(&before).next() {
+                return Err(CommandError::BreaksIntegrity(format!(
+                    "{code} on {subject}"
+                )));
+            }
         }
 
         let undo = Self {
