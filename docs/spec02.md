@@ -1461,11 +1461,14 @@ cargo deny check
 cargo xtask check-architecture
 cargo check --locked --target wasm32-unknown-unknown \
       -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer \
-      -p circuit-commands -p circuit-editor -p circuit-export
+      -p circuit-commands -p circuit-editor -p circuit-export -p circuit-io
+cargo clippy --locked --target wasm32-unknown-unknown -p opencircuit-desktop \
+      -- -D warnings                                                    # aplicação web
+cargo build --locked --release --target wasm32-unknown-unknown -p opencircuit-desktop
 cargo +1.85 test --workspace --exclude opencircuit-desktop --locked   # MSRV do núcleo
 ```
 
-O CI nunca executa `--update-golden`. Quando a aplicação web entrar em desenvolvimento, acrescentar build e testes do alvo WASM da aplicação; compilar o núcleo para WASM não garante a portabilidade da aplicação inteira.
+O CI nunca executa `--update-golden`. Desde o M4 o CI também passa o clippy e compila a aplicação web (`opencircuit-desktop` para `wasm32-unknown-unknown`), porque compilar o núcleo para WASM não garante a portabilidade da aplicação inteira. O build não é publicado.
 
 ---
 
