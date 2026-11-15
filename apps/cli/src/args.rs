@@ -50,6 +50,20 @@ pub(crate) enum Command {
         library: Option<PathBuf>,
         report: OutputFormat,
     },
+    New {
+        file: PathBuf,
+        name: Option<String>,
+        force: bool,
+        report: OutputFormat,
+    },
+    Edit {
+        project: PathBuf,
+        apply: PathBuf,
+        output: Option<PathBuf>,
+        dry_run: bool,
+        library: Option<PathBuf>,
+        report: OutputFormat,
+    },
     Serve {
         project: PathBuf,
         listen: std::net::SocketAddr,
@@ -298,6 +312,33 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 report: report_format(&words)?,
             })
         }
+        "new" => {
+            let words = Words::split(rest, &["--name", "--format"], &["--force"])?;
+            Ok(Command::New {
+                file: words.single_positional("project file")?,
+                name: words.value("--name").map(str::to_owned),
+                force: words.flag("--force"),
+                report: report_format(&words)?,
+            })
+        }
+        "edit" => {
+            let words = Words::split(
+                rest,
+                &["--apply", "--output", "--library", "--format"],
+                &["--dry-run"],
+            )?;
+            Ok(Command::Edit {
+                project: words.single_positional("project file")?,
+                apply: words
+                    .value("--apply")
+                    .map(PathBuf::from)
+                    .ok_or("`edit` needs `--apply <edit file>`")?,
+                output: words.value("--output").map(PathBuf::from),
+                dry_run: words.flag("--dry-run"),
+                library: words.value("--library").map(PathBuf::from),
+                report: report_format(&words)?,
+            })
+        }
         "serve" => {
             let words = Words::split(
                 rest,
@@ -398,6 +439,33 @@ mod tests {
                 report: OutputFormat::Text,
             })
         );
+    }
+
+    #[test]
+    fn new_and_edit_read_their_options() {
+        assert_eq!(
+            parse_words(&["new", "a.ocircuit", "--name", "Pump", "--force"]),
+            Ok(Command::New {
+                file: PathBuf::from("a.ocircuit"),
+                name: Some("Pump".to_owned()),
+                force: true,
+                report: OutputFormat::Text,
+            })
+        );
+        assert_eq!(
+            parse_words(&["edit", "a.ocircuit", "--apply", "tx.json", "--dry-run"]),
+            Ok(Command::Edit {
+                project: PathBuf::from("a.ocircuit"),
+                apply: PathBuf::from("tx.json"),
+                output: None,
+                dry_run: true,
+                library: None,
+                report: OutputFormat::Text,
+            })
+        );
+        assert!(parse_words(&["edit", "a.ocircuit"]).is_err());
+        assert!(parse_words(&["new"]).is_err());
+        assert!(parse_words(&["new", "a", "b"]).is_err());
     }
 
     #[test]
