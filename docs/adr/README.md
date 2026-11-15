@@ -22,3 +22,4 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0008](0008-extension-libraries.md) | Extension libraries: data only, namespaced models, own artwork, no code |
 | [0009](0009-industrial-io.md) | Industrial I/O: Modbus TCP server, codec in the core, socket in the CLI, safety limits |
 | [0010](0010-opcua-mqtt-evaluation.md) | OPC UA and MQTT evaluated: OPC UA not implemented (MPL-2.0 only), MQTT feasible and deferred |
+| [0011](0011-sheets-as-frames.md) | Sheets as frames over the single canvas: paper size, zones and title block; simulator unchanged |
