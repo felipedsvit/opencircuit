@@ -1,6 +1,6 @@
 //! Executable representation of a schematic.
 //!
-//! A [`CompiledCircuit`] is produced only by [`crate::compile`], so its dense
+//! A [`CompiledCircuit`] is produced only by [`crate::compile()`], so its dense
 //! indices are always consistent with each other. The indices are internal:
 //! documents and snapshots use stable IDs only.
 
