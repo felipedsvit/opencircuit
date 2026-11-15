@@ -58,7 +58,11 @@ impl Transaction {
                 Edit::InsertSymbol(symbol) => Some(Subject::Symbol(symbol.id)),
                 Edit::InsertJunction(junction) => Some(Subject::Junction(junction.id)),
                 Edit::InsertWire(wire) => Some(Subject::Wire(wire.id)),
-                Edit::InsertSupply(_)
+                Edit::SetProject(_)
+                | Edit::InsertSheet(_)
+                | Edit::RemoveSheet(_)
+                | Edit::SetSheet(_)
+                | Edit::InsertSupply(_)
                 | Edit::RemoveSupply(_)
                 | Edit::SetSupply(_)
                 | Edit::InsertDevice(_)

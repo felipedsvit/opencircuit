@@ -6,9 +6,9 @@
 //! Whole-document rules are checked once per transaction.
 
 use circuit_model::{
-    Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue, QuarterTurn,
-    ReferenceDesignator, Schematic, Subject, SupplyId, SupplyProfile, SymbolId, SymbolInstance,
-    Wire, WireId,
+    Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue, ProjectMeta,
+    QuarterTurn, ReferenceDesignator, Schematic, Sheet, SheetId, Subject, SupplyId, SupplyProfile,
+    SymbolId, SymbolInstance, Wire, WireId,
 };
 
 use crate::error::CommandError;
@@ -17,6 +17,15 @@ use crate::sorted;
 /// One change to one entity of a document.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Edit {
+    /// Replace the project information: name, grid unit and title-block
+    /// fields.
+    SetProject(ProjectMeta),
+    /// Add a drawing sheet.
+    InsertSheet(Sheet),
+    /// Remove a drawing sheet.
+    RemoveSheet(SheetId),
+    /// Replace a sheet with one of the same ID.
+    SetSheet(Sheet),
     /// Add a supply profile.
     InsertSupply(SupplyProfile),
     /// Remove a supply profile.
@@ -123,6 +132,27 @@ impl Edit {
     /// document is then unchanged.
     pub(crate) fn apply(self, doc: &mut Schematic) -> Result<Self, CommandError> {
         match self {
+            Self::SetProject(project) => Ok(Self::SetProject(std::mem::replace(
+                &mut doc.project,
+                project,
+            ))),
+            Self::InsertSheet(sheet) => {
+                let id = sheet.id;
+                if sorted::insert(&mut doc.sheets, sheet, |s| s.id) {
+                    Ok(Self::RemoveSheet(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Sheet(id)))
+                }
+            }
+            Self::RemoveSheet(id) => sorted::remove(&mut doc.sheets, &id, |s| s.id)
+                .map(Self::InsertSheet)
+                .ok_or_else(|| missing(Subject::Sheet(id))),
+            Self::SetSheet(sheet) => {
+                let id = sheet.id;
+                let slot = sorted::find_mut(&mut doc.sheets, &id, |s| s.id)
+                    .ok_or_else(|| missing(Subject::Sheet(id)))?;
+                Ok(Self::SetSheet(std::mem::replace(slot, sheet)))
+            }
             Self::InsertSupply(supply) => {
                 let id = supply.id;
                 if sorted::insert(&mut doc.supplies, supply, |s| s.id) {
@@ -309,6 +339,10 @@ mod tests {
         b.finish()
     }
 
+    fn doc_project() -> ProjectMeta {
+        doc().project
+    }
+
     /// Applying an edit then its inverse gives back the same document.
     fn round_trip(edit: Edit) {
         let original = doc();
@@ -330,7 +364,24 @@ mod tests {
         let wire = doc.wires[0].clone();
         let supply = doc.supplies[0].clone();
         let new = 100;
+        let sheet = Sheet {
+            id: SheetId(new),
+            number: 1,
+            title: "one".to_owned(),
+            origin: GridPoint::new(0, 0),
+            size: circuit_model::SheetSize::A4,
+            orientation: circuit_model::Orientation::Landscape,
+            zones: circuit_model::Zones {
+                columns: 8,
+                rows: 6,
+            },
+        };
         for edit in [
+            Edit::SetProject(ProjectMeta {
+                author: Some("A".to_owned()),
+                ..doc_project()
+            }),
+            Edit::InsertSheet(sheet.clone()),
             Edit::InsertSupply(SupplyProfile {
                 id: SupplyId(new),
                 ..supply.clone()
@@ -384,6 +435,56 @@ mod tests {
         ] {
             round_trip(edit);
         }
+    }
+
+    #[test]
+    fn a_sheet_is_replaced_and_removed_by_edits_that_undo_themselves() {
+        let mut edited = doc();
+        let sheet = Sheet {
+            id: SheetId(100),
+            number: 1,
+            title: "one".to_owned(),
+            origin: GridPoint::new(0, 0),
+            size: circuit_model::SheetSize::A4,
+            orientation: circuit_model::Orientation::Landscape,
+            zones: circuit_model::Zones {
+                columns: 8,
+                rows: 6,
+            },
+        };
+        let original = edited.clone();
+        let mut inverses = vec![Edit::InsertSheet(sheet.clone()).apply(&mut edited).unwrap()];
+        inverses.push(
+            Edit::SetSheet(Sheet {
+                title: "other".to_owned(),
+                ..sheet.clone()
+            })
+            .apply(&mut edited)
+            .unwrap(),
+        );
+        assert_eq!(edited.sheets[0].title, "other");
+
+        assert!(matches!(
+            Edit::InsertSheet(sheet.clone()).apply(&mut edited),
+            Err(CommandError::AlreadyExists(Subject::Sheet(_)))
+        ));
+        assert!(matches!(
+            Edit::RemoveSheet(SheetId(7)).apply(&mut edited),
+            Err(CommandError::Missing(Subject::Sheet(_)))
+        ));
+        assert!(matches!(
+            Edit::SetSheet(Sheet {
+                id: SheetId(7),
+                ..sheet
+            })
+            .apply(&mut edited),
+            Err(CommandError::Missing(Subject::Sheet(_)))
+        ));
+        for inverse in inverses.into_iter().rev() {
+            inverse.apply(&mut edited).unwrap();
+        }
+
+        assert_eq!(edited, original);
     }
 
     #[test]
