@@ -434,6 +434,41 @@ fn several_selected_devices_are_aligned_and_share_a_parameter_field() {
 }
 
 #[test]
+fn sheets_and_the_title_block_are_edited_in_the_inspector() {
+    let mut harness = edit_mode(&project(|_| {}));
+    assert!(document(&harness).sheets.is_empty());
+
+    click_label(&mut harness, "Add A4 sheet");
+    click_label(&mut harness, "Add A4 sheet");
+    let doc = document(&harness);
+    assert_eq!(doc.sheets.len(), 2);
+    assert_eq!(
+        doc.sheets.iter().map(|s| s.number).collect::<Vec<_>>(),
+        [1, 2]
+    );
+    // The second lies to the right of the first, not over it.
+    assert!(doc.sheets[1].origin.x > doc.sheets[0].origin.x + 84);
+    assert!(doc.validate().is_empty());
+
+    let author = harness.get_by_label("Author");
+    author.focus();
+    author.type_text("Ana");
+    harness.run();
+    harness.key_press(egui::Key::Enter);
+    harness.run();
+    assert_eq!(document(&harness).project.author.as_deref(), Some("Ana"));
+
+    // One undo per edit: the author, then the second sheet.
+    click_label(&mut harness, "Undo");
+    assert_eq!(document(&harness).project.author, None);
+    click_label(&mut harness, "Undo");
+    assert_eq!(document(&harness).sheets.len(), 1);
+
+    click_label(&mut harness, "Remove");
+    assert!(document(&harness).sheets.is_empty());
+}
+
+#[test]
 fn delete_key_removes_the_selected_symbol_and_its_wires() {
     let mut harness = edit_mode(&project(|b| {
         let first = b.device("S1", "pushbutton_no", &[]).unwrap();

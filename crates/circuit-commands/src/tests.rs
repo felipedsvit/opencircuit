@@ -1890,3 +1890,202 @@ proptest! {
         prop_assert_eq!(doc, before);
     }
 }
+
+// Sheets and project information.
+
+use crate::sheets::{self, SheetSpec};
+
+fn sheet_ids(doc: &Schematic) -> Vec<(u32, circuit_model::SheetId)> {
+    let mut sheets: Vec<_> = doc.sheets.iter().map(|s| (s.number, s.id)).collect();
+    sheets.sort_unstable();
+    sheets
+}
+
+#[test]
+fn sheets_are_added_numbered_in_order_and_undone() {
+    let mut doc = Schematic::new("sheets");
+    let mut history = History::new();
+
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("one", point(0, 0)))
+    });
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("two", point(100, 0)))
+    });
+
+    assert_eq!(
+        sheet_ids(&doc).iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+        [1, 2]
+    );
+    assert_eq!(integrity(&doc), []);
+    assert!(doc.validate().is_empty());
+    assert_eq!(history.undo_label(), Some("Add sheet 2"));
+    history.undo(&mut doc).unwrap();
+    assert_eq!(doc.sheets.len(), 1);
+    // The counter does not go back: a redo reuses the ID, a new sheet does not.
+    let next = doc.next_id;
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("three", point(200, 0)))
+    });
+    assert!(doc.sheets.iter().all(|s| s.id.0 < doc.next_id) && doc.next_id > next);
+}
+
+#[test]
+fn a_sheet_that_the_format_would_refuse_is_refused_before_it_is_added() {
+    let mut doc = Schematic::new("sheets");
+    let mut history = History::new();
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("one", point(0, 0)))
+    });
+    let before = doc.clone();
+
+    let refused = |spec: SheetSpec| sheets::add_sheet(&before, &spec);
+    // Over the first sheet.
+    assert!(matches!(
+        refused(SheetSpec::a4("over", point(40, 10))),
+        Err(CommandError::InvalidSheet(_))
+    ));
+    // The number of the first.
+    assert!(matches!(
+        refused(SheetSpec {
+            number: Some(1),
+            ..SheetSpec::a4("again", point(200, 0))
+        }),
+        Err(CommandError::InvalidSheet(_))
+    ));
+    assert!(matches!(
+        refused(SheetSpec {
+            number: Some(0),
+            ..SheetSpec::a4("zero", point(200, 0))
+        }),
+        Err(CommandError::InvalidSheet(_))
+    ));
+    // No zones, an empty size, a size over the limit, beyond the range.
+    for broken in [
+        SheetSpec {
+            zones: circuit_model::Zones {
+                columns: 0,
+                rows: 6,
+            },
+            ..SheetSpec::a4("zones", point(200, 0))
+        },
+        SheetSpec {
+            size: circuit_model::SheetSize::Custom {
+                width: 0,
+                height: 10,
+            },
+            ..SheetSpec::a4("empty", point(200, 0))
+        },
+        SheetSpec {
+            size: circuit_model::SheetSize::Custom {
+                width: 5_000,
+                height: 10,
+            },
+            ..SheetSpec::a4("huge", point(200, 0))
+        },
+        SheetSpec::a4("far", point(i32::MAX - 10, 0)),
+    ] {
+        assert!(matches!(
+            refused(broken),
+            Err(CommandError::InvalidSheet(_))
+        ));
+    }
+    assert_eq!(doc, before);
+}
+
+#[test]
+fn a_sheet_is_edited_and_removed_and_a_missing_one_is_refused() {
+    let mut doc = Schematic::new("sheets");
+    let mut history = History::new();
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("one", point(0, 0)))
+    });
+    let mut sheet = doc.sheets[0].clone();
+
+    sheet.title = "renamed".to_owned();
+    sheet.orientation = circuit_model::Orientation::Portrait;
+    let edited = sheet.clone();
+    run(&mut doc, &mut history, |doc| sheets::set_sheet(doc, edited));
+    assert_eq!(doc.sheets[0].title, "renamed");
+    // Nothing changed: an empty transaction.
+    assert!(sheets::set_sheet(&doc, sheet.clone()).unwrap().is_empty());
+    // Turning it over a neighbour is refused.
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("two", point(100, 0)))
+    });
+    let mut wide = sheet.clone();
+    wide.orientation = circuit_model::Orientation::Landscape;
+    wide.origin = point(60, 0);
+    assert!(matches!(
+        sheets::set_sheet(&doc, wide),
+        Err(CommandError::InvalidSheet(_))
+    ));
+
+    let id = sheet.id;
+    run(&mut doc, &mut history, |doc| sheets::remove_sheet(doc, id));
+    assert_eq!(doc.sheets.len(), 1);
+    assert!(matches!(
+        sheets::remove_sheet(&doc, id),
+        Err(CommandError::Missing(Subject::Sheet(_)))
+    ));
+    assert!(matches!(
+        sheets::set_sheet(&doc, sheet),
+        Err(CommandError::Missing(Subject::Sheet(_)))
+    ));
+}
+
+#[test]
+fn project_information_is_set_undone_and_limited() {
+    let mut doc = Schematic::new("project");
+    let mut history = History::new();
+
+    run(&mut doc, &mut history, |doc| {
+        sheets::set_project_info(
+            doc,
+            "Pump",
+            Some("Ana"),
+            None,
+            Some("B"),
+            Some("2026-11-15"),
+        )
+    });
+    assert_eq!(doc.project.name, "Pump");
+    assert_eq!(doc.project.author.as_deref(), Some("Ana"));
+    assert_eq!(doc.project.company, None);
+    assert_eq!(doc.project.grid_unit, 10);
+    assert!(
+        sheets::set_project_info(
+            &doc,
+            "Pump",
+            Some("Ana"),
+            None,
+            Some("B"),
+            Some("2026-11-15")
+        )
+        .unwrap()
+        .is_empty()
+    );
+    history.undo(&mut doc).unwrap();
+    assert_eq!(doc.project.name, "project");
+
+    let long = "x".repeat(300);
+    let tx = sheets::set_project_info(&doc, "Pump", Some(&long), None, None, None).unwrap();
+    assert!(matches!(tx.apply_to(&doc), Err(CommandError::Limit(_))));
+}
+
+#[test]
+fn a_junction_is_added_alone_and_with_a_new_id() {
+    let mut doc = Schematic::new("junction");
+    let mut history = History::new();
+
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_junction(doc, point(3, 4))
+    });
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_junction(doc, point(3, 4))
+    });
+
+    assert_eq!(doc.junctions.len(), 2);
+    assert_ne!(doc.junctions[0].id, doc.junctions[1].id);
+    assert_eq!(doc.junctions[0].position, point(3, 4));
+}

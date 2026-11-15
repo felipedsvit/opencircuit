@@ -74,4 +74,9 @@ pub enum CommandError {
     /// The edit would add a structural error to the document.
     #[error("the edit would break the document: {0}")]
     BreaksIntegrity(String),
+    /// A sheet would be invalid: a number used twice, a frame without zones,
+    /// of a size the format does not allow, beyond the coordinate range or
+    /// over another sheet.
+    #[error("invalid sheet: {0}")]
+    InvalidSheet(String),
 }

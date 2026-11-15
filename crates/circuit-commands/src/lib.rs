@@ -14,7 +14,8 @@
 //! The functions of [`ops`] turn the actions of an editor (place, connect,
 //! delete, move, rotate, rename, set a parameter, edit supplies) into
 //! transactions, [`copy`] copies, pastes and duplicates part of a
-//! document, and [`arrange`] edits several elements at once. The crate depends on `circuit-model` only and does no I/O.
+//! document, [`arrange`] edits several elements at once, and [`sheets`]
+//! edits the sheets and the information of the project. The crate depends on `circuit-model` only and does no I/O.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -36,6 +37,7 @@ mod edit;
 mod error;
 mod history;
 pub mod ops;
+pub mod sheets;
 mod sorted;
 mod transaction;
 

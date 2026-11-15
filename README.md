@@ -141,7 +141,10 @@ back, starting at tick 0 on the edited circuit).
   and holds the supply profiles. With several elements selected it rotates
   or deletes them all, aligns them on an edge, spaces them evenly, and, when
   their devices share a model, sets a parameter on every one of them; each
-  of these is one undo step.
+  of these is one undo step. **Sheets and title block** edits the project
+  name, author, company, revision and date, and adds, retitles and removes
+  A4 sheets (a new one goes to the right of the last); a sheet that would
+  overlap another is refused.
 - Undo and Redo (Ctrl+Z, Ctrl+Shift+Z) cover every change. A change the
   model does not accept is refused with a message and leaves the project as
   it was.
