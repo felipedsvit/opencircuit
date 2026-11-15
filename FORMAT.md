@@ -126,7 +126,13 @@ three-phase has a frequency and a sequence; voltages are positive.
 ## Terminal keys
 
 Keys are structural and belong to the symbol kind; displayed numbers such as
-13/14 are labels, not keys.
+13/14 are labels, not keys. A label is never stored: it is derived from the
+symbol kind, the class of the device and the slot of the symbol
+(`circuit_model::terminal_label`): A1/A2 on a coil, n3/n4 on the normally
+open contact in slot n and n1/n2 on a normally closed one (n7/n8 and n5/n6
+on a timer), 95/96 and 97/98 on a thermal overload relay, 1 to 6 on power
+contacts, U1 to W2 on a motor, X1/X2 on a lamp. A slot above 9 and a supply
+terminal get no label.
 
 | Symbol kind | Terminals |
 | --- | --- |
