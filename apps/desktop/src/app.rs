@@ -665,6 +665,7 @@ impl DesktopApp {
             (egui::Key::Backspace, Key::Delete),
             (egui::Key::R, Key::Rotate),
             (egui::Key::Escape, Key::Escape),
+            (egui::Key::Space, Key::FlipBend),
         ] {
             if pressed(ui, egui::Modifiers::NONE, key) {
                 actions.push(action);

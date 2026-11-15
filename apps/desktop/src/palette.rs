@@ -8,6 +8,7 @@ use eframe::egui::{self, Ui};
 /// The keyboard of the editor, shown under the tools.
 const KEYS: &[(&str, &str)] = &[
     ("W", "wire tool"),
+    ("Space", "turn the next bend the other way"),
     ("Esc", "cancel, then select tool, then clear"),
     ("Arrows", "move the selection (Shift: 5)"),
     ("R", "rotate"),
