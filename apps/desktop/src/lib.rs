@@ -27,6 +27,8 @@ mod inspector;
 mod palette;
 pub mod session;
 mod theme;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
 
 pub use app::{DesktopApp, Mode};
 pub use session::{LoadError, Session};

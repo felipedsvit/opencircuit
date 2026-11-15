@@ -1716,7 +1716,10 @@ dependencies = [
  "circuit-sim",
  "eframe",
  "egui_kittest",
+ "js-sys",
  "rfd",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

@@ -79,6 +79,9 @@ pub struct DesktopApp {
     /// Extension libraries loaded in this window, in loading order. Every
     /// project opened here compiles against the built-in catalog with them.
     libraries: Vec<Library>,
+    /// Files a browser has finished reading, opened at the next frame.
+    #[cfg(target_arch = "wasm32")]
+    inbox: crate::web::Inbox,
     /// Close the window at the next frame.
     close_now: bool,
     /// The window title last sent.
@@ -192,6 +195,19 @@ impl DesktopApp {
             return;
         };
         let with_state = self.mode == Mode::Simulate;
+        #[cfg(target_arch = "wasm32")]
+        {
+            let name = format!("{}.{extension}", session.document().project.name);
+            let downloaded = if extension == "pdf" {
+                crate::web::download(&name, &session.pdf(with_state), "application/pdf")
+            } else {
+                crate::web::download(&name, session.svg(with_state).as_bytes(), "image/svg+xml")
+            };
+            if let Err(error) = downloaded {
+                self.error = Some(error);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = dialogs::choose_export_path(&session.document().project.name, extension)
             && let Err(error) = session.export(&path, with_state)
         {
@@ -218,6 +234,34 @@ impl DesktopApp {
             || "project".to_owned(),
             |s| s.document().project.name.clone(),
         );
+        #[cfg(target_arch = "wasm32")]
+        {
+            // A browser cannot write to disk: the project is downloaded.
+            let Some(session) = self.session.as_mut() else {
+                return false;
+            };
+            let downloaded = session
+                .text()
+                .map_err(|error| error.to_string())
+                .and_then(|text| {
+                    crate::web::download(
+                        &format!("{name}.{}", dialogs::PROJECT_EXTENSION),
+                        text.as_bytes(),
+                        "application/json",
+                    )
+                });
+            match downloaded {
+                Ok(()) => {
+                    session.mark_saved();
+                    true
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    false
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         match dialogs::choose_save_path(&name) {
             Some(path) => self.save_to(path),
             None => false,
@@ -312,10 +356,16 @@ impl DesktopApp {
     /// asynchronously; the web entry point reads them and calls
     /// [`DesktopApp::open_text`] or [`DesktopApp::add_library_text`].
     fn open_dropped(&mut self, file: &egui::DroppedFileHandle) {
-        let path = file.path().to_path_buf();
-        if cfg!(target_arch = "wasm32") {
-            return;
-        }
+        #[cfg(target_arch = "wasm32")]
+        crate::web::read_dropped(file.clone(), self.inbox.clone());
+        #[cfg(not(target_arch = "wasm32"))]
+        self.open_dropped_path(file.path());
+    }
+
+    /// Open a file dropped from disk.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open_dropped_path(&mut self, path: &Path) {
+        let path = path.to_path_buf();
         let is_library = path
             .extension()
             .is_some_and(|extension| extension == dialogs::LIBRARY_EXTENSION);
@@ -329,6 +379,28 @@ impl DesktopApp {
             }
         } else {
             self.open_path(&path);
+        }
+    }
+
+    /// Open the files the browser has finished reading.
+    #[cfg(target_arch = "wasm32")]
+    fn open_inbox(&mut self) {
+        let files: Vec<(String, Vec<u8>)> = self.inbox.borrow_mut().drain(..).collect();
+        for (name, bytes) in files {
+            let Ok(text) = String::from_utf8(bytes) else {
+                self.error = Some(format!("{name} is not UTF-8 text"));
+                continue;
+            };
+            let is_library = Path::new(&name)
+                .extension()
+                .is_some_and(|extension| extension == dialogs::LIBRARY_EXTENSION);
+            if is_library {
+                if let Err(error) = self.add_library_text(&text, &name) {
+                    self.error = Some(error);
+                }
+            } else {
+                self.open_text(&text, &name);
+            }
         }
     }
 
@@ -465,6 +537,8 @@ impl DesktopApp {
         for file in dropped {
             self.open_dropped(&file);
         }
+        #[cfg(target_arch = "wasm32")]
+        self.open_inbox();
 
         // One `step_n` and one snapshot per frame, before anything is drawn.
         let frame_us = SimClock::frame_us(ui.input(|input| input.stable_dt));

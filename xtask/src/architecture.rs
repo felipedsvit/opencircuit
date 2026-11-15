@@ -107,7 +107,9 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-sim",
         ],
         // `rfd` gives the native file dialogs (portal over libdbus on Linux).
-        external: &["eframe", "rfd"],
+        // On wasm32, `web-sys`, `js-sys` and `wasm-bindgen-futures` start the
+        // application on its canvas, read dropped files and offer downloads.
+        external: &["eframe", "js-sys", "rfd", "wasm-bindgen-futures", "web-sys"],
         dev: &["egui_kittest"],
         core: false,
     },

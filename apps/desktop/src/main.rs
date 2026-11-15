@@ -6,10 +6,11 @@ fn main() -> std::process::ExitCode {
     native::main()
 }
 
-/// In a browser the application is started by the web entry point, not by
-/// `main`.
+/// In a browser, start on the canvas of `index.html`.
 #[cfg(target_arch = "wasm32")]
-fn main() {}
+fn main() {
+    opencircuit_desktop::web::start();
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
