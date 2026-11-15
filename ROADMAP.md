@@ -110,36 +110,49 @@ operates it through the Modbus server
 `apps/cli/tests/cli.rs`); the interfaces and their limits are in
 `EXTENDING.md`.
 
-## M5 — Editor precision, electrical sheets and CLI automation
+## M5 — Editor precision, electrical sheets and CLI automation (done)
 
-Tracking issue #56. Clean room: ideas from other editors may shape the
-interaction; no code, strings or artwork is copied.
+Tracking issue #56. Clean room: ideas from other editors shaped the
+interaction; no code, strings or artwork was copied.
 
-Editor precision (the file format does not change):
+Editor precision (the file format did not change):
 
-- [ ] Snapping to pins, junctions and wires within a tolerance, with markers.
-- [ ] Visible grid; keyboard for tools, nudging, selecting all and zooming.
-- [ ] Duplicate, copy and paste, with designators renumbered.
-- [ ] Wire bends kept when one end moves; bend direction chosen while wiring.
-- [ ] Editing several elements at once; align and distribute.
+- [x] Snapping to pins, junctions and wires within 12 screen points, with
+  markers.
+- [x] Visible grid; keys for the wire tool, nudging, selecting all and zooming.
+- [x] Duplicate, copy and paste, with designators renumbered.
+- [x] Wire bends kept when one end moves; bend direction chosen while wiring.
+- [x] Editing several elements at once; align and distribute.
 
-Electrical documentation (schema version 2):
+Electrical documentation (schema version 2, ADR-0011 and ADR-0012):
 
-- [ ] Terminal labels (A1/A2, 13/14) in the catalog, libraries and drawings.
-- [ ] Sheets as frames over the canvas, with paper size, zones and a title
-  block (ADR-0011).
-- [ ] One PDF page per sheet; `opencircuit export --sheet`.
-- [ ] Cross-references between coils and their contacts (sheet and column).
+- [x] Terminal numbers (A1/A2, 13/14, 95/96) on the drawings, derived from the
+  symbol, the device class and the slot, so library models get them too.
+- [x] Sheets as frames over the canvas, with paper size, zones and a title
+  block; a sheets and title block section in the inspector.
+- [x] One PDF page per sheet, in an embedded Liberation Mono subset;
+  `opencircuit export --sheet`.
+- [x] Cross-references between coils and their contacts (sheet and zone).
 
 Automation through the command line (data only, no script engine):
 
-- [ ] JSON output for every command.
-- [ ] `opencircuit new` and `opencircuit edit --apply <transaction.json>`.
+- [x] `--format json` on every command that reports a result.
+- [x] `opencircuit new` and `opencircuit edit --apply <edit.json>`.
 
 **Exit criterion:** a project made only through the command line, with two
 sheets, terminal labels and cross-references, validates, simulates and
 exports as a multi-page PDF; in the editor, snapping, duplicating and
-nudging work and are undone in one step each.
+nudging work and are undone in one step each. The exit test is
+`m5_exit_a_project_made_only_through_the_command_line_validates_simulates_and_exports`
+in `apps/cli/tests/cli.rs`; the editor behaviour is covered by the window
+tests in `apps/desktop/tests/editor.rs`; the formats and limits are in
+`EXTENDING.md`.
+
+Considered and not done in M5: an MCP server (the edit file and the JSON
+output are the interface it would sit on), separate sheets joined by off-page
+connectors (it would supersede ADR-0011), DXF and DWG, and a cache of the
+scene for documents beyond about 5,000 devices (`docs/benchmarks.md`). New
+work starts with an issue.
 
 ## Out of scope for the MVP
 

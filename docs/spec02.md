@@ -1612,14 +1612,14 @@ A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte oper
 
 **Critério:** plataforma extensível, com interfaces de integração documentadas e limites de segurança explícitos.
 
-### M5 — Precisão do editor, folhas elétricas e automação pela CLI
+### M5 — Precisão do editor, folhas elétricas e automação pela CLI (concluído)
 
 - Snap com tolerância a pinos, junções e fios, com marcadores; grade visível; teclado para ferramentas, deslocamento, seleção total e zoom.
 - Duplicar, copiar e colar com renumeração de designadores; dobras de fio preservadas; edição de vários elementos; alinhar e distribuir.
-- Rótulos de terminal (A1/A2, 13/14) no catálogo, nas bibliotecas e no desenho.
+- Números de terminal (A1/A2, 13/14, 95/96) no desenho, derivados do símbolo, da classe do dispositivo e do slot, de modo que modelos de biblioteca também os têm.
 - Folhas como molduras sobre a tela única, com tamanho de papel, zonas e carimbo (ADR-0011, schema v2); uma página de PDF por folha.
 - Referências cruzadas entre bobina e contatos (folha e coluna), geradas e nunca persistidas.
-- Saída JSON em todos os comandos; `opencircuit new` e `opencircuit edit --apply` com transações em JSON (só dados, sem motor de script; MCP fora do M5).
+- Saída JSON nos comandos que reportam um resultado; `opencircuit new` e `opencircuit edit --apply` com arquivos de edição em JSON (só dados, sem motor de script; MCP fora do M5).
 
 **Critério:** um projeto feito só pela CLI, com duas folhas, rótulos de terminal e referências cruzadas, valida, simula e exporta como PDF de várias páginas; no editor, snap, duplicação e deslocamento funcionam e se desfazem em um passo cada.
 
