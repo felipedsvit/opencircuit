@@ -139,6 +139,22 @@ impl SchematicBuilder {
         slot: Option<u8>,
         position: GridPoint,
     ) -> Result<SymbolId, IdExhausted> {
+        self.symbol_turned(device, symbol_key, slot, position, QuarterTurn::Deg0)
+    }
+
+    /// Add a symbol instance of a device, turned by `rotation`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdExhausted`] when the document has no identifier left.
+    pub fn symbol_turned(
+        &mut self,
+        device: DeviceId,
+        symbol_key: &str,
+        slot: Option<u8>,
+        position: GridPoint,
+        rotation: QuarterTurn,
+    ) -> Result<SymbolId, IdExhausted> {
         let id = SymbolId(self.ids.alloc()?);
         self.doc.symbols.push(SymbolInstance {
             id,
@@ -146,7 +162,7 @@ impl SchematicBuilder {
             symbol_key: SymbolKey(symbol_key.to_owned()),
             slot,
             position,
-            rotation: QuarterTurn::Deg0,
+            rotation,
         });
         Ok(id)
     }

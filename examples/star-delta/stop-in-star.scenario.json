@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit": "star-delta.ocircuit",
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 6, "action": "release", "device": "S1" },
+    { "tick": 8, "action": "press", "device": "S0" },
+    { "tick": 9, "action": "release", "device": "S0" }
+  ],
+  "until_tick": 20,
+  "expect": { "trace": "stop-in-star.trace", "diagnostics": [] }
+}

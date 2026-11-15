@@ -107,7 +107,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-sim",
         ],
         external: &["serde_json"],
-        dev: &[],
+        dev: &["proptest"],
         core: false,
     },
 ];
