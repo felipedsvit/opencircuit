@@ -1458,6 +1458,7 @@ Matriz inicial: Linux, Windows e macOS.
 ```text
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
 cargo test --workspace --locked
 cargo deny check
 cargo run --locked -p xtask -- check-architecture
