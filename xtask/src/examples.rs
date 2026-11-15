@@ -56,15 +56,25 @@ impl Example {
             &circuit_renderer::SceneOptions::default(),
         );
         let theme = circuit_export::Theme::Print;
+        // A document with sheets prints one page per sheet, as the command
+        // line and the application do.
+        let pages = circuit_renderer::sheet_scenes(
+            &doc,
+            &catalog,
+            None,
+            &circuit_renderer::SceneOptions::default(),
+        );
+        let pdf = if pages.is_empty() {
+            circuit_export::pdf(&scene, theme)
+        } else {
+            circuit_export::pdf_pages(&pages, theme)
+        };
         vec![
             Ok((
                 format!("examples/{stem}.svg"),
                 circuit_export::svg(&scene, theme).into_bytes(),
             )),
-            Ok((
-                format!("examples/{stem}.pdf"),
-                circuit_export::pdf(&scene, theme),
-            )),
+            Ok((format!("examples/{stem}.pdf"), pdf)),
         ]
     }
 }
@@ -106,6 +116,11 @@ pub(crate) const EXAMPLES: &[Example] = &[
     Example {
         path: "examples/direct-starter/starter.ocircuit",
         build: starter,
+        library: None,
+    },
+    Example {
+        path: "examples/sheets/starter-sheets.ocircuit",
+        build: starter_sheets,
         library: None,
     },
     Example {
@@ -350,21 +365,27 @@ fn command() -> Built<Schematic> {
 /// K1, thermal overload F1 and motor M1. The trip contact of F1 is in series
 /// with the control circuit.
 fn starter() -> Built<Schematic> {
-    let mut sheet = Sheet::new("Direct-online starter");
-    let (p24, p0) = sheet.control_supply((0, 0), (0, 28))?;
-    let phases = sheet.power_supply(20, 0)?;
+    starter_at("Direct-online starter", 0)
+}
 
-    let q1 = sheet.part("Q1", "main_switch.3p", "main", &[], (24, 4))?;
+/// [`starter`] with the power circuit `power_dx` grid units to the right.
+fn starter_at(name: &str, power_dx: i32) -> Built<Schematic> {
+    let mut sheet = Sheet::new(name);
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 28))?;
+    let phases = sheet.power_supply(20_i32.saturating_add(power_dx), 0)?;
+    let px = |x: i32| x.saturating_add(power_dx);
+
+    let q1 = sheet.part("Q1", "main_switch.3p", "main", &[], (px(24), 4))?;
     let f1 = sheet.device("F1", "thermal_overload.generic", &[])?;
-    let element = sheet.symbol(f1, "element", None, (24, 16))?;
+    let element = sheet.symbol(f1, "element", None, (px(24), 16))?;
     let trip = sheet.symbol(f1, "aux_nc", None, (0, 4))?;
     let stop = sheet.part("S2", "pushbutton_nc", "contact", &[], (0, 10))?;
     let start = sheet.part("S1", "pushbutton_no", "contact", &[], (-4, 17))?;
     let k1 = sheet.device("K1", "contactor.generic", &dc_load())?;
     let coil = sheet.symbol(k1, "coil", None, (0, 24))?;
-    let main = sheet.symbol(k1, "main", None, (24, 10))?;
+    let main = sheet.symbol(k1, "main", None, (px(24), 10))?;
     let seal = sheet.symbol(k1, "aux_no", Some(1), (4, 17))?;
-    let motor = sheet.part("M1", "motor.3ph", "motor", &motor_400v(), (24, 22))?;
+    let motor = sheet.part("M1", "motor.3ph", "motor", &motor_400v(), (px(24), 22))?;
 
     let top = sheet.junction((0, 14))?;
     let bottom = sheet.junction((0, 20))?;
@@ -385,6 +406,38 @@ fn starter() -> Built<Schematic> {
         sheet.wire(pin(element, output), pin(motor, terminal))?;
     }
     Ok(sheet.finish())
+}
+
+/// The direct-online starter on two A4 sheets: the control circuit on the
+/// first and the power circuit on the second, with the title block filled in.
+/// K1 has its coil and its seal-in contact on sheet 1 and its main contacts
+/// on sheet 2.
+fn starter_sheets() -> Built<Schematic> {
+    let mut doc = starter_at("Partida direta", 100)?;
+    doc.project.author = Some("OpenCircuit".to_owned());
+    doc.project.company = Some("Exemplo".to_owned());
+    doc.project.revision = Some("A".to_owned());
+    doc.project.date = Some("2026-11-15".to_owned());
+    for (number, title, origin) in [
+        (1, "Circuito de comando", GridPoint::new(-14, -8)),
+        (2, "Circuito de for\u{e7}a", GridPoint::new(106, -8)),
+    ] {
+        let id = doc.next_id;
+        doc.next_id = id.checked_add(1).ok_or(IdExhausted)?;
+        doc.sheets.push(circuit_model::Sheet {
+            id: circuit_model::SheetId(id),
+            number,
+            title: title.to_owned(),
+            origin,
+            size: circuit_model::SheetSize::A4,
+            orientation: circuit_model::Orientation::Landscape,
+            zones: circuit_model::Zones {
+                columns: 8,
+                rows: 6,
+            },
+        });
+    }
+    Ok(doc)
 }
 
 /// Reversing starter. K1 runs the motor forward; K2 swaps L1 and L3. Each
