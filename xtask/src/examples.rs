@@ -23,6 +23,43 @@ impl Example {
         let doc = (self.build)().map_err(|error| format!("{}: {error}", self.path))?;
         circuit_project::to_string(&doc).map_err(|error| format!("{}: {error}", self.path))
     }
+
+    /// The drawing of an example under `examples/`, at rest, in the print
+    /// theme, next to its project file: the deterministic-SVG golden of the
+    /// exporter. Fixtures have none.
+    pub(crate) fn drawing(&self) -> Option<Result<(String, String), String>> {
+        let path = self
+            .path
+            .strip_prefix("examples/")
+            .and_then(|rest| rest.strip_suffix(".ocircuit"))
+            .map(|stem| format!("examples/{stem}.svg"))?;
+        Some(
+            (self.build)()
+                .map_err(|error| format!("{}: {error}", self.path))
+                .map(|doc| {
+                    let catalog = circuit_model::ComponentCatalog::builtin();
+                    let scene = circuit_renderer::build_scene(
+                        &doc,
+                        &catalog,
+                        None,
+                        &circuit_renderer::SceneOptions::default(),
+                    );
+                    (
+                        path,
+                        circuit_export::svg(&scene, circuit_export::Theme::Print),
+                    )
+                }),
+        )
+    }
+}
+
+/// Every generated file, project files then drawings, as `(path, text)`.
+pub(crate) fn outputs() -> Vec<Result<(String, String), String>> {
+    let projects = EXAMPLES
+        .iter()
+        .map(|example| example.render().map(|text| (example.path.to_owned(), text)));
+    let drawings = EXAMPLES.iter().filter_map(Example::drawing);
+    projects.chain(drawings).collect()
 }
 
 /// Every generated project file.
@@ -869,20 +906,15 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("xtask lives one level below the workspace root");
-        for example in EXAMPLES {
-            let on_disk =
-                std::fs::read_to_string(root.join(example.path)).unwrap_or_else(|error| {
-                    panic!(
-                        "{}: {error}; run `cargo run -p xtask -- generate-examples`",
-                        example.path
-                    )
-                });
+        for output in outputs() {
+            let (path, text) = output.unwrap();
+            let on_disk = std::fs::read_to_string(root.join(&path)).unwrap_or_else(|error| {
+                panic!("{path}: {error}; run `cargo run -p xtask -- generate-examples`")
+            });
 
             assert_eq!(
-                on_disk,
-                example.render().unwrap(),
-                "{} is stale; run `cargo run -p xtask -- generate-examples`",
-                example.path
+                on_disk, text,
+                "{path} is stale; run `cargo run -p xtask -- generate-examples`"
             );
         }
     }
@@ -979,5 +1011,24 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn every_example_has_a_drawing_and_fixtures_do_not() {
+        for example in EXAMPLES {
+            assert_eq!(
+                example.drawing().is_some(),
+                example.path.starts_with("examples/"),
+                "{}",
+                example.path
+            );
+        }
+    }
+
+    #[test]
+    fn drawing_of_an_example_is_the_same_twice() {
+        let drawing = || EXAMPLES[0].drawing().unwrap().unwrap();
+
+        assert_eq!(drawing(), drawing());
     }
 }

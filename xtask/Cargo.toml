@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 circuit-commands = { workspace = true }
+circuit-export = { workspace = true }
 circuit-model = { workspace = true }
 circuit-project = { workspace = true }
 circuit-renderer = { workspace = true }

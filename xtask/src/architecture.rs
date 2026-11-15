@@ -73,6 +73,15 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // Exporters write the neutral scene; like the renderer they never see
+    // the simulator, and they write SVG and PDF text themselves.
+    PackageRule {
+        name: "circuit-export",
+        workspace: &["circuit-model", "circuit-renderer"],
+        external: &[],
+        dev: &["proptest"],
+        core: true,
+    },
     // The only package with egui/eframe, which it reaches through the eframe
     // re-export; the GUI never enters the core.
     PackageRule {
@@ -101,6 +110,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
         name: "xtask",
         workspace: &[
             "circuit-commands",
+            "circuit-export",
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
@@ -486,12 +496,12 @@ mod tests {
 
     #[test]
     fn unknown_workspace_crate_fails_closed() {
-        let found = violations(&[("circuit-export", &[])], REGISTRY);
+        let found = violations(&[("circuit-io", &[])], REGISTRY);
 
         assert_eq!(
             found,
             [
-                "workspace package `circuit-export` has no architecture rule; add one to xtask before adding the crate"
+                "workspace package `circuit-io` has no architecture rule; add one to xtask before adding the crate"
             ]
         );
     }

@@ -26,6 +26,7 @@ second real consumer justifies the boundary.
 | Commands | `circuit-commands` | Invertible edits, atomic transactions checked for integrity and format limits, undo/redo history, and the editing operations |
 | Editor | `circuit-editor` | Editor logic without a GUI: hit-test, selection, tools (select, place, wire), drag and placement previews; returns transactions, never changes the document |
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
+| Export | `circuit-export` | Deterministic SVG written directly from the neutral scene, with a print and a live theme; no I/O |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation and golden execution |
 | Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that creates, opens, draws, edits (palette, inspector, undo/redo through `circuit-commands` and `circuit-editor`), saves atomically and runs a project with operator controls; the only package with a GUI dependency |
 | Tooling | `xtask` | Architecture checks, generation of the example projects and benchmarks |
@@ -42,7 +43,7 @@ runtime  -> bitset, compiled, fingerprint, logic, solve, trace
 ```
 
 M2 adds `circuit-renderer`, `apps/desktop`, `circuit-commands` and
-`circuit-editor` (all present). M3 adds `circuit-export`. Those directories are placeholders
+`circuit-editor` (all present). M3 adds `circuit-export` (present). The remaining directories are placeholders
 until their milestone; they are not workspace members before they have a real
 `src/lib.rs` and a consumer.
 
@@ -57,7 +58,7 @@ circuit-commands    -> circuit-model
 circuit-editor      -> circuit-model, circuit-commands
 circuit-export      -> circuit-model, circuit-renderer
 apps/cli            -> circuit-model, circuit-sim, circuit-project
-xtask               -> circuit-model, circuit-project, circuit-sim, circuit-renderer, circuit-commands
+xtask               -> circuit-model, circuit-project, circuit-sim, circuit-renderer, circuit-commands, circuit-export
 apps/desktop        -> model, sim, project, renderer, editor, commands, export
 ```
 
