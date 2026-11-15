@@ -33,6 +33,6 @@ mod snap;
 #[cfg(test)]
 mod tests;
 
-pub use editor::{Editor, Key, Modifiers, Outcome, Preview, Tool};
+pub use editor::{Editor, Key, Modifiers, Outcome, PASTE_STEP, Preview, Tool};
 pub use hit::{Hit, hit_test};
 pub use snap::{Pointer, Snap, SnapTarget, snap};
