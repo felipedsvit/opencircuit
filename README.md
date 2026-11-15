@@ -136,7 +136,10 @@ back, starting at tick 0 on the edited circuit).
   that end can follow it.
 - The inspector on the right edits the designator and the parameters of the
   selected device, adds symbols to it (an auxiliary contact, for example),
-  and holds the supply profiles.
+  and holds the supply profiles. With several elements selected it rotates
+  or deletes them all, aligns them on an edge, spaces them evenly, and, when
+  their devices share a model, sets a parameter on every one of them; each
+  of these is one undo step.
 - Undo and Redo (Ctrl+Z, Ctrl+Shift+Z) cover every change. A change the
   model does not accept is refused with a message and leaves the project as
   it was.
