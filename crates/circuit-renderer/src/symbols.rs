@@ -26,6 +26,10 @@ pub(crate) enum Actuator {
     Push,
     /// Maintained switch.
     Latch,
+    /// Emergency stop: a mushroom head on the rod.
+    Emergency,
+    /// Position or level switch: a roller on the rod.
+    Position,
 }
 
 /// The state a drawing shows.
@@ -161,6 +165,31 @@ fn actuator(x: i64, kind: Actuator, actuated: bool, out: &mut Vec<(Shape, StyleK
         Actuator::Push => {
             out.push((line(shifted(x, (-4, 0)), shifted(x, (-14, 0))), style));
             out.push((line(shifted(x, (-14, -5)), shifted(x, (-14, 5))), style));
+        }
+        Actuator::Emergency => {
+            out.push((line(shifted(x, (-4, 0)), shifted(x, (-14, 0))), style));
+            out.push((
+                polyline(&[
+                    shifted(x, (-14, -6)),
+                    shifted(x, (-17, -5)),
+                    shifted(x, (-19, -2)),
+                    shifted(x, (-19, 2)),
+                    shifted(x, (-17, 5)),
+                    shifted(x, (-14, 6)),
+                    shifted(x, (-14, -6)),
+                ]),
+                style,
+            ));
+        }
+        Actuator::Position => {
+            out.push((line(shifted(x, (-4, 0)), shifted(x, (-12, 0))), style));
+            out.push((
+                Shape::Circle {
+                    center: point(x.saturating_sub(15), 0),
+                    radius: 3,
+                },
+                style,
+            ));
         }
         Actuator::Latch => {
             out.push((line(shifted(x, (-4, 0)), shifted(x, (-14, 0))), style));
@@ -512,7 +541,13 @@ mod tests {
     #[test]
     fn every_terminal_is_reached_by_a_lead() {
         for kind in every_kind() {
-            for operator in [Actuator::None, Actuator::Push, Actuator::Latch] {
+            for operator in [
+                Actuator::None,
+                Actuator::Push,
+                Actuator::Latch,
+                Actuator::Emergency,
+                Actuator::Position,
+            ] {
                 for look in every_look() {
                     let drawn: Vec<ScenePoint> = art(kind, operator, look)
                         .iter()
@@ -540,7 +575,13 @@ mod tests {
                 ScenePoint::from_grid(bounds.min),
                 ScenePoint::from_grid(bounds.max),
             );
-            for operator in [Actuator::None, Actuator::Push, Actuator::Latch] {
+            for operator in [
+                Actuator::None,
+                Actuator::Push,
+                Actuator::Latch,
+                Actuator::Emergency,
+                Actuator::Position,
+            ] {
                 for look in every_look() {
                     for (shape, _) in art(kind, operator, look) {
                         if matches!(shape, Shape::Text { .. }) {

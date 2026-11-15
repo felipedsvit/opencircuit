@@ -179,6 +179,8 @@ the warning `OC-STR-009` (`NonOrthogonalWire`).
 | `supply.terminal` | 1 | `terminal` (1..255) | `conductor`, `supply` |
 | `pushbutton_no`, `pushbutton_nc` | 1 | `contact` (1) | — |
 | `pushbutton.combined` | 1 | `no` (1), `nc` (1), one button | — |
+| `estop.latching` | 1 | `contact` (1, NC, mushroom head) | `initial_closed` (default `false`) |
+| `limit_switch` | 1 | `no` (0..1), `nc` (0..1), roller | — |
 | `selector.latching` | 1 | `contact` (1, NO) | `initial_closed` (default `false`) |
 | `main_switch.3p` | 1 | `main` (1, three poles) | `initial_closed` (default `false`) |
 | `contactor.generic` | 1 | `coil` (1), `main` (0..1), `aux_no` (0..8, slotted), `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
@@ -193,6 +195,12 @@ the warning `OC-STR-009` (`NonOrthogonalWire`).
 | `motor.3ph.6t` | 1 | `motor` (1, six terminals) | `rated_voltage_mv` (line voltage in delta) |
 | `transformer.control` | 1 | `primary` (1), `secondary` (1) | `rated_voltage_mv`, `connection` (primary), `secondary` (single-phase supply ID) |
 | `lamp.generic`, `buzzer.generic` | 1 | `lamp` / `buzzer` (1) | `rated_voltage_mv`, `connection` |
+
+An emergency stop is a maintained switch: `close` latches it pressed, which
+opens its NC contact, and `open` releases it. A limit switch is momentary:
+`press` while the machine or the level holds it. Their operator (mushroom
+head, roller) only changes the drawing and the designator prefix (`B` for a
+limit switch).
 
 A published `(model id, version)` never changes. Changing a terminal key, a
 terminal offset, a parameter or a behaviour creates a new model version with a

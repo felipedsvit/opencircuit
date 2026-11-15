@@ -83,6 +83,45 @@ pub enum DeviceClass {
     Transformer,
 }
 
+/// How an operator or a machine acts on a device, for the drawing and the
+/// designator. It changes nothing in the simulation: the class decides the
+/// behaviour.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Operator {
+    /// Driven by a coil, a timer, a thermal relay, or nothing.
+    None,
+    /// Momentary pushbutton.
+    Push,
+    /// Maintained switch.
+    Latch,
+    /// Emergency stop: a maintained mushroom head.
+    Emergency,
+    /// Position or level switch, actuated by the machine.
+    Position,
+}
+
+impl Operator {
+    /// The operator a class has unless its model says otherwise.
+    #[must_use]
+    pub const fn default_for(class: DeviceClass) -> Self {
+        match class {
+            DeviceClass::Pushbutton => Self::Push,
+            DeviceClass::LatchingSwitch => Self::Latch,
+            _ => Self::None,
+        }
+    }
+
+    /// Whether a model of `class` may use this operator.
+    #[must_use]
+    pub const fn fits(self, class: DeviceClass) -> bool {
+        match self {
+            Self::Push | Self::Position => matches!(class, DeviceClass::Pushbutton),
+            Self::Latch | Self::Emergency => matches!(class, DeviceClass::LatchingSwitch),
+            Self::None => !matches!(class, DeviceClass::Pushbutton | DeviceClass::LatchingSwitch),
+        }
+    }
+}
+
 /// What a symbol does in the solver and in the logic.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SymbolKind {
@@ -506,6 +545,7 @@ pub struct ComponentModel {
     id: String,
     version: u32,
     class: DeviceClass,
+    operator: Operator,
     params: Vec<ParamDefinition>,
     symbols: Vec<SymbolDefinition>,
     provenance: Provenance,
@@ -526,10 +566,25 @@ impl ComponentModel {
             id: id.to_owned(),
             version,
             class,
+            operator: Operator::default_for(class),
             params,
             symbols,
             provenance,
         }
+    }
+
+    /// The same model with another operator. Checked against the class by
+    /// [`ComponentCatalog::new`].
+    #[must_use]
+    pub const fn with_operator(mut self, operator: Operator) -> Self {
+        self.operator = operator;
+        self
+    }
+
+    /// How the device is operated, for the drawing and the designator.
+    #[must_use]
+    pub const fn operator(&self) -> Operator {
+        self.operator
     }
 
     /// Model identifier.
@@ -794,6 +849,12 @@ fn keeps_keys(source: &ComponentModel, target: &ComponentModel) -> bool {
 }
 
 fn check_model(model: &ComponentModel) -> Result<(), String> {
+    if !model.operator.fits(model.class) {
+        return Err(format!(
+            "operator {:?} is not valid for class {:?}",
+            model.operator, model.class
+        ));
+    }
     let mut symbol_keys = BTreeSet::new();
     let mut coils = 0_u32;
     for symbol in &model.symbols {
@@ -1126,6 +1187,29 @@ fn builtin_models() -> Vec<ComponentModel> {
             )],
         ),
         model(
+            "estop.latching",
+            DeviceClass::LatchingSwitch,
+            vec![initial_closed()],
+            vec![SymbolDefinition::new(
+                "contact",
+                SymbolKind::ContactNc,
+                1,
+                1,
+                false,
+            )],
+        )
+        .with_operator(Operator::Emergency),
+        model(
+            "limit_switch",
+            DeviceClass::Pushbutton,
+            Vec::new(),
+            vec![
+                SymbolDefinition::new("no", SymbolKind::ContactNo, 0, 1, false),
+                SymbolDefinition::new("nc", SymbolKind::ContactNc, 0, 1, false),
+            ],
+        )
+        .with_operator(Operator::Position),
+        model(
             "selector.latching",
             DeviceClass::LatchingSwitch,
             vec![initial_closed()],
@@ -1436,6 +1520,33 @@ mod tests {
     }
 
     #[test]
+    fn emergency_stop_and_limit_switch_name_their_operator() {
+        let estop = builtin_model("estop.latching");
+        let limit = builtin_model("limit_switch");
+
+        assert_eq!(
+            (estop.class(), estop.operator()),
+            (DeviceClass::LatchingSwitch, Operator::Emergency)
+        );
+        assert_eq!(
+            (limit.class(), limit.operator()),
+            (DeviceClass::Pushbutton, Operator::Position)
+        );
+        assert_eq!(builtin_model("pushbutton_no").operator(), Operator::Push);
+        assert_eq!(builtin_model("relay.generic").operator(), Operator::None);
+    }
+
+    #[test]
+    fn an_operator_that_does_not_fit_the_class_is_refused() {
+        let wrong = builtin_model("relay.generic").with_operator(Operator::Emergency);
+
+        assert!(matches!(
+            ComponentCatalog::new(vec![wrong]),
+            Err(CatalogError::InvalidModel { .. })
+        ));
+    }
+
+    #[test]
     fn supply_terminal_is_its_own_origin() {
         assert_eq!(offsets(SymbolKind::SupplyTerminal), [(0, 0)]);
     }
@@ -1463,9 +1574,11 @@ mod tests {
             [
                 "buzzer.generic@1",
                 "contactor.generic@1",
+                "estop.latching@1",
                 "fuse.generic@1",
                 "interlock.mechanical@1",
                 "lamp.generic@1",
+                "limit_switch@1",
                 "main_switch.3p@1",
                 "motor.3ph@1",
                 "motor.3ph.6t@1",
@@ -1493,7 +1606,7 @@ mod tests {
             .map(|model| format!("{}@{}", model.id(), model.version()))
             .collect();
 
-        assert_eq!(latest.len(), 18);
+        assert_eq!(latest.len(), 20);
         assert!(latest.contains(&"relay.generic@2".to_owned()));
         assert!(latest.contains(&"timer_on.generic@2".to_owned()));
         assert!(latest.contains(&"timer_off.generic@2".to_owned()));
