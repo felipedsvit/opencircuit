@@ -14,6 +14,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::geometry::{GridPoint, GridRect};
+use crate::library::{
+    Artwork, Library, MAX_LIBRARY_MODELS, MAX_LIBRARY_SYMBOLS, check_artwork, is_valid_library_id,
+    is_valid_model_name,
+};
 use crate::schematic::{ModelRef, ParamValue, SymbolKey, TerminalKey};
 use crate::supply::Conductor;
 
@@ -372,6 +376,7 @@ pub struct SymbolDefinition {
     min_instances: u8,
     max_instances: u8,
     slotted: bool,
+    artwork: Option<Artwork>,
 }
 
 impl SymbolDefinition {
@@ -391,7 +396,23 @@ impl SymbolDefinition {
             min_instances,
             max_instances,
             slotted,
+            artwork: None,
         }
+    }
+
+    /// The same symbol with its own artwork (extension libraries). Checked
+    /// against the kind when a library is added to a catalog.
+    #[must_use]
+    pub fn with_artwork(mut self, artwork: Artwork) -> Self {
+        self.artwork = Some(artwork);
+        self
+    }
+
+    /// The artwork of a library symbol, if it has one; otherwise the
+    /// renderer draws the artwork of its kind.
+    #[must_use]
+    pub const fn artwork(&self) -> Option<&Artwork> {
+        self.artwork.as_ref()
     }
 
     /// Key of the symbol inside its model.
@@ -714,6 +735,14 @@ pub enum CatalogError {
         /// Model version.
         version: u32,
     },
+    /// A library cannot be added to the catalog.
+    #[error("library `{library}`: {reason}")]
+    InvalidLibrary {
+        /// Library identifier.
+        library: String,
+        /// What is wrong.
+        reason: String,
+    },
     /// A model is internally inconsistent.
     #[error("model `{id}` version {version}: {reason}")]
     InvalidModel {
@@ -773,6 +802,75 @@ impl ComponentCatalog {
     #[must_use]
     pub fn models(&self) -> &[ComponentModel] {
         &self.models
+    }
+
+    /// This catalog with the models of an extension library added
+    /// (ADR-0008).
+    ///
+    /// The library namespace must be a valid identifier that no model of
+    /// this catalog uses as its first segment (which also refuses a library
+    /// added twice and the namespaces of built-in models) and is not
+    /// `opencircuit`. Every model must be `<namespace>.<name>`, within the
+    /// limits, consistent with its class like a built-in model, and every
+    /// artwork must fit its symbol kind. Each model takes the provenance of
+    /// the library.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatalogError::InvalidLibrary`] for a library-level problem
+    /// and the errors of [`ComponentCatalog::new`] for a model.
+    pub fn with_library(&self, library: Library) -> Result<Self, CatalogError> {
+        let invalid = |reason: String| CatalogError::InvalidLibrary {
+            library: library.id.clone(),
+            reason,
+        };
+        if !is_valid_library_id(&library.id) || library.id == "opencircuit" {
+            return Err(invalid(
+                "the identifier is not a valid namespace".to_owned(),
+            ));
+        }
+        let taken = self
+            .models
+            .iter()
+            .any(|model| model.id.split('.').next() == Some(library.id.as_str()));
+        if taken {
+            return Err(invalid("the namespace is already used".to_owned()));
+        }
+        if library.models.len() > MAX_LIBRARY_MODELS {
+            return Err(invalid(format!("more than {MAX_LIBRARY_MODELS} models")));
+        }
+        let mut models = self.models.clone();
+        for mut model in library.models {
+            let name = model
+                .id
+                .strip_prefix(library.id.as_str())
+                .and_then(|rest| rest.strip_prefix('.'));
+            if !name.is_some_and(is_valid_model_name) {
+                return Err(invalid(format!(
+                    "model `{}` is not `{}.<name>`",
+                    model.id, library.id
+                )));
+            }
+            if model.symbols.len() > MAX_LIBRARY_SYMBOLS {
+                return Err(invalid(format!(
+                    "model `{}` has more than {MAX_LIBRARY_SYMBOLS} symbols",
+                    model.id
+                )));
+            }
+            for symbol in &model.symbols {
+                if let Some(artwork) = &symbol.artwork {
+                    check_artwork(symbol.kind, artwork).map_err(|reason| {
+                        invalid(format!(
+                            "symbol `{}` of model `{}`: {reason}",
+                            symbol.key.0, model.id
+                        ))
+                    })?;
+                }
+            }
+            model.provenance = library.provenance.clone();
+            models.push(model);
+        }
+        Self::new(models)
     }
 
     /// Look up a model by its versioned reference.
@@ -1544,6 +1642,148 @@ mod tests {
             ComponentCatalog::new(vec![wrong]),
             Err(CatalogError::InvalidModel { .. })
         ));
+    }
+
+    mod libraries {
+        use super::*;
+        use crate::library::{ArtPoint, ArtPrimitive, Artwork, Library};
+
+        fn provenance() -> Provenance {
+            Provenance {
+                origin: "ACME test vendor".to_owned(),
+                license: "MIT".to_owned(),
+                standard_reference: None,
+            }
+        }
+
+        /// A relay with a coil and a normally open contact drawn its own way.
+        fn relay(id: &str) -> ComponentModel {
+            let contact = Artwork {
+                rest: vec![
+                    ArtPrimitive::Line {
+                        from: ArtPoint { x: 0, y: -20 },
+                        to: ArtPoint { x: 0, y: -8 },
+                    },
+                    ArtPrimitive::Line {
+                        from: ArtPoint { x: 0, y: 8 },
+                        to: ArtPoint { x: 0, y: 20 },
+                    },
+                ],
+                operated: None,
+            };
+            ComponentModel::new(
+                id,
+                1,
+                DeviceClass::Relay,
+                vec![rated_voltage(), connection()],
+                vec![
+                    SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
+                    SymbolDefinition::new("no", SymbolKind::ContactNo, 0, 2, true)
+                        .with_artwork(contact),
+                ],
+                Provenance::project_owned(),
+            )
+        }
+
+        fn library(id: &str, models: Vec<ComponentModel>) -> Library {
+            Library {
+                id: id.to_owned(),
+                version: 1,
+                name: "ACME".to_owned(),
+                provenance: provenance(),
+                models,
+            }
+        }
+
+        #[test]
+        fn a_library_adds_its_models_with_its_provenance() {
+            let catalog = ComponentCatalog::builtin()
+                .with_library(library("acme", vec![relay("acme.r4")]))
+                .unwrap();
+            let model = catalog
+                .model(&ModelRef {
+                    id: "acme.r4".to_owned(),
+                    version: 1,
+                })
+                .unwrap();
+
+            assert_eq!(model.provenance(), &provenance());
+            assert!(
+                model
+                    .symbol(&SymbolKey("no".to_owned()))
+                    .unwrap()
+                    .artwork()
+                    .is_some()
+            );
+            assert_eq!(
+                catalog.models().len(),
+                ComponentCatalog::builtin().models().len() + 1
+            );
+        }
+
+        #[test]
+        fn namespaces_of_built_in_models_and_of_loaded_libraries_are_taken() {
+            let once = ComponentCatalog::builtin()
+                .with_library(library("acme", vec![relay("acme.r4")]))
+                .unwrap();
+
+            for (catalog, id, model) in [
+                (&once, "acme", "acme.r5"),
+                (&ComponentCatalog::builtin(), "relay", "relay.r4"),
+                (
+                    &ComponentCatalog::builtin(),
+                    "opencircuit",
+                    "opencircuit.r4",
+                ),
+                (&ComponentCatalog::builtin(), "Bad", "Bad.r4"),
+            ] {
+                assert!(
+                    matches!(
+                        catalog.with_library(library(id, vec![relay(model)])),
+                        Err(CatalogError::InvalidLibrary { .. })
+                    ),
+                    "{id}"
+                );
+            }
+        }
+
+        #[test]
+        fn models_outside_the_namespace_or_inconsistent_with_their_class_are_refused() {
+            let builtin = ComponentCatalog::builtin();
+            let outside = builtin.with_library(library("acme", vec![relay("other.r4")]));
+            let wrong_class = relay("acme.r4").with_operator(Operator::Emergency);
+            let inconsistent = builtin.with_library(library("acme", vec![wrong_class]));
+            let duplicate =
+                builtin.with_library(library("acme", vec![relay("acme.r4"), relay("acme.r4")]));
+
+            assert!(matches!(outside, Err(CatalogError::InvalidLibrary { .. })));
+            assert!(matches!(
+                inconsistent,
+                Err(CatalogError::InvalidModel { .. })
+            ));
+            assert!(matches!(
+                duplicate,
+                Err(CatalogError::DuplicateModel { .. })
+            ));
+        }
+
+        #[test]
+        fn artwork_that_does_not_reach_the_terminals_is_refused() {
+            let mut model = relay("acme.r4");
+            model.symbols[1] = SymbolDefinition::new("no", SymbolKind::ContactNo, 0, 2, true)
+                .with_artwork(Artwork {
+                    rest: vec![ArtPrimitive::Circle {
+                        center: ArtPoint { x: 0, y: 0 },
+                        radius: 5,
+                    }],
+                    operated: None,
+                });
+
+            assert!(matches!(
+                ComponentCatalog::builtin().with_library(library("acme", vec![model])),
+                Err(CatalogError::InvalidLibrary { .. })
+            ));
+        }
     }
 
     #[test]

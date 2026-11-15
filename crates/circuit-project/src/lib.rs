@@ -33,6 +33,7 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+pub mod library;
 mod limits;
 mod migrate;
 

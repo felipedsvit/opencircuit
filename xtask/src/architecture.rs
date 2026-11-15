@@ -41,7 +41,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
     PackageRule {
         name: "circuit-project",
         workspace: &["circuit-model"],
-        external: &["serde_json", "thiserror"],
+        external: &["serde", "serde_json", "thiserror"],
         dev: &["proptest"],
         core: true,
     },
