@@ -15,7 +15,7 @@ drawing that tries to infer electricity from pixels.
 
 ## Target crates
 
-The M1 workspace is deliberately small. A layer becomes a crate only when a
+The workspace is deliberately small. A layer becomes a crate only when a
 second real consumer justifies the boundary.
 
 | Layer | Crate | Responsibility |
@@ -43,9 +43,11 @@ trace    -> compiled, fingerprint
 runtime  -> bitset, compiled, fingerprint, logic, solve, trace
 ```
 
-M2 adds `circuit-renderer`, `apps/desktop`, `circuit-commands` and
-`circuit-editor`; M3 adds `circuit-export`; M4 adds `circuit-io`. A new crate
-is not a workspace member before it has a real `src/lib.rs` and a consumer.
+The crates arrived in this order: M1 has `circuit-model`, `circuit-sim`,
+`circuit-project`, `apps/cli` and `xtask`; M2 added `circuit-renderer`,
+`apps/desktop`, `circuit-commands` and `circuit-editor`; M3 added
+`circuit-export`; M4 added `circuit-io`. A new crate is not a workspace member
+before it has a real `src/lib.rs` and a consumer.
 
 ## Dependency rules
 

@@ -122,8 +122,8 @@ diagnostic_codes! {
     JunctionUnconnected = "OC-STR-007", Structural, Error, latches = false;
     /// A junction with a single wire.
     JunctionDangling = "OC-STR-008", Structural, Warning, latches = false;
-    /// A wire segment that is not horizontal or vertical. Reserved: emitted
-    /// once symbol geometry exists.
+    /// A wire segment that is not horizontal or vertical. Geometry has no
+    /// electrical meaning, so the compiler reports it without blocking.
     NonOrthogonalWire = "OC-STR-009", Structural, Warning, latches = false;
     /// A parameter is unknown, missing, of the wrong type or out of range.
     InvalidParameter = "OC-STR-010", Structural, Error, latches = false;
