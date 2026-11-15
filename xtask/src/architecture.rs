@@ -83,6 +83,16 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // Industrial I/O (ADR-0009): the Modbus codec and the I/O map, pure.
+    // Sockets and clocks stay in the command line, so the crate is core and
+    // must not reach `std::net`.
+    PackageRule {
+        name: "circuit-io",
+        workspace: &["circuit-model"],
+        external: &[],
+        dev: &["proptest"],
+        core: true,
+    },
     // The only package with egui/eframe, which it reaches through the eframe
     // re-export; the GUI never enters the core.
     PackageRule {
@@ -504,12 +514,12 @@ mod tests {
 
     #[test]
     fn unknown_workspace_crate_fails_closed() {
-        let found = violations(&[("circuit-io", &[])], REGISTRY);
+        let found = violations(&[("circuit-plugin", &[])], REGISTRY);
 
         assert_eq!(
             found,
             [
-                "workspace package `circuit-io` has no architecture rule; add one to xtask before adding the crate"
+                "workspace package `circuit-plugin` has no architecture rule; add one to xtask before adding the crate"
             ]
         );
     }

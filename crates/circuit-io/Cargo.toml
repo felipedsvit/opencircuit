@@ -1,0 +1,13 @@
+[package]
+name = "circuit-io"
+description = "OpenCircuit industrial I/O: Modbus TCP codec and the I/O map of a project, without sockets or clocks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+circuit-model = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
