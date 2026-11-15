@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use circuit_model::catalog::PARAM_SUPPLY;
+use circuit_model::catalog::{PARAM_FIRST, PARAM_SECOND, PARAM_SUPPLY};
 use circuit_model::{
     ComponentCatalog, ComponentModel, Device, DeviceClass, DeviceId, Endpoint, GridPoint,
     IdAllocator, Junction, JunctionId, LayoutIndex, ModelRef, ParamType, ParamValue, PhaseSequence,
@@ -141,7 +141,7 @@ fn still_fits(
 /// The letters a new device of this model is named with: K for contactors
 /// and relays, KT for timers, S for pushbuttons and switches, Q for a main
 /// switch, F for thermal relays and fuses, M for motors, H for lamps and
-/// buzzers, X for supply terminals.
+/// buzzers, X for supply terminals, KX for mechanical interlocks.
 #[must_use]
 pub fn designator_prefix(model: &ComponentModel) -> &'static str {
     match model.class() {
@@ -159,6 +159,7 @@ pub fn designator_prefix(model: &ComponentModel) -> &'static str {
         DeviceClass::Motor => "M",
         DeviceClass::Lamp | DeviceClass::Buzzer => "H",
         DeviceClass::PowerSupply => "X",
+        DeviceClass::MechanicalInterlock => "KX",
     }
 }
 
@@ -435,13 +436,18 @@ fn touches(
 /// Delete elements and everything that cannot exist without them: the
 /// symbols of a deleted device and the wires at a deleted symbol or
 /// junction. A junction whose wires are all deleted and a device whose
-/// symbols are all deleted go too. Pins, supplies and the document are not
-/// deleted this way.
+/// symbols are all deleted go too, and so does a mechanical interlock that
+/// names a deleted device. Pins, supplies and the document are not deleted
+/// this way.
 ///
 /// # Errors
 ///
 /// Returns [`CommandError::Missing`] for an element that does not exist.
-pub fn delete(doc: &Schematic, subjects: &BTreeSet<Subject>) -> Result<Transaction, CommandError> {
+pub fn delete(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    subjects: &BTreeSet<Subject>,
+) -> Result<Transaction, CommandError> {
     let mut devices = BTreeSet::new();
     let mut symbols = BTreeSet::new();
     let mut junctions = BTreeSet::new();
@@ -510,6 +516,27 @@ pub fn delete(doc: &Schematic, subjects: &BTreeSet<Subject>) -> Result<Transacti
             .peekable();
         if own.peek().is_some() && own.all(|s| symbols.contains(&s.id)) {
             devices.insert(device.id);
+        }
+    }
+
+    // An interlock cannot outlive a contactor it names.
+    for device in &doc.devices {
+        let names_deleted = catalog.model(&device.model).is_some_and(|model| {
+            model.class() == DeviceClass::MechanicalInterlock
+                && [PARAM_FIRST, PARAM_SECOND].iter().any(|key| {
+                    model
+                        .int_param(&device.params, key)
+                        .and_then(|raw| u64::try_from(raw).ok())
+                        .is_some_and(|id| devices.contains(&DeviceId(id)))
+                })
+        });
+        if names_deleted && devices.insert(device.id) {
+            symbols.extend(
+                doc.symbols
+                    .iter()
+                    .filter(|s| s.device_id == device.id)
+                    .map(|s| s.id),
+            );
         }
     }
 
@@ -757,6 +784,19 @@ pub fn set_param(
         definition
             .accepts(value)
             .map_err(CommandError::InvalidParameter)?;
+        if matches!(definition.ty, ParamType::DeviceRef) {
+            let target = match value {
+                ParamValue::Int(raw) => u64::try_from(*raw).ok().map(DeviceId),
+                ParamValue::Bool(_) | ParamValue::Text(_) => None,
+            };
+            let exists =
+                target.is_some_and(|id| id != device && doc.devices.iter().any(|d| d.id == id));
+            if !exists {
+                return Err(CommandError::InvalidParameter(format!(
+                    "parameter `{key}` must name another device of the document"
+                )));
+            }
+        }
         if matches!(definition.ty, ParamType::SupplyRef) {
             let supply = match value {
                 ParamValue::Int(raw) => u64::try_from(*raw).ok().map(SupplyId),

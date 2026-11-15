@@ -671,7 +671,12 @@ fn drag_stops_when_its_selection_disappears() {
         .pointer_move(&bench.doc, &bench.catalog, point(3, 0));
     assert!(bench.editor.is_busy());
 
-    let tx = ops::delete(&bench.doc, &BTreeSet::from([Subject::Symbol(contact)])).unwrap();
+    let tx = ops::delete(
+        &bench.doc,
+        &ComponentCatalog::builtin(),
+        &BTreeSet::from([Subject::Symbol(contact)]),
+    )
+    .unwrap();
     bench.history.execute(&mut bench.doc, tx).unwrap();
     bench.editor.retain_existing(&bench.doc);
 

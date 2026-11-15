@@ -185,6 +185,21 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
             actuator(0, operator, look.actuated, &mut out);
         }
         SymbolKind::Changeover => changeover(look.closed, &mut out),
+        SymbolKind::InterlockLink => {
+            // A dashed bar with two triangles meeting in the middle: the two
+            // contactors push against one another.
+            for (from, to) in [(-20, -14), (-11, -6), (6, 11), (14, 20)] {
+                out.push((line((from, 0), (to, 0)), StyleKey::Linkage));
+            }
+            out.push((
+                polyline(&[(-5, -5), (0, 0), (-5, 5), (-5, -5)]),
+                StyleKey::Symbol,
+            ));
+            out.push((
+                polyline(&[(5, -5), (0, 0), (5, 5), (5, -5)]),
+                StyleKey::Symbol,
+            ));
+        }
         SymbolKind::PowerContacts { poles } => {
             for index in 0..poles {
                 contact(pole_x(index, poles), false, look.closed, &mut out);
@@ -385,6 +400,7 @@ mod tests {
             SymbolKind::ContactNo,
             SymbolKind::ContactNc,
             SymbolKind::Changeover,
+            SymbolKind::InterlockLink,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
             SymbolKind::Lamp,

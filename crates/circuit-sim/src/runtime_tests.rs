@@ -6,8 +6,8 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::testkit::{
-    Rig, action, command_circuit, compile_ok, dc_load, direct_online_circuit, out,
-    reversing_circuit, run, simulator,
+    Interlocks, Rig, action, command_circuit, compile_ok, dc_load, direct_online_circuit, out,
+    reversing_circuit, reversing_with, run, simulator,
 };
 use crate::trace::format_trace;
 
@@ -1061,6 +1061,129 @@ fn actions_at(sim: &Simulator, script: &[Stroke], tick: u64) -> Vec<InputAction>
             }
         })
         .collect()
+}
+
+fn mechanical_only() -> Schematic {
+    reversing_with(Interlocks {
+        electrical: false,
+        mechanical: true,
+    })
+}
+
+fn active(sim: &Simulator, reference: &str) -> bool {
+    sim.snapshot()
+        .is_some_and(|snapshot| snapshot.active_devices.contains(&id(sim, reference)))
+}
+
+#[test]
+fn simultaneous_start_with_a_mechanical_interlock_picks_up_neither_and_warns() {
+    let mut sim = default_sim(&mechanical_only());
+
+    let trace = run(&mut sim, 6, &[(2, "press S1"), (2, "press S3")]);
+
+    assert!(!active(&sim, "K1") && !active(&sim, "K2"));
+    assert!(!sim.snapshot().unwrap().faulted);
+    assert!(
+        trace.contains(&"t=2 fault OC-ELEC-007 started K1,K2".to_owned()),
+        "{trace:?}"
+    );
+    assert!(
+        !trace.iter().any(|line| line.contains("OC-ELEC-001")),
+        "{trace:?}"
+    );
+    let faults = sim.snapshot().unwrap().faults;
+    assert_eq!(
+        faults.iter().map(Diagnostic::code).collect::<Vec<_>>(),
+        [DiagnosticCode::InterlockContention]
+    );
+}
+
+#[test]
+fn releasing_one_button_after_a_contention_lets_the_other_contactor_pick_up() {
+    let mut sim = default_sim(&mechanical_only());
+
+    let trace = run(
+        &mut sim,
+        8,
+        &[(2, "press S1"), (2, "press S3"), (5, "release S3")],
+    );
+
+    assert!(active(&sim, "K1") && !active(&sim, "K2"));
+    assert!(
+        trace.contains(&"t=5 fault OC-ELEC-007 cleared K1,K2".to_owned()),
+        "{trace:?}"
+    );
+    assert!(
+        trace.contains(&"t=6 signal K1.active 0->1".to_owned()),
+        "{trace:?}"
+    );
+}
+
+#[test]
+fn active_contactor_blocks_its_partner_even_with_the_coil_energized() {
+    let mut sim = default_sim(&mechanical_only());
+
+    run(
+        &mut sim,
+        6,
+        &[(2, "press S1"), (3, "release S1"), (5, "press S3")],
+    );
+    let snapshot = sim.snapshot().unwrap();
+
+    assert!(active(&sim, "K1") && !active(&sim, "K2"));
+    assert!(snapshot.energized_devices.contains(&id(&sim, "K2")));
+    assert!(snapshot.faults.is_empty());
+}
+
+#[test]
+fn partner_picks_up_only_after_the_first_contactor_has_dropped_out() {
+    // K1 runs; S2 stops it while S3 is held. K2 may pick up only at the
+    // commit after K1 is low, so there is a tick with both out.
+    let mut sim = default_sim(&mechanical_only());
+
+    let trace = run(
+        &mut sim,
+        12,
+        &[
+            (2, "press S1"),
+            (3, "release S1"),
+            (5, "press S3"),
+            (7, "press S2"),
+            (8, "release S2"),
+        ],
+    );
+
+    let tick_of = |line: &str| {
+        trace
+            .iter()
+            .find(|l| l.ends_with(line))
+            .and_then(|l| l.strip_prefix("t="))
+            .and_then(|l| l.split(' ').next())
+            .and_then(|t| t.parse::<u64>().ok())
+            .unwrap_or_else(|| panic!("no `{line}` in {trace:?}"))
+    };
+    let k1_out = tick_of("K1.active 1->0");
+    let k2_in = tick_of("K2.active 0->1");
+    assert!(k2_in > k1_out, "{trace:?}");
+}
+
+proptest! {
+    #[test]
+    fn mechanically_interlocked_contactors_are_never_active_together(script in strokes()) {
+        let mut sim = default_sim(&mechanical_only());
+        let (k1, k2) = (id(&sim, "K1"), id(&sim, "K2"));
+        for tick in 0..45 {
+            let actions = actions_at(&sim, &script, tick);
+            sim.step(&actions).unwrap();
+            let snapshot = sim.snapshot().unwrap();
+
+            prop_assert!(
+                !(snapshot.active_devices.contains(&k1) && snapshot.active_devices.contains(&k2)),
+                "tick {}", tick
+            );
+            prop_assert!(!snapshot.faulted, "tick {}", tick);
+        }
+    }
 }
 
 fn trace_text(sim: &mut Simulator) -> String {

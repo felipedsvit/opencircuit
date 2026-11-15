@@ -457,7 +457,7 @@ impl Editor {
                 if self.selection.is_empty() || self.is_busy() {
                     return Outcome::default();
                 }
-                Outcome::from_result(ops::delete(doc, &self.selection))
+                Outcome::from_result(ops::delete(doc, catalog, &self.selection))
             }
         }
     }

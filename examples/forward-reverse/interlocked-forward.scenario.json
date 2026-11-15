@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit": "interlocked.ocircuit",
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 4, "action": "release", "device": "S1" },
+    { "tick": 8, "action": "press", "device": "S2" },
+    { "tick": 9, "action": "release", "device": "S2" }
+  ],
+  "until_tick": 12,
+  "expect": { "trace": "interlocked-forward.trace", "diagnostics": [] }
+}

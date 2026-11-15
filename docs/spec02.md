@@ -1156,12 +1156,14 @@ Regras:
 | OC-SEM-006 | `FloatingNet` | Warning | não | Rede com 2+ pontos inalcançável por qualquer fonte, mesmo com todos os switches fechados |
 | OC-SEM-007 | `NoSupply` | Warning | não | Documento com cargas e nenhuma fonte |
 | OC-SEM-008 | `UnusedSupply` | Info | não | Fonte sem carga alcançável |
+| OC-SEM-009 | `InvalidInterlock` | Error | não | Intertravamento mecânico que não nomeia dois contatores distintos, ou contator em mais de um intertravamento (M3) |
 | OC-ELEC-001 | `ShortCircuit` | Error | sim | Condutores incompatíveis no mesmo grupo, estático ou em execução (inclui mistura AC/DC) |
 | OC-ELEC-002 | `ProtectiveEarthFault` | Error | sim | PE em contato com condutor ativo |
 | OC-ELEC-003 | `NeutralEarthBond` | Warning | não | N e PE no mesmo grupo |
 | OC-ELEC-004 | `LoadSupplyMismatch` | Warning | não | Rótulo de tensão ou tipo de alimentação incompatível com a carga; carga fica `Off` |
 | OC-ELEC-005 | `LoadTerminalsShorted` | Warning | não | Os dois terminais de uma carga estão no mesmo grupo; carga fica `Off` |
 | OC-ELEC-006 | `PhaseLoss` | Warning | não | Motor com apenas parte das fases |
+| OC-ELEC-007 | `InterlockContention` | Warning | não | Os dois contatores de um intertravamento mecânico tentaram fechar no mesmo commit; nenhum fechou (M3) |
 | OC-MOD-001 | `StaticSeriesLoads` | Error | não | Cargas em série permanente (§9.5); erro de compilação |
 | OC-MOD-002 | `DynamicUnsupportedTopology` | Error | não | Grupo flutuante tocando 2+ cargas em execução (§9.5); cargas afetadas ficam `Off` |
 | OC-MOD-003 | `CircuitTooLarge` | Error | não | Documento maior do que o compilador consegue indexar |

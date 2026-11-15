@@ -29,6 +29,10 @@ pub const PARAM_CONNECTION: &str = "connection";
 pub const PARAM_PRESET_MS: &str = "preset_ms";
 /// Parameter key: whether a latching switch starts closed.
 pub const PARAM_INITIAL_CLOSED: &str = "initial_closed";
+/// Parameter key: first contactor of a mechanical interlock.
+pub const PARAM_FIRST: &str = "first";
+/// Parameter key: second contactor of a mechanical interlock.
+pub const PARAM_SECOND: &str = "second";
 
 /// Largest pole count of a multi-pole symbol.
 pub const MAX_POLES: u8 = 4;
@@ -69,6 +73,9 @@ pub enum DeviceClass {
     Buzzer,
     /// Tap of a supply conductor.
     PowerSupply,
+    /// Mechanical interlock between two contactors: at most one of them is
+    /// picked up at any time.
+    MechanicalInterlock,
 }
 
 /// What a symbol does in the solver and in the logic.
@@ -103,6 +110,8 @@ pub enum SymbolKind {
     Buzzer,
     /// Point where a supply conductor enters the circuit.
     SupplyTerminal,
+    /// Mark of a mechanical interlock; it has no terminals.
+    InterlockLink,
 }
 
 /// Vertical offset of the terminals above the origin of a symbol, in grid
@@ -182,6 +191,7 @@ impl SymbolKind {
             Self::SupplyTerminal => {
                 vec![TerminalDefinition::new("out", false, GridPoint::new(0, 0))]
             }
+            Self::InterlockLink => Vec::new(),
         }
     }
 
@@ -206,6 +216,7 @@ impl SymbolKind {
             }
             Self::Motor => corners(MOTOR_LEFT, ABOVE, POLE_PITCH, 6),
             Self::SupplyTerminal => corners(-1, -2, 1, 0),
+            Self::InterlockLink => corners(-2, -1, 2, 1),
         }
     }
 
@@ -374,6 +385,8 @@ pub enum ParamType {
     Enum(Vec<String>),
     /// The ID of a supply profile of the document.
     SupplyRef,
+    /// The ID of a device of the document.
+    DeviceRef,
 }
 
 /// One parameter a component model accepts.
@@ -419,7 +432,7 @@ impl ParamDefinition {
                     ))
                 }
             }
-            (ParamType::SupplyRef, ParamValue::Int(v)) if *v > 0 => Ok(()),
+            (ParamType::SupplyRef | ParamType::DeviceRef, ParamValue::Int(v)) if *v > 0 => Ok(()),
             (ParamType::Bool, _) => Err(format!("parameter `{}` must be a boolean", self.key)),
             (ParamType::Int { .. }, _) => {
                 Err(format!("parameter `{}` must be an integer", self.key))
@@ -427,6 +440,10 @@ impl ParamDefinition {
             (ParamType::Enum(_), _) => Err(format!("parameter `{}` must be a text key", self.key)),
             (ParamType::SupplyRef, _) => Err(format!(
                 "parameter `{}` must be the positive id of a supply",
+                self.key
+            )),
+            (ParamType::DeviceRef, _) => Err(format!(
+                "parameter `{}` must be the positive id of a device",
                 self.key
             )),
         }
@@ -850,6 +867,7 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
         DeviceClass::Lamp => matches!(kind, SymbolKind::Lamp),
         DeviceClass::Buzzer => matches!(kind, SymbolKind::Buzzer),
         DeviceClass::PowerSupply => matches!(kind, SymbolKind::SupplyTerminal),
+        DeviceClass::MechanicalInterlock => matches!(kind, SymbolKind::InterlockLink),
     }
 }
 
@@ -862,12 +880,15 @@ enum ExpectedParam {
     ConnectionKey,
     ConductorKey,
     SupplyRef,
+    DeviceRef,
 }
 
 impl ExpectedParam {
     fn matches(self, ty: &ParamType) -> bool {
         match (self, ty) {
-            (Self::Bool, ParamType::Bool) | (Self::SupplyRef, ParamType::SupplyRef) => true,
+            (Self::Bool, ParamType::Bool)
+            | (Self::SupplyRef, ParamType::SupplyRef)
+            | (Self::DeviceRef, ParamType::DeviceRef) => true,
             (Self::PositiveU32, ParamType::Int { min, max }) => {
                 *min >= 1 && *max <= i64::from(u32::MAX) && min <= max
             }
@@ -904,6 +925,10 @@ const fn class_params(class: DeviceClass) -> &'static [(&'static str, ExpectedPa
             (PARAM_CONDUCTOR, ExpectedParam::ConductorKey),
             (PARAM_SUPPLY, ExpectedParam::SupplyRef),
         ],
+        DeviceClass::MechanicalInterlock => &[
+            (PARAM_FIRST, ExpectedParam::DeviceRef),
+            (PARAM_SECOND, ExpectedParam::DeviceRef),
+        ],
         DeviceClass::ThermalOverload | DeviceClass::Pushbutton | DeviceClass::Fuse => &[],
     }
 }
@@ -939,6 +964,14 @@ fn preset() -> ParamDefinition {
             min: 1,
             max: i64::from(u32::MAX),
         },
+        default: None,
+    }
+}
+
+fn device_ref(key: &str) -> ParamDefinition {
+    ParamDefinition {
+        key: key.to_owned(),
+        ty: ParamType::DeviceRef,
         default: None,
     }
 }
@@ -1028,6 +1061,27 @@ fn builtin_models() -> Vec<ComponentModel> {
             vec![SymbolDefinition::new(
                 "contact",
                 SymbolKind::ContactNc,
+                1,
+                1,
+                false,
+            )],
+        ),
+        model(
+            "pushbutton.combined",
+            DeviceClass::Pushbutton,
+            Vec::new(),
+            vec![
+                SymbolDefinition::new("no", SymbolKind::ContactNo, 1, 1, false),
+                SymbolDefinition::new("nc", SymbolKind::ContactNc, 1, 1, false),
+            ],
+        ),
+        model(
+            "interlock.mechanical",
+            DeviceClass::MechanicalInterlock,
+            vec![device_ref(PARAM_FIRST), device_ref(PARAM_SECOND)],
+            vec![SymbolDefinition::new(
+                "link",
+                SymbolKind::InterlockLink,
                 1,
                 1,
                 false,
@@ -1211,6 +1265,7 @@ mod tests {
             SymbolKind::Lamp,
             SymbolKind::Buzzer,
             SymbolKind::SupplyTerminal,
+            SymbolKind::InterlockLink,
         ];
         for poles in 1..=MAX_POLES {
             kinds.push(SymbolKind::PowerContacts { poles });
@@ -1304,9 +1359,11 @@ mod tests {
                 "buzzer.generic@1",
                 "contactor.generic@1",
                 "fuse.generic@1",
+                "interlock.mechanical@1",
                 "lamp.generic@1",
                 "main_switch.3p@1",
                 "motor.3ph@1",
+                "pushbutton.combined@1",
                 "pushbutton_nc@1",
                 "pushbutton_no@1",
                 "relay.generic@1",
@@ -1329,12 +1386,69 @@ mod tests {
             .map(|model| format!("{}@{}", model.id(), model.version()))
             .collect();
 
-        assert_eq!(latest.len(), 14);
+        assert_eq!(latest.len(), 16);
         assert!(latest.contains(&"relay.generic@2".to_owned()));
         assert!(latest.contains(&"timer_on.generic@2".to_owned()));
         assert!(latest.contains(&"timer_off.generic@2".to_owned()));
         assert!(latest.contains(&"contactor.generic@1".to_owned()));
         assert!(!latest.contains(&"relay.generic@1".to_owned()));
+    }
+
+    #[test]
+    fn combined_pushbutton_has_one_no_and_one_nc_contact() {
+        let button = builtin_model("pushbutton.combined");
+        let kinds: Vec<(String, SymbolKind, u8, u8)> = button
+            .symbols()
+            .iter()
+            .map(|s| {
+                (
+                    s.key().0.clone(),
+                    s.kind(),
+                    s.min_instances(),
+                    s.max_instances(),
+                )
+            })
+            .collect();
+
+        assert_eq!(button.class(), DeviceClass::Pushbutton);
+        assert_eq!(
+            kinds,
+            [
+                ("no".to_owned(), SymbolKind::ContactNo, 1, 1),
+                ("nc".to_owned(), SymbolKind::ContactNc, 1, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn mechanical_interlock_names_two_devices_and_has_a_link_without_terminals() {
+        let interlock = builtin_model("interlock.mechanical");
+        let params: Vec<(&str, &ParamType)> = interlock
+            .params()
+            .iter()
+            .map(|p| (p.key.as_str(), &p.ty))
+            .collect();
+
+        assert_eq!(
+            params,
+            [
+                ("first", &ParamType::DeviceRef),
+                ("second", &ParamType::DeviceRef)
+            ]
+        );
+        let link = interlock.symbol(&SymbolKey("link".to_owned())).unwrap();
+        assert_eq!(link.kind(), SymbolKind::InterlockLink);
+        assert!(link.terminals().is_empty());
+    }
+
+    #[test]
+    fn device_reference_must_be_a_positive_integer() {
+        let interlock = builtin_model("interlock.mechanical");
+        let first = &interlock.params()[0];
+
+        assert_eq!(first.accepts(&ParamValue::Int(3)), Ok(()));
+        assert!(first.accepts(&ParamValue::Int(0)).is_err());
+        assert!(first.accepts(&ParamValue::Text("K1".to_owned())).is_err());
     }
 
     #[test]

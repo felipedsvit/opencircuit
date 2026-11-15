@@ -233,6 +233,7 @@ pub struct CompiledCircuit {
     pub(crate) supplies: Vec<CompiledSupply>,
     pub(crate) wires: Vec<(WireId, NetIx)>,
     pub(crate) junctions: Vec<(JunctionId, NetIx)>,
+    pub(crate) interlocks: Vec<(DeviceIx, DeviceIx)>,
     pub(crate) fingerprint: Fingerprint,
 }
 
@@ -295,6 +296,14 @@ impl CompiledCircuit {
     #[must_use]
     pub fn junctions(&self) -> &[(JunctionId, NetIx)] {
         &self.junctions
+    }
+
+    /// The contactor pairs of the mechanical interlocks, each pair in
+    /// ascending order and the list sorted. A contactor is in at most one
+    /// pair.
+    #[must_use]
+    pub fn interlocks(&self) -> &[(DeviceIx, DeviceIx)] {
+        &self.interlocks
     }
 
     /// Stable hash of this circuit.

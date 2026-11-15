@@ -4,8 +4,8 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::testkit::{
-    Rig, codes, command_circuit, compile_doc, compile_ok, dc_load, direct_online_circuit, load,
-    out, reversing_circuit,
+    Interlocks, Rig, codes, command_circuit, compile_doc, compile_ok, dc_load,
+    direct_online_circuit, load, out, reversing_circuit, reversing_with,
 };
 
 fn net_of(circuit: &CompiledCircuit, symbol: SymbolId, terminal: &str) -> NetIx {
@@ -832,6 +832,89 @@ fn shuffled(doc: Schematic) -> impl Strategy<Value = Schematic> {
                 ..doc.clone()
             },
         )
+}
+
+/// Two contactors and a relay with their coils wired, and interlocks between
+/// the named devices.
+fn interlock_rig(links: &[(&str, &str)]) -> Schematic {
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let mut ids = BTreeMap::new();
+    for (reference, model) in [
+        ("K1", "contactor.generic"),
+        ("K2", "contactor.generic"),
+        ("K3", "contactor.generic"),
+        ("KA1", "relay.generic"),
+    ] {
+        let device = rig.device(reference, model, &dc_load());
+        let coil = rig.symbol(device, "coil", None);
+        rig.wire(out(p24), pin(coil, "a1"));
+        rig.wire(pin(coil, "a2"), out(p0));
+        ids.insert(reference, i64::try_from(device.0).unwrap());
+    }
+    for (index, (first, second)) in links.iter().enumerate() {
+        let id = |reference: &str| ids.get(reference).copied().unwrap_or(9_999);
+        let link = rig.device(
+            &format!("KX{}", index + 1),
+            "interlock.mechanical",
+            &[
+                ("first", ParamValue::Int(id(first))),
+                ("second", ParamValue::Int(id(second))),
+            ],
+        );
+        rig.symbol(link, "link", None);
+    }
+    rig.finish()
+}
+
+#[test]
+fn interlock_between_two_contactors_compiles_into_one_sorted_pair() {
+    let doc = interlock_rig(&[("K2", "K1")]);
+    let circuit = compile_ok(&doc);
+    let index = |reference: &str| {
+        circuit
+            .device_index(circuit.device_by_reference(reference).unwrap().id)
+            .unwrap()
+    };
+
+    assert_eq!(circuit.interlocks(), [(index("K1"), index("K2"))]);
+}
+
+#[test]
+fn interlock_that_does_not_name_two_contactors_is_an_error() {
+    for links in [
+        &[("K1", "K1")][..],
+        &[("K1", "KA1")],
+        &[("K1", "missing")],
+        &[("K1", "K2"), ("K2", "K3")],
+    ] {
+        let output = compile_doc(&interlock_rig(links));
+
+        assert!(output.circuit.is_none(), "{links:?}");
+        assert!(
+            codes(&output).contains(&DiagnosticCode::InvalidInterlock),
+            "{links:?}: {:?}",
+            output.diagnostics
+        );
+    }
+}
+
+#[test]
+fn interlocks_change_the_fingerprint_and_circuits_without_them_keep_theirs() {
+    let plain = compile_ok(&reversing_with(Interlocks {
+        electrical: true,
+        mechanical: false,
+    }));
+    let linked = compile_ok(&reversing_with(Interlocks {
+        electrical: true,
+        mechanical: true,
+    }));
+
+    assert_eq!(
+        plain.fingerprint(),
+        compile_ok(&reversing_circuit()).fingerprint()
+    );
+    assert_ne!(plain.fingerprint(), linked.fingerprint());
 }
 
 proptest! {

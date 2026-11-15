@@ -119,7 +119,10 @@ Let `S` be the signals effective at the start of tick `n`.
    (canonical order), then the latch.
 5. **Keep** the solved state for `snapshot()`.
 6. **Logic and commit.** Coil and timer logic compute `CoilActive` and
-   `TimerOut` for tick `n + 1`; time advances.
+   `TimerOut` for tick `n + 1`, mechanical interlocks correct them; time
+   advances. The logic may be computed before step 4, since it only reads the
+   solution of this tick; an interlock contention it finds is recorded with
+   the faults of this tick.
 
 Consequences: a contact driven by a pushbutton or a thermal trip moves in the
 tick of the action; a contact driven by a coil or a timer moves at least one
@@ -146,6 +149,30 @@ Per contactor or relay, counted in consecutive ticks of the solved coil
 state: after `pickup_ticks` energized ticks `CoilActive` goes high at the
 next commit; after `dropout_ticks` de-energized ticks it goes low. A run that
 is interrupted restarts from zero.
+
+## Mechanical interlock
+
+An `interlock.mechanical` device pairs two contactors (`first`, `second`);
+compilation refuses a pair that does not name two distinct contactors, or a
+contactor named by two interlocks (`OC-SEM-009`). At each commit, break
+before make:
+
+- a contactor whose `CoilActive` would rise rises only if its partner is low
+  in this tick and stays low at this commit;
+- when both would rise at the same commit, neither does, and the tick
+  reports the warning `OC-ELEC-007` (`InterlockContention`, subject the first
+  contactor, related the second), which does not latch;
+- a blocked contactor keeps counting energized ticks, so it picks up at the
+  first commit the rule allows.
+
+The two contactors of a pair are never active in the same tick, and at least
+one tick separates the drop-out of one from the pick-up of the other. The
+logic runs before the tick is recorded so that the contention appears in the
+trace and the snapshot of the tick that computed it; nothing it computes is
+effective before the next tick.
+
+A `pushbutton.combined` is one button with a normally open and a normally
+closed contact on its single `Actuated` signal.
 
 ## Timers
 
