@@ -1157,6 +1157,7 @@ Regras:
 | OC-SEM-007 | `NoSupply` | Warning | não | Documento com cargas e nenhuma fonte |
 | OC-SEM-008 | `UnusedSupply` | Info | não | Fonte sem carga alcançável |
 | OC-SEM-009 | `InvalidInterlock` | Error | não | Intertravamento mecânico que não nomeia dois contatores distintos, ou contator em mais de um intertravamento (M3) |
+| OC-SEM-010 | `InvalidTransformer` | Error | não | Secundário de transformador que não é monofásico, é nomeado por outro transformador ou também é derivado por um `supply.terminal` (M4) |
 | OC-ELEC-001 | `ShortCircuit` | Error | sim | Condutores incompatíveis no mesmo grupo, estático ou em execução (inclui mistura AC/DC) |
 | OC-ELEC-002 | `ProtectiveEarthFault` | Error | sim | PE em contato com condutor ativo |
 | OC-ELEC-003 | `NeutralEarthBond` | Warning | não | N e PE no mesmo grupo |

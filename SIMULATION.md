@@ -38,14 +38,20 @@ The circuit is present exactly when no diagnostic has error severity.
    union-find over pins and junctions.
 3. **Devices and signals** in device-ID order. Each class owns at most one
    signal: `Actuated` (pushbutton, latching switch), `Tripped` (thermal
-   overload), `CoilActive` (contactor, relay), `TimerOut` (timer).
+   overload), `CoilActive` (contactor, relay), `TimerOut` (timer), `Powered`
+   (control transformer).
 4. **Elements**: a contact is a switch between two nets driven by its
    device signal (NO closed while high, NC closed while low); a changeover
    contact is two switches from `com` on the same signal, `com`–`nc` closed
    while low and `com`–`no` closed while high, so exactly one side conducts;
    main contacts are one switch per pole sharing the signal; fuse links and thermal
-   elements are always closed; supply terminals are sources; coils, lamps,
-   buzzers and motors are loads.
+   elements are always closed; supply terminals are sources; the secondary
+   of a control transformer is a pair of sources (`x1` provides `l1`, `x2`
+   provides `n` of its single-phase section) enabled by its `Powered`
+   signal; coils, transformer primaries, lamps, buzzers and motors are
+   loads. The secondary profile of a transformer must be single-phase,
+   named by that transformer only and tapped by no supply terminal
+   (`OC-SEM-010`).
 5. **Static checks**: required terminals, devices without symbols, loads
    without supply, permanent conductor conflicts (only always-closed switches
    conduct, the table below applied with sections), unused supplies, floating nets (with every
@@ -141,7 +147,8 @@ Let `S` be the signals effective at the start of tick `n`.
    derived signals, then loads (by device ID, then symbol ID), then faults
    (canonical order), then the latch.
 5. **Keep** the solved state for `snapshot()`.
-6. **Logic and commit.** Coil and timer logic compute `CoilActive` and
+6. **Logic and commit.** Coil, transformer and timer logic compute
+   `CoilActive`, `Powered` and
    `TimerOut` for tick `n + 1`, mechanical interlocks correct them; time
    advances. The logic may be computed before step 4, since it only reads the
    solution of this tick; an interlock contention it finds is recorded with
@@ -172,6 +179,20 @@ Per contactor or relay, counted in consecutive ticks of the solved coil
 state: after `pickup_ticks` energized ticks `CoilActive` goes high at the
 next commit; after `dropout_ticks` de-energized ticks it goes low. A run that
 is interrupted restarts from zero.
+
+## Control transformer
+
+A `transformer.control` (ADR-0007) has a primary, a two-terminal load
+energized like a coil, and a secondary that provides a separate single-phase
+section. `Powered` follows the primary with the actuation delays of coils:
+after `pickup_ticks` energized ticks it goes high at the next commit, after
+`dropout_ticks` de-energized ticks it goes low. While `Powered` is high in a
+tick, `x1` and `x2` provide `l1` and `n` of the secondary section in that
+tick's solve; otherwise they provide nothing. The secondary is therefore live
+from the tick after the primary is energized, and dies the tick after the
+primary loses power. A transformer is listed in `active_devices` while
+powered. A transformer fed from its own secondary never starts. The solver
+remains a pure function of the closed switches and the enabled sources.
 
 ## Mechanical interlock
 
@@ -268,7 +289,7 @@ tests:
 # fingerprint <16 lowercase hex digits>
 # tick_us=<u32> pickup_ticks=<u32> dropout_ticks=<u32> fault_policy=<halt|report>
 t=<tick> input <REF>.<pressed|closed|tripped> <0|1>-><0|1>
-t=<tick> signal <REF>.<active|out> <0|1>-><0|1>
+t=<tick> signal <REF>.<active|out|powered> <0|1>-><0|1>
 t=<tick> load <REF>.<symbol key> <on|off|forward|reverse|forward-star|forward-delta|reverse-star|reverse-delta>
 t=<tick> fault <OC-CODE> <started|cleared> <subject>[,<related>...]
 t=<tick> runtime latched

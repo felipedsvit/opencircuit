@@ -7,9 +7,9 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::testkit::{
-    Interlocks, Rig, action, codes, command_circuit, compile_doc, compile_ok, dc_load,
+    Interlocks, Rig, Secondary, action, codes, command_circuit, compile_doc, compile_ok, dc_load,
     direct_online_circuit, load, out, reversing_circuit, reversing_with, run, simulator,
-    two_sections,
+    transformer_circuit, two_sections,
 };
 use crate::trace::format_trace;
 
@@ -1362,6 +1362,74 @@ fn load_across_two_sections_stays_off() {
             .map(Diagnostic::code)
             .collect::<Vec<_>>(),
         [DiagnosticCode::LoadSupplyMismatch]
+    );
+}
+
+#[test]
+fn transformer_secondary_is_live_from_the_tick_after_the_primary() {
+    let doc = transformer_circuit(Secondary::Own);
+    // L3 of the power supply is unused: an info, nothing more.
+    assert_eq!(codes(&compile_doc(&doc)), [DiagnosticCode::UnusedSupply]);
+    let mut sim = default_sim(&doc);
+
+    let trace = run(&mut sim, 9, &[(2, "close S1"), (6, "open S1")]);
+
+    assert_eq!(
+        trace,
+        [
+            "t=2 input S1.closed 0->1",
+            "t=2 load T1.primary on",
+            "t=3 signal T1.powered 0->1",
+            "t=3 load H1.lamp on",
+            "t=6 input S1.closed 1->0",
+            "t=6 load T1.primary off",
+            "t=7 signal T1.powered 1->0",
+            "t=7 load H1.lamp off",
+        ]
+    );
+}
+
+#[test]
+fn powered_transformer_is_listed_as_active() {
+    let doc = transformer_circuit(Secondary::Own);
+    let mut sim = default_sim(&doc);
+
+    run(&mut sim, 3, &[(2, "close S1")]);
+
+    assert!(
+        sim.snapshot()
+            .unwrap()
+            .active_devices
+            .contains(&id(&sim, "T1"))
+    );
+}
+
+#[test]
+fn transformer_fed_from_its_own_secondary_never_starts() {
+    let mut rig = Rig::new();
+    let [l1, ..] = rig.three_phase();
+    let section = rig.single_phase_supply(230_000);
+    let mut params = load(230_000, "line_neutral");
+    params.push((
+        "secondary",
+        ParamValue::Int(i64::try_from(section.0).unwrap()),
+    ));
+    let t1 = rig.device("T1", "transformer.control", &params);
+    let primary = rig.symbol(t1, "primary", None);
+    let secondary = rig.symbol(t1, "secondary", None);
+    rig.wire(pin(secondary, "x1"), pin(primary, "a1"));
+    rig.wire(pin(primary, "a2"), pin(secondary, "x2"));
+    let lamp = rig.part("H1", "lamp.generic", "lamp", &load(400_000, "line_line"));
+    rig.wire(out(l1), pin(lamp, "x1"));
+    let mut sim = default_sim(&rig.finish());
+
+    run(&mut sim, 10, &[]);
+
+    assert!(
+        !sim.snapshot()
+            .unwrap()
+            .active_devices
+            .contains(&id(&sim, "T1"))
     );
 }
 

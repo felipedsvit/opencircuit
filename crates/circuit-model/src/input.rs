@@ -88,7 +88,8 @@ pub const fn operator_controls(class: DeviceClass) -> &'static [Control] {
         | DeviceClass::Lamp
         | DeviceClass::Buzzer
         | DeviceClass::PowerSupply
-        | DeviceClass::MechanicalInterlock => &[],
+        | DeviceClass::MechanicalInterlock
+        | DeviceClass::Transformer => &[],
     }
 }
 
@@ -143,6 +144,7 @@ mod tests {
             DeviceClass::Buzzer,
             DeviceClass::PowerSupply,
             DeviceClass::MechanicalInterlock,
+            DeviceClass::Transformer,
         ] {
             assert_eq!(operator_controls(class), &[], "{class:?}");
         }

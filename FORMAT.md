@@ -131,6 +131,8 @@ Keys are structural and belong to the symbol kind; displayed numbers such as
 | Symbol kind | Terminals |
 | --- | --- |
 | coil | `a1`, `a2` (both required) |
+| transformer primary | `a1`, `a2` (both required) |
+| transformer secondary | `x1` (provides `l1`), `x2` (provides `n`) |
 | contact, fuse link | `p1`, `p2` |
 | changeover contact | `com`, `nc`, `no` |
 | main contacts, thermal element | `pole1.in`, `pole1.out`, … per pole |
@@ -157,7 +159,7 @@ Terminal offsets, unrotated:
 
 | Symbol kind | Offsets |
 | --- | --- |
-| coil, contact, fuse link, lamp, buzzer | first terminal `(0, -2)`, second `(0, 2)` |
+| coil, contact, fuse link, lamp, buzzer, transformer primary and secondary | first terminal `(0, -2)`, second `(0, 2)` |
 | changeover contact | `com` `(0, 2)`, `nc` `(2, -2)`, `no` `(0, -2)` |
 | main contacts, thermal element (`n` poles) | pole `k`: `x = (2k - n - 1) * 2`, `in` at `y = -2`, `out` at `y = 2` |
 | motor | `u1` `(-4, -2)`, `v1` `(0, -2)`, `w1` `(4, -2)` |
@@ -189,6 +191,7 @@ the warning `OC-STR-009` (`NonOrthogonalWire`).
 | `interlock.mechanical` | 1 | `link` (1, no terminals) | `first`, `second` (device IDs of two contactors) |
 | `motor.3ph` | 1 | `motor` (1) | `rated_voltage_mv` |
 | `motor.3ph.6t` | 1 | `motor` (1, six terminals) | `rated_voltage_mv` (line voltage in delta) |
+| `transformer.control` | 1 | `primary` (1), `secondary` (1) | `rated_voltage_mv`, `connection` (primary), `secondary` (single-phase supply ID) |
 | `lamp.generic`, `buzzer.generic` | 1 | `lamp` / `buzzer` (1) | `rated_voltage_mv`, `connection` |
 
 A published `(model id, version)` never changes. Changing a terminal key, a
