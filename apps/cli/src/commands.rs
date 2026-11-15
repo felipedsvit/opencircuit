@@ -1,4 +1,4 @@
-//! The four commands: `validate`, `simulate`, `test` and `export`.
+//! The commands: `validate`, `simulate`, `test`, `export` and `serve`.
 
 use std::io::{self, Write};
 use std::path::Path;
@@ -87,6 +87,37 @@ pub(crate) fn execute(
         } => {
             let catalog = load_catalog(library.as_slice())?;
             export(project, output, *format, *theme, &catalog, out, err)
+        }
+        Command::Serve {
+            project,
+            listen,
+            library,
+            print_map,
+            duration_ms,
+        } => {
+            let catalog = load_catalog(library.as_slice())?;
+            let text = read_text(project, MAX_PROJECT_BYTES)?;
+            let doc = match circuit_project::from_str(&text) {
+                Ok(doc) => doc,
+                Err(error) => {
+                    writeln!(err, "error: {}: {error}", project.display())?;
+                    return Ok(EXIT_FAILED);
+                }
+            };
+            if *print_map {
+                out.write_all(circuit_io::IoMap::new(&doc, &catalog).describe().as_bytes())?;
+                return Ok(EXIT_OK);
+            }
+            crate::serve::serve(
+                &crate::serve::ServeRequest {
+                    doc: &doc,
+                    catalog: &catalog,
+                    listen: *listen,
+                    duration: duration_ms.map(std::time::Duration::from_millis),
+                },
+                out,
+                err,
+            )
         }
     }
 }

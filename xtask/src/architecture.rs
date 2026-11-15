@@ -115,6 +115,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
         name: "opencircuit-cli",
         workspace: &[
             "circuit-export",
+            "circuit-io",
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
