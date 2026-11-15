@@ -142,6 +142,48 @@ fn diagonal_wire_is_reported_once_and_does_not_block_compilation() {
     assert!(output.circuit.is_some());
 }
 
+fn sheet(id: u64, number: u32, origin: GridPoint) -> circuit_model::Sheet {
+    circuit_model::Sheet {
+        id: circuit_model::SheetId(id),
+        number,
+        title: String::new(),
+        origin,
+        size: circuit_model::SheetSize::A4,
+        orientation: circuit_model::Orientation::Landscape,
+        zones: circuit_model::Zones {
+            columns: 8,
+            rows: 6,
+        },
+    }
+}
+
+#[test]
+fn a_wire_across_the_edge_of_a_sheet_is_a_warning_and_still_compiles() {
+    let mut doc = command_circuit();
+    let bounds = doc
+        .symbols
+        .iter()
+        .map(|symbol| symbol.position)
+        .fold((i32::MAX, i32::MIN), |(low, high), p| {
+            (low.min(p.y), high.max(p.y))
+        });
+    // A frame whose bottom edge runs through the middle of the circuit.
+    let middle = bounds.0 + (bounds.1 - bounds.0) / 2;
+    let id = doc.next_id;
+    doc.sheets
+        .push(sheet(id, 1, GridPoint::new(-40, middle - 59)));
+    doc.next_id += 1;
+
+    let output = compile_doc(&doc);
+
+    assert!(codes(&output).contains(&DiagnosticCode::WireCrossesSheet));
+    assert!(output.circuit.is_some());
+
+    // The same frame away from the circuit: no warning.
+    doc.sheets[0].origin = GridPoint::new(1_000, 1_000);
+    assert!(!codes(&compile_doc(&doc)).contains(&DiagnosticCode::WireCrossesSheet));
+}
+
 #[test]
 fn orthogonal_wires_raise_no_geometry_warning() {
     let output = compile_doc(&command_circuit());
@@ -1207,7 +1249,15 @@ mod hostile {
             Schematic {
                 schema_version: 1,
                 next_id,
-                project: ProjectMeta { name: "hostile".to_owned(), grid_unit: 10 },
+                project: ProjectMeta {
+                    name: "hostile".to_owned(),
+                    grid_unit: 10,
+                    author: None,
+                    company: None,
+                    revision: None,
+                    date: None,
+                },
+                sheets: Vec::new(),
                 supplies,
                 devices,
                 symbols,
