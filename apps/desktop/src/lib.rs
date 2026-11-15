@@ -21,6 +21,7 @@ pub mod app;
 pub mod camera;
 mod canvas;
 pub mod clock;
+mod dialogs;
 pub mod files;
 mod inspector;
 mod palette;

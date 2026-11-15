@@ -19,14 +19,13 @@ use eframe::egui::{self, KeyboardShortcut, RichText, Ui};
 use crate::camera::Camera;
 use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
+use crate::dialogs;
 use crate::inspector::{self, InspectorState};
 use crate::palette;
 use crate::session::{SaveError, Session};
 
 /// Radius of the ring marking the pin under the pointer, in subunits.
 const PIN_RING: i64 = SUBUNITS_PER_GRID / 2;
-/// Extension of project files.
-const EXTENSION: &str = "ocircuit";
 
 /// An action that would drop unsaved changes, waiting for the user to save,
 /// discard or cancel.
@@ -40,46 +39,6 @@ enum Pending {
     OpenDialog,
     /// Close the window.
     Close,
-}
-
-/// Ask the operating system for a project to open. `None` when the user
-/// cancels or no file dialog is available; the path field remains.
-fn pick_project() -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .add_filter("OpenCircuit project", &[EXTENSION])
-        .pick_file()
-}
-
-/// Ask the operating system where to save. The extension is added when the
-/// user leaves it out.
-fn choose_save_path(name: &str) -> Option<PathBuf> {
-    let mut path = rfd::FileDialog::new()
-        .add_filter("OpenCircuit project", &[EXTENSION])
-        .set_file_name(format!("{name}.{EXTENSION}"))
-        .save_file()?;
-    if path.extension().is_none() {
-        path.set_extension(EXTENSION);
-    }
-    Some(path)
-}
-
-/// Ask the operating system where to write a drawing in the format of
-/// `extension` (`svg` or `pdf`). The extension is added when the user
-/// leaves it out.
-fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
-    let filter = if extension == "pdf" {
-        "PDF document"
-    } else {
-        "SVG drawing"
-    };
-    let mut path = rfd::FileDialog::new()
-        .add_filter(filter, &[extension])
-        .set_file_name(format!("{name}.{extension}"))
-        .save_file()?;
-    if path.extension().is_none() {
-        path.set_extension(extension);
-    }
-    Some(path)
 }
 
 /// What the window is for at the moment.
@@ -233,7 +192,7 @@ impl DesktopApp {
             return;
         };
         let with_state = self.mode == Mode::Simulate;
-        if let Some(path) = choose_export_path(&session.document().project.name, extension)
+        if let Some(path) = dialogs::choose_export_path(&session.document().project.name, extension)
             && let Err(error) = session.export(&path, with_state)
         {
             self.error = Some(error.to_string());
@@ -242,13 +201,7 @@ impl DesktopApp {
 
     /// Ask for library files and load them, stopping at the first error.
     fn library_dialog(&mut self) {
-        let Some(paths) = rfd::FileDialog::new()
-            .add_filter("OpenCircuit library", &["oclib"])
-            .pick_files()
-        else {
-            return;
-        };
-        for path in paths {
+        for path in dialogs::pick_libraries() {
             let origin = path.display().to_string();
             let loaded = crate::files::read_text(&path, MAX_LIBRARY_BYTES)
                 .map_err(|error| error.to_string())
@@ -265,7 +218,7 @@ impl DesktopApp {
             || "project".to_owned(),
             |s| s.document().project.name.clone(),
         );
-        match choose_save_path(&name) {
+        match dialogs::choose_save_path(&name) {
             Some(path) => self.save_to(path),
             None => false,
         }
@@ -289,7 +242,7 @@ impl DesktopApp {
             }
             Pending::Open(path) => self.open_path(&path),
             Pending::OpenDialog => {
-                if let Some(path) = pick_project() {
+                if let Some(path) = dialogs::pick_project() {
                     self.open_path(&path);
                 }
             }
@@ -352,6 +305,31 @@ impl DesktopApp {
         self.focus = None;
         self.held = None;
         self.fit_pending = true;
+    }
+
+    /// Open a dropped file: a library (`.oclib`) is loaded into the window,
+    /// anything else is opened as a project. A browser hands over files
+    /// asynchronously; the web entry point reads them and calls
+    /// [`DesktopApp::open_text`] or [`DesktopApp::add_library_text`].
+    fn open_dropped(&mut self, file: &egui::DroppedFileHandle) {
+        let path = file.path().to_path_buf();
+        if cfg!(target_arch = "wasm32") {
+            return;
+        }
+        let is_library = path
+            .extension()
+            .is_some_and(|extension| extension == dialogs::LIBRARY_EXTENSION);
+        if is_library {
+            let origin = path.display().to_string();
+            let loaded = crate::files::read_text(&path, MAX_LIBRARY_BYTES)
+                .map_err(|error| error.to_string())
+                .and_then(|text| self.add_library_text(&text, &origin));
+            if let Err(error) = loaded {
+                self.error = Some(error);
+            }
+        } else {
+            self.open_path(&path);
+        }
     }
 
     /// The built-in catalog with the libraries of this window.
@@ -483,15 +461,9 @@ impl DesktopApp {
         }
         self.confirm_dialog(ui);
 
-        let dropped = ui.input(|input| {
-            input
-                .raw
-                .dropped_files
-                .first()
-                .map(|file| file.path().to_path_buf())
-        });
-        if let Some(path) = dropped {
-            self.open_path(&path);
+        let dropped = ui.input(|input| input.raw.dropped_files.clone());
+        for file in dropped {
+            self.open_dropped(&file);
         }
 
         // One `step_n` and one snapshot per frame, before anything is drawn.

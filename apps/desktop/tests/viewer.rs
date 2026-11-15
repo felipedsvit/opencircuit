@@ -221,3 +221,35 @@ fn a_library_loaded_in_the_window_lets_its_project_compile() {
     let harness = harness(app);
     assert!(harness.query_by_label("Library…").is_some());
 }
+
+/// A file dropped onto the window from disk.
+#[derive(Debug)]
+struct Dropped(std::path::PathBuf);
+
+impl eframe::egui::DroppedFile for Dropped {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|error| error.to_string())
+    }
+}
+
+#[test]
+fn dropping_a_library_then_its_project_opens_a_project_that_compiles() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/library");
+    let mut harness = harness(DesktopApp::default());
+
+    for file in ["acme.oclib", "acme-lamp.ocircuit"] {
+        harness
+            .input_mut()
+            .dropped_files
+            .push(std::sync::Arc::new(Dropped(root.join(file))));
+        harness.run();
+    }
+
+    let app = harness.state();
+    assert_eq!(app.libraries().len(), 1);
+    assert!(app.session().unwrap().can_simulate());
+}
