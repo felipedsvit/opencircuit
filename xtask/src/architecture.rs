@@ -75,11 +75,13 @@ const PACKAGE_RULES: &[PackageRule] = &[
     },
     // Exporters write the neutral scene; like the renderer they never see
     // the simulator. SVG is written by hand; PDF objects by `pdf-writer`
-    // (ADR-0006), a small writer with no font or layout code.
+    // (ADR-0006), a small writer with no font or layout code, and the font
+    // that the PDF embeds is cut down to the glyphs it uses by `subsetter`
+    // (ADR-0012).
     PackageRule {
         name: "circuit-export",
         workspace: &["circuit-model", "circuit-renderer"],
-        external: &["pdf-writer"],
+        external: &["pdf-writer", "subsetter"],
         dev: &["proptest"],
         core: true,
     },
