@@ -26,7 +26,7 @@ second real consumer justifies the boundary.
 | Commands | `circuit-commands` | Invertible edits, atomic transactions checked for integrity and format limits, undo/redo history, and the editing operations |
 | Editor | `circuit-editor` | Editor logic without a GUI: hit-test, selection, tools (select, place, wire), drag and placement previews; returns transactions, never changes the document |
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
-| Export | `circuit-export` | Deterministic SVG written directly from the neutral scene, with a print and a live theme; no I/O |
+| Export | `circuit-export` | Deterministic SVG written directly and PDF written with `pdf-writer` (ADR-0006) from the neutral scene, with a print and a live theme; no I/O |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation, golden execution and export |
 | Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that creates, opens, draws, edits (palette, inspector, undo/redo through `circuit-commands` and `circuit-editor`), saves atomically and runs a project with operator controls; the only package with a GUI dependency |
 | Tooling | `xtask` | Architecture checks, generation of the example projects and benchmarks |

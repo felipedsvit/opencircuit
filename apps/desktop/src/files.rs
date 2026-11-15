@@ -65,7 +65,7 @@ pub fn read_text(path: &Path, limit: usize) -> Result<String, FileError> {
 ///
 /// Returns [`FileError`] when the path has no file name or the file cannot
 /// be written, synced or renamed.
-pub fn write_atomic(path: &Path, contents: &str) -> Result<(), FileError> {
+pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), FileError> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let error = |source| FileError {
         path: path.to_path_buf(),
@@ -89,7 +89,7 @@ pub fn write_atomic(path: &Path, contents: &str) -> Result<(), FileError> {
 
     let written = (|| -> io::Result<()> {
         let mut file = File::create(&temporary)?;
-        file.write_all(contents.as_bytes())?;
+        file.write_all(contents.as_ref())?;
         file.sync_all()?;
         fs::rename(&temporary, path)
     })();

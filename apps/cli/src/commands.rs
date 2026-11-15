@@ -104,7 +104,8 @@ fn export(
         &circuit_renderer::SceneOptions::default(),
     );
     let drawing = match format {
-        ExportFormat::Svg => circuit_export::svg(&scene, theme),
+        ExportFormat::Svg => circuit_export::svg(&scene, theme).into_bytes(),
+        ExportFormat::Pdf => circuit_export::pdf(&scene, theme),
     };
     write_atomic(output, &drawing)?;
     writeln!(out, "wrote  {}", output.display())?;

@@ -45,7 +45,7 @@ pub(crate) fn read_text(path: &Path, limit: usize) -> Result<String, CliError> {
 /// Write a file atomically: write a temporary file in the same directory,
 /// flush it to disk, then rename it over the destination. A failure leaves
 /// the destination untouched and removes the temporary file.
-pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), CliError> {
+pub(crate) fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), CliError> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     let name = path
@@ -65,7 +65,7 @@ pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), CliError> 
 
     let written = (|| -> io::Result<()> {
         let mut file = File::create(&temporary)?;
-        file.write_all(contents.as_bytes())?;
+        file.write_all(contents.as_ref())?;
         file.sync_all()?;
         fs::rename(&temporary, path)
     })();

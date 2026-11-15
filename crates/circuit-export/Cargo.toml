@@ -1,6 +1,6 @@
 [package]
 name = "circuit-export"
-description = "OpenCircuit exporters: deterministic SVG written from the neutral scene"
+description = "OpenCircuit exporters: deterministic SVG and PDF written from the neutral scene"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 circuit-model = { workspace = true }
 circuit-renderer = { workspace = true }
+pdf-writer = "0.15"
 
 [dev-dependencies]
 proptest = { workspace = true }

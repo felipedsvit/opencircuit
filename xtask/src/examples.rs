@@ -24,41 +24,50 @@ impl Example {
         circuit_project::to_string(&doc).map_err(|error| format!("{}: {error}", self.path))
     }
 
-    /// The drawing of an example under `examples/`, at rest, in the print
-    /// theme, next to its project file: the deterministic-SVG golden of the
-    /// exporter. Fixtures have none.
-    pub(crate) fn drawing(&self) -> Option<Result<(String, String), String>> {
-        let path = self
+    /// The drawings of an example under `examples/`, at rest, in the print
+    /// theme, next to its project file: SVG and PDF, the goldens of the
+    /// exporters. Fixtures have none.
+    pub(crate) fn drawings(&self) -> Vec<Result<(String, Vec<u8>), String>> {
+        let Some(stem) = self
             .path
             .strip_prefix("examples/")
             .and_then(|rest| rest.strip_suffix(".ocircuit"))
-            .map(|stem| format!("examples/{stem}.svg"))?;
-        Some(
-            (self.build)()
-                .map_err(|error| format!("{}: {error}", self.path))
-                .map(|doc| {
-                    let catalog = circuit_model::ComponentCatalog::builtin();
-                    let scene = circuit_renderer::build_scene(
-                        &doc,
-                        &catalog,
-                        None,
-                        &circuit_renderer::SceneOptions::default(),
-                    );
-                    (
-                        path,
-                        circuit_export::svg(&scene, circuit_export::Theme::Print),
-                    )
-                }),
-        )
+        else {
+            return Vec::new();
+        };
+        let doc = match (self.build)() {
+            Ok(doc) => doc,
+            Err(error) => return vec![Err(format!("{}: {error}", self.path))],
+        };
+        let catalog = circuit_model::ComponentCatalog::builtin();
+        let scene = circuit_renderer::build_scene(
+            &doc,
+            &catalog,
+            None,
+            &circuit_renderer::SceneOptions::default(),
+        );
+        let theme = circuit_export::Theme::Print;
+        vec![
+            Ok((
+                format!("examples/{stem}.svg"),
+                circuit_export::svg(&scene, theme).into_bytes(),
+            )),
+            Ok((
+                format!("examples/{stem}.pdf"),
+                circuit_export::pdf(&scene, theme),
+            )),
+        ]
     }
 }
 
-/// Every generated file, project files then drawings, as `(path, text)`.
-pub(crate) fn outputs() -> Vec<Result<(String, String), String>> {
-    let projects = EXAMPLES
-        .iter()
-        .map(|example| example.render().map(|text| (example.path.to_owned(), text)));
-    let drawings = EXAMPLES.iter().filter_map(Example::drawing);
+/// Every generated file, project files then drawings, as `(path, bytes)`.
+pub(crate) fn outputs() -> Vec<Result<(String, Vec<u8>), String>> {
+    let projects = EXAMPLES.iter().map(|example| {
+        example
+            .render()
+            .map(|text| (example.path.to_owned(), text.into_bytes()))
+    });
+    let drawings = EXAMPLES.iter().flat_map(Example::drawings);
     projects.chain(drawings).collect()
 }
 
@@ -908,7 +917,7 @@ mod tests {
             .expect("xtask lives one level below the workspace root");
         for output in outputs() {
             let (path, text) = output.unwrap();
-            let on_disk = std::fs::read_to_string(root.join(&path)).unwrap_or_else(|error| {
+            let on_disk = std::fs::read(root.join(&path)).unwrap_or_else(|error| {
                 panic!("{path}: {error}; run `cargo run -p xtask -- generate-examples`")
             });
 
@@ -1014,21 +1023,22 @@ mod tests {
     }
 
     #[test]
-    fn every_example_has_a_drawing_and_fixtures_do_not() {
+    fn every_example_has_two_drawings_and_fixtures_have_none() {
         for example in EXAMPLES {
-            assert_eq!(
-                example.drawing().is_some(),
-                example.path.starts_with("examples/"),
-                "{}",
-                example.path
-            );
+            let expected = if example.path.starts_with("examples/") {
+                2
+            } else {
+                0
+            };
+
+            assert_eq!(example.drawings().len(), expected, "{}", example.path);
         }
     }
 
     #[test]
-    fn drawing_of_an_example_is_the_same_twice() {
-        let drawing = || EXAMPLES[0].drawing().unwrap().unwrap();
+    fn drawings_of_an_example_are_the_same_twice() {
+        let drawings = || EXAMPLES[0].drawings();
 
-        assert_eq!(drawing(), drawing());
+        assert_eq!(drawings(), drawings());
     }
 }
