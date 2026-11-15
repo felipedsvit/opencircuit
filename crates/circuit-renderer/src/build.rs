@@ -6,10 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ComponentModel, ConductorSet, DeviceClass, DeviceId, JunctionId, LayoutIndex,
-    MotorState, Operator, PinRef, Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance,
-    SymbolKind, TimerView, WindingConnection, Wire, WireId, terminal_label,
+    MotorState, Operator, PinRef, Schematic, SheetId, SimSnapshot, Subject, SymbolId,
+    SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire, WireId, terminal_label,
 };
 
+use crate::frame::{draw_sheets, frame_rect};
 use crate::scene::{Anchor, Scene, ScenePoint, SceneRect, Shape, StyleKey};
 use crate::symbols::{self, Actuator, Look};
 
@@ -84,6 +85,62 @@ impl<'a> State<'a> {
     }
 }
 
+/// Build the scene of one printed page: sheet `sheet` of the document.
+///
+/// It holds the frame of that sheet, and every element of the drawing that
+/// lies inside the frame (an element that crosses the edge is kept, and the
+/// page cuts it), in the same styles and states as [`build_scene`]. The
+/// bounds and the page are the frame, so an exporter writes a page of the
+/// paper size. `None` when the document has no such sheet or its frame
+/// leaves the coordinate range.
+#[must_use]
+pub fn build_sheet_scene(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    snapshot: Option<&SimSnapshot>,
+    options: &SceneOptions,
+    sheet: SheetId,
+) -> Option<Scene> {
+    let wanted = doc.sheets.iter().find(|candidate| candidate.id == sheet)?;
+    let frame = frame_rect(wanted)?;
+    let whole = build_scene(doc, catalog, snapshot, options);
+    let own = Some(Subject::Sheet(sheet));
+    let items = whole
+        .items
+        .into_iter()
+        .filter(|item| match item.style {
+            StyleKey::Frame => item.subject == own,
+            _ => item
+                .shape
+                .bounds()
+                .is_some_and(|bounds| frame.intersects(&bounds)),
+        })
+        .collect();
+    Some(Scene {
+        items,
+        bounds: Some(frame),
+        page: Some(frame),
+    })
+}
+
+/// The scene of every sheet of the document, in sheet-number order: the
+/// pages of a printed set. Empty when the document has no sheet (or none whose
+/// frame is inside the coordinate range).
+#[must_use]
+pub fn sheet_scenes(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    snapshot: Option<&SimSnapshot>,
+    options: &SceneOptions,
+) -> Vec<Scene> {
+    let mut sheets: Vec<&circuit_model::Sheet> = doc.sheets.iter().collect();
+    sheets.sort_by_key(|sheet| (sheet.number, sheet.id));
+    sheets
+        .into_iter()
+        .filter_map(|sheet| build_sheet_scene(doc, catalog, snapshot, options, sheet.id))
+        .collect()
+}
+
 /// Build the scene of a document.
 ///
 /// Without a snapshot every symbol is drawn at rest: normally open contacts
@@ -106,6 +163,9 @@ pub fn build_scene(
     let wires = by_id(&doc.wires, |wire| wire.id);
     let symbols = by_id(&doc.symbols, |symbol| symbol.id);
     let mut scene = Scene::default();
+
+    // Frames first, so that the drawing lies over them.
+    draw_sheets(&mut scene, doc);
 
     for wire in wires.values() {
         let Some(path) = layout.wire_polyline(wire) else {

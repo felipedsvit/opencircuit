@@ -65,6 +65,8 @@ cargo run -p opencircuit-cli -- simulate examples/forward-reverse/reversing.ocir
 cargo run -p opencircuit-cli -- test examples tests/fixtures
 cargo run -p opencircuit-cli -- export examples/star-delta/star-delta.ocircuit \
     --output star-delta.pdf
+cargo run -p opencircuit-cli -- export examples/sheets/starter-sheets.ocircuit \
+    --output starter-sheets.pdf          # two A4 pages, with frame and title block
 cargo run -p opencircuit-desktop -- examples/star-delta/star-delta.ocircuit
 cargo run -p opencircuit-cli -- serve examples/direct-starter/command.ocircuit --print-map
 ```

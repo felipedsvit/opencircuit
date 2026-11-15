@@ -26,13 +26,14 @@
 )]
 
 mod build;
+mod frame;
 pub mod scene;
 mod symbols;
 
 #[cfg(test)]
 mod tests;
 
-pub use build::{SceneOptions, build_scene};
+pub use build::{SceneOptions, build_scene, build_sheet_scene, sheet_scenes};
 pub use scene::{
     Anchor, SUBUNITS_PER_GRID, Scene, SceneItem, ScenePoint, SceneRect, Shape, StyleKey,
 };

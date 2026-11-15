@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "circuit": "starter-sheets.ocircuit",
+  "events": [
+    { "tick": 1, "action": "close", "device": "Q1" },
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 4, "action": "release", "device": "S1" },
+    { "tick": 8, "action": "trip", "device": "F1" },
+    { "tick": 12, "action": "reset_trip", "device": "F1" },
+    { "tick": 14, "action": "press", "device": "S1" },
+    { "tick": 15, "action": "release", "device": "S1" },
+    { "tick": 18, "action": "press", "device": "S2" },
+    { "tick": 19, "action": "release", "device": "S2" },
+    { "tick": 21, "action": "open", "device": "Q1" }
+  ],
+  "until_tick": 24,
+  "expect": { "trace": "starter-sheets.trace", "diagnostics": [] }
+}

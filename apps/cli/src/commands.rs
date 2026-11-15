@@ -11,7 +11,7 @@ use circuit_sim::{
 };
 use serde::Serialize;
 
-use crate::args::{Command, ExportFormat, OutputFormat};
+use crate::args::{Command, ExportFormat, OutputFormat, SheetChoice};
 use crate::fsio::{find_scenarios, load_catalog, read_text, write_atomic};
 use crate::scenario::{ActionName, MAX_SCENARIO_BYTES, PolicyName, Scenario};
 use crate::{CliError, EXIT_FAILED, EXIT_OK, Env};
@@ -83,10 +83,16 @@ pub(crate) fn execute(
             output,
             format,
             theme,
+            sheet,
             library,
         } => {
             let catalog = load_catalog(library.as_slice())?;
-            export(project, output, *format, *theme, &catalog, out, err)
+            let drawing = Drawing {
+                format: *format,
+                theme: *theme,
+                sheet: *sheet,
+            };
+            export(project, output, drawing, &catalog, out, err)
         }
         Command::Serve {
             project,
@@ -122,17 +128,29 @@ pub(crate) fn execute(
     }
 }
 
+/// What `export` draws and how.
+#[derive(Clone, Copy)]
+struct Drawing {
+    format: ExportFormat,
+    theme: circuit_export::Theme,
+    sheet: SheetChoice,
+}
+
 /// Draw a project at rest and write it. A project that loads is drawn even
 /// when it does not compile: the drawing is how its errors are found.
 fn export(
     project: &Path,
     output: &Path,
-    format: ExportFormat,
-    theme: circuit_export::Theme,
+    drawing: Drawing,
     catalog: &ComponentCatalog,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<u8, CliError> {
+    let Drawing {
+        format,
+        theme,
+        sheet,
+    } = drawing;
     let text = read_text(project, MAX_PROJECT_BYTES)?;
     let doc = match circuit_project::from_str(&text) {
         Ok(doc) => doc,
@@ -141,17 +159,45 @@ fn export(
             return Ok(EXIT_FAILED);
         }
     };
-    let scene = circuit_renderer::build_scene(
-        &doc,
-        catalog,
-        None,
-        &circuit_renderer::SceneOptions::default(),
-    );
-    let drawing = match format {
-        ExportFormat::Svg => circuit_export::svg(&scene, theme).into_bytes(),
-        ExportFormat::Pdf => circuit_export::pdf(&scene, theme),
+    let options = circuit_renderer::SceneOptions::default();
+    // One sheet by its number: a scene of the paper, for SVG and for PDF.
+    let one = match sheet {
+        SheetChoice::Number(number) => {
+            let Some(found) = doc
+                .sheets
+                .iter()
+                .find(|candidate| candidate.number == number)
+            else {
+                writeln!(
+                    err,
+                    "error: {}: no sheet number {number}; the project has {} sheet(s)",
+                    project.display(),
+                    doc.sheets.len()
+                )?;
+                return Ok(EXIT_FAILED);
+            };
+            circuit_renderer::build_sheet_scene(&doc, catalog, None, &options, found.id)
+        }
+        SheetChoice::Default | SheetChoice::All => None,
     };
-    write_atomic(output, &drawing)?;
+    let bytes = match (format, one) {
+        (ExportFormat::Svg, Some(page)) => circuit_export::svg(&page, theme).into_bytes(),
+        (ExportFormat::Pdf, Some(page)) => circuit_export::pdf(&page, theme),
+        (ExportFormat::Svg, None) => {
+            let scene = circuit_renderer::build_scene(&doc, catalog, None, &options);
+            circuit_export::svg(&scene, theme).into_bytes()
+        }
+        (ExportFormat::Pdf, None) => {
+            let pages = circuit_renderer::sheet_scenes(&doc, catalog, None, &options);
+            if pages.is_empty() {
+                let scene = circuit_renderer::build_scene(&doc, catalog, None, &options);
+                circuit_export::pdf(&scene, theme)
+            } else {
+                circuit_export::pdf_pages(&pages, theme)
+            }
+        }
+    };
+    write_atomic(output, &bytes)?;
     writeln!(out, "wrote  {}", output.display())?;
     Ok(EXIT_OK)
 }

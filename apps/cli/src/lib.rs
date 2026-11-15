@@ -54,7 +54,8 @@ usage:
                        [--library <file.oclib|dir>]
   opencircuit test <path>... [--update-golden]
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
-                     [--theme print|live] [--library <file.oclib|dir>]
+                     [--theme print|live] [--sheet <number>|all]
+                     [--library <file.oclib|dir>]
   opencircuit serve <project.ocircuit> [--listen <address:port>] [--print-map]
                     [--library <file.oclib|dir>] [--duration-ms N]
 

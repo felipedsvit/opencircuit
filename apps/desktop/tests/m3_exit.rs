@@ -14,6 +14,8 @@ use opencircuit_desktop::DesktopApp;
 const STAR_DELTA: &str = include_str!("../../../examples/star-delta/star-delta.ocircuit");
 const STAR_DELTA_SVG: &str = include_str!("../../../examples/star-delta/star-delta.svg");
 const STAR_DELTA_PDF: &[u8] = include_bytes!("../../../examples/star-delta/star-delta.pdf");
+const SHEETS_PROJECT: &str = include_str!("../../../examples/sheets/starter-sheets.ocircuit");
+const SHEETS_PDF: &[u8] = include_bytes!("../../../examples/sheets/starter-sheets.pdf");
 
 /// A path in the temporary directory, removed when dropped.
 struct TempPath(PathBuf);
@@ -113,4 +115,15 @@ fn star_delta_starts_in_star_then_runs_in_delta_and_exports() {
     assert_eq!(std::fs::read_to_string(&svg.0).unwrap(), STAR_DELTA_SVG);
     assert_eq!(std::fs::read(&pdf.0).unwrap(), STAR_DELTA_PDF);
     assert_ne!(session.svg(true), STAR_DELTA_SVG);
+}
+
+#[test]
+fn the_pdf_of_a_project_with_sheets_is_the_committed_multi_page_one() {
+    let mut app = DesktopApp::default();
+    app.open_text(SHEETS_PROJECT, "starter-sheets.ocircuit");
+
+    let pdf = app.session().unwrap().pdf(false);
+
+    assert_eq!(pdf, SHEETS_PDF);
+    assert!(String::from_utf8_lossy(&pdf).contains("/Count 2"));
 }

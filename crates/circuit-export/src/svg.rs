@@ -10,31 +10,47 @@ pub const MARGIN: i64 = 20;
 /// Height of a text, in scene subunits.
 const FONT_SIZE: i64 = 8;
 
-/// Write a scene as an SVG document.
-///
-/// The view box is the area of the scene plus [`MARGIN`] on every side; one
-/// user unit is one scene subunit. Every item becomes one element, in scene
-/// order, with its look from `theme`. Texts are escaped for XML and lose any
-/// character XML 1.0 does not allow, so a designator from a hostile file
-/// cannot break the document.
-#[must_use]
-pub fn svg(scene: &Scene, theme: Theme) -> String {
+/// The page of a scene: its left and top edges and its width and height, in
+/// subunits. The area of the scene plus [`MARGIN`] on every side, or exactly
+/// the paper of a sheet when the scene is one.
+pub(crate) fn page_of(scene: &Scene) -> (i64, i64, i64, i64) {
+    if let Some(page) = scene.page {
+        return (
+            page.min.x,
+            page.min.y,
+            page.max.x.saturating_sub(page.min.x),
+            page.max.y.saturating_sub(page.min.y),
+        );
+    }
     let area = scene.bounds.unwrap_or(SceneRect::from_corners(
         ScenePoint::new(0, 0),
         ScenePoint::new(0, 0),
     ));
-    let x = area.min.x.saturating_sub(MARGIN);
-    let y = area.min.y.saturating_sub(MARGIN);
-    let width = area
-        .max
-        .x
-        .saturating_sub(area.min.x)
-        .saturating_add(MARGIN.saturating_mul(2));
-    let height = area
-        .max
-        .y
-        .saturating_sub(area.min.y)
-        .saturating_add(MARGIN.saturating_mul(2));
+    (
+        area.min.x.saturating_sub(MARGIN),
+        area.min.y.saturating_sub(MARGIN),
+        area.max
+            .x
+            .saturating_sub(area.min.x)
+            .saturating_add(MARGIN.saturating_mul(2)),
+        area.max
+            .y
+            .saturating_sub(area.min.y)
+            .saturating_add(MARGIN.saturating_mul(2)),
+    )
+}
+
+/// Write a scene as an SVG document.
+///
+/// The view box is the area of the scene plus [`MARGIN`] on every side, or
+/// the paper of the sheet when the scene is one; one user unit is one scene
+/// subunit. Every item becomes one element, in scene order, with its look
+/// from `theme`. Texts are escaped for XML and lose any character XML 1.0
+/// does not allow, so a designator from a hostile file cannot break the
+/// document.
+#[must_use]
+pub fn svg(scene: &Scene, theme: Theme) -> String {
+    let (x, y, width, height) = page_of(scene);
 
     let mut out = String::new();
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -163,6 +179,30 @@ mod tests {
             });
         }
         scene
+    }
+
+    #[test]
+    fn a_scene_that_is_one_sheet_has_exactly_the_paper_as_its_view_box() {
+        let mut sheet = scene(vec![(
+            Shape::Line {
+                from: ScenePoint::new(10, 10),
+                to: ScenePoint::new(20, 20),
+            },
+            StyleKey::Symbol,
+        )]);
+        let plain = svg(&sheet, Theme::Print);
+        sheet.page = Some(SceneRect::from_corners(
+            ScenePoint::new(-100, 50),
+            ScenePoint::new(740, 640),
+        ));
+
+        let page = svg(&sheet, Theme::Print);
+
+        assert!(plain.contains("viewBox=\"-10 -10 50 50\""), "{plain}");
+        assert!(
+            page.contains("viewBox=\"-100 50 840 590\" width=\"840\" height=\"590\""),
+            "{page}"
+        );
     }
 
     #[test]
