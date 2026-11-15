@@ -193,6 +193,8 @@ A rede de cobre depende só da geometria lógica do documento. O grupo depende t
 
 ### 5.1 Estrutura inicial
 
+A árvore e o `Cargo.toml` desta seção são o ponto de partida do M1. O workspace atual tem onze membros (`circuit-model`, `circuit-sim`, `circuit-project`, `circuit-renderer`, `circuit-commands`, `circuit-editor`, `circuit-export`, `circuit-io`, `apps/cli`, `apps/desktop` e `xtask`); a lista vigente está em `AGENTS.md` e em `ARCHITECTURE.md`.
+
 ```text
 opencircuit/
 ├── Cargo.toml
@@ -225,7 +227,7 @@ opencircuit/
 └── xtask/                       # check-architecture, update-golden
 ```
 
-`circuit-editor`/`circuit-commands`, `circuit-renderer` e `circuit-export` **não existem** no início. Entram quando houver consumidor real (§5.3).
+`circuit-editor`/`circuit-commands`, `circuit-renderer` e `circuit-export` **não existem** no início. Entram quando houver consumidor real (§5.3): `circuit-renderer` no M2a, `circuit-commands` e `circuit-editor` no M2b, `circuit-export` no M3 e `circuit-io` no M4.
 
 ### 5.2 Responsabilidade de crates e módulos
 
@@ -322,7 +324,7 @@ members = [                     # explícito, sem glob: um crate novo exige uma 
     "crates/circuit-project",
     "crates/circuit-sim",
     "xtask",
-]                               # apps/desktop entra no M2a
+]                               # lista do M1; apps/desktop entrou no M2a e os demais crates, depois (§5.1)
 
 [workspace.package]
 edition = "2024"
