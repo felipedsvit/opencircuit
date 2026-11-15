@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use circuit_model::builder::pin;
 use circuit_model::{
     ComponentCatalog, Conductor, ConductorSet, Diagnostic, DiagnosticCode, GridPoint, Live,
-    ModelRef, ParamValue, QuarterTurn, Schematic, SchematicBuilder, SimSnapshot, Subject, SymbolId,
-    TimerView,
+    ModelRef, MotorState, MotorView, ParamValue, QuarterTurn, Schematic, SchematicBuilder,
+    SimSnapshot, Subject, SymbolId, TimerView, WindingConnection,
 };
 use proptest::prelude::*;
 
@@ -430,6 +430,46 @@ fn changeover_rests_on_its_nc_side_and_moves_to_no_when_closed() {
     assert_eq!(blade_tip(&at_rest, changeover), Some((6, -8)));
     assert_eq!(blade_tip(&released, changeover), Some((6, -8)));
     assert_eq!(blade_tip(&running, changeover), Some((0, -8)));
+}
+
+#[test]
+fn running_six_terminal_motor_is_marked_with_its_winding_connection() {
+    let catalog = ComponentCatalog::builtin();
+    let mut b = SchematicBuilder::new("motor");
+    let device = b
+        .device(
+            "M1",
+            "motor.3ph.6t",
+            &[("rated_voltage_mv", ParamValue::Int(400_000))],
+        )
+        .unwrap();
+    let motor = b
+        .symbol(device, "motor", None, GridPoint::new(0, 0))
+        .unwrap();
+    let doc = b.finish();
+    let texts = |scene: &crate::Scene| -> Vec<String> {
+        scene
+            .items
+            .iter()
+            .filter(|item| item.subject == Some(Subject::Symbol(motor)))
+            .filter_map(|item| match &item.shape {
+                Shape::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut running = snapshot();
+    running.motors = vec![MotorView {
+        device,
+        state: MotorState::Forward,
+        winding: Some(WindingConnection::Delta),
+    }];
+
+    let at_rest = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let delta = build_scene(&doc, &catalog, Some(&running), &SceneOptions::default());
+
+    assert!(!texts(&at_rest).iter().any(|t| t == "Y" || t == "\u{394}"));
+    assert!(texts(&delta).contains(&"\u{394}".to_owned()));
 }
 
 #[test]

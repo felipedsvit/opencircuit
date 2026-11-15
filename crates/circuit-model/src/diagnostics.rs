@@ -175,6 +175,9 @@ diagnostic_codes! {
     DynamicUnsupportedTopology = "OC-MOD-002", ModelLimitation, Error, latches = false;
     /// The document is larger than the compiler supports.
     CircuitTooLarge = "OC-MOD-003", ModelLimitation, Error, latches = false;
+    /// The windings of a six-terminal motor are energized in a way that is
+    /// neither star nor delta; the motor stays off.
+    UnsupportedWindingConnection = "OC-MOD-004", ModelLimitation, Error, latches = false;
     /// The tick duration or an actuation delay is invalid.
     InvalidConfig = "OC-CFG-001", Configuration, Error, latches = false;
     /// A timer preset is not a multiple of the tick and was rounded up.
@@ -403,6 +406,7 @@ mod tests {
         ("OC-MOD-001", "StaticSeriesLoads", "error", false),
         ("OC-MOD-002", "DynamicUnsupportedTopology", "error", false),
         ("OC-MOD-003", "CircuitTooLarge", "error", false),
+        ("OC-MOD-004", "UnsupportedWindingConnection", "error", false),
         ("OC-CFG-001", "InvalidConfig", "error", false),
         ("OC-CFG-002", "PresetQuantized", "warning", false),
     ];

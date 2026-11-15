@@ -1167,6 +1167,7 @@ Regras:
 | OC-MOD-001 | `StaticSeriesLoads` | Error | não | Cargas em série permanente (§9.5); erro de compilação |
 | OC-MOD-002 | `DynamicUnsupportedTopology` | Error | não | Grupo flutuante tocando 2+ cargas em execução (§9.5); cargas afetadas ficam `Off` |
 | OC-MOD-003 | `CircuitTooLarge` | Error | não | Documento maior do que o compilador consegue indexar |
+| OC-MOD-004 | `UnsupportedWindingConnection` | Error | não | Enrolamentos do motor de seis terminais energizados em ligação que não é estrela nem triângulo (M3) |
 | OC-CFG-001 | `InvalidConfig` | Error | não | `tick_us` ou atraso de atuação inválido |
 | OC-CFG-002 | `PresetQuantized` | Warning | não | Preset de temporizador não é múltiplo do tick |
 

@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 
 use circuit_model::{
     DeviceClass, DeviceId, Diagnostic, DiagnosticCode, InputAction, Live, MotorState, MotorView,
-    SimSnapshot, Subject, SymbolId, TimerView, sort_diagnostics,
+    SimSnapshot, Subject, SymbolId, TimerView, WindingConnection, sort_diagnostics,
 };
 
 use crate::bitset::BitSet;
@@ -674,15 +674,28 @@ impl Simulator {
             .loads()
             .iter()
             .zip(self.view.loads.iter())
-            .filter(|(load, _)| matches!(load.rule, LoadRule::ThreePhaseMotor { .. }))
+            .filter(|(load, _)| {
+                matches!(
+                    load.rule,
+                    LoadRule::ThreePhaseMotor { .. } | LoadRule::SixTerminalMotor { .. }
+                )
+            })
             .filter_map(|(load, state)| {
+                let (state, winding) = match state {
+                    LoadState::Rotating(Direction::Forward) => (MotorState::Forward, None),
+                    LoadState::Rotating(Direction::Reverse) => (MotorState::Reverse, None),
+                    LoadState::RotatingWound(Direction::Forward, winding) => {
+                        (MotorState::Forward, Some(*winding))
+                    }
+                    LoadState::RotatingWound(Direction::Reverse, winding) => {
+                        (MotorState::Reverse, Some(*winding))
+                    }
+                    LoadState::Off | LoadState::On => (MotorState::Stopped, None),
+                };
                 self.circuit.device(load.device).map(|device| MotorView {
                     device: device.id,
-                    state: match state {
-                        LoadState::Rotating(Direction::Forward) => MotorState::Forward,
-                        LoadState::Rotating(Direction::Reverse) => MotorState::Reverse,
-                        LoadState::Off | LoadState::On => MotorState::Stopped,
-                    },
+                    state,
+                    winding,
                 })
             })
             .collect();
@@ -860,6 +873,18 @@ const fn activity(state: LoadState) -> LoadActivity {
         LoadState::On => LoadActivity::On,
         LoadState::Rotating(Direction::Forward) => LoadActivity::Forward,
         LoadState::Rotating(Direction::Reverse) => LoadActivity::Reverse,
+        LoadState::RotatingWound(Direction::Forward, WindingConnection::Star) => {
+            LoadActivity::ForwardStar
+        }
+        LoadState::RotatingWound(Direction::Forward, WindingConnection::Delta) => {
+            LoadActivity::ForwardDelta
+        }
+        LoadState::RotatingWound(Direction::Reverse, WindingConnection::Star) => {
+            LoadActivity::ReverseStar
+        }
+        LoadState::RotatingWound(Direction::Reverse, WindingConnection::Delta) => {
+            LoadActivity::ReverseDelta
+        }
     }
 }
 

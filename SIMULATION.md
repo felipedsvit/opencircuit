@@ -80,6 +80,7 @@ Loads:
 | Coil, lamp, buzzer (`line_neutral`) | one side has a phase, the other `n` |
 | Coil, lamp, buzzer (`line_line`) | the sides have two different phases |
 | Motor (`u1`, `v1`, `w1`) | three distinct groups, each with exactly one phase, together L1, L2 and L3 |
+| Six-terminal motor | its windings are connected in star or delta, see below |
 
 …and the voltage label matches exactly: `dc` uses the DC nominal voltage,
 `line_neutral` the phase voltage of a three-phase supply or the nominal
@@ -91,6 +92,21 @@ nominal (line) voltage. Both conductors must come from the same supply.
 - Motor with only part of its phases: off, `OC-ELEC-006` warning.
 - Motor direction: `Forward` when `(u1, v1, w1)` follows the supply phase
   sequence (any rotation of it), otherwise `Reverse`.
+- Six-terminal motor (`u1`–`u2`, `v1`–`v2`, `w1`–`w2`), one load evaluated
+  on its six groups, in order: a group in fault, or every terminal dead:
+  off; a terminal on a conductor that is not a phase: off, `OC-ELEC-004`;
+  **star** when `u2`, `v2`, `w2` share one group that carries no conductor
+  and is none of the groups of `u1`, `v1`, `w1`; **delta** when `u1` shares
+  the group of `w2`, `v1` that of `u2` and `w1` that of `v2`, in three
+  distinct groups; in star or delta the motor runs by the motor rule above
+  on `(u1, v1, w1)` (phase loss and label mismatch included); otherwise, with
+  `u2`, `v2`, `w2` dead and apart (open windings, as between star and
+  delta): off, no diagnostic; any other connection: off, `OC-MOD-004`
+  (`UnsupportedWindingConnection`), which does not latch. `rated_voltage_mv`
+  is the line voltage of the motor in delta, compared with the line voltage
+  of the supply in both connections. The star point inside the motor is not
+  a series topology, and a copper net made only of second ends of
+  six-terminal motors is not a floating net.
 - Loads that are fed only through each other, between different conductors:
   off, `OC-MOD-002`. Loads that merely share a switched-off node are not a
   fault.
@@ -227,7 +243,8 @@ IDs only and every list is sorted: `tick`, `t_us`, `energized_devices`,
 `actuated_devices`, `tripped_devices`, `closed_symbols` (driven contacts
 closed in the solve; a changeover contact while its `no` side conducts),
 `live_wires`, `live_junctions` (with their conductor
-set), `motors`, `timers`, `faulted`, `faults`.
+set), `motors` (with `winding`, `star` or `delta`, for a running six-terminal
+motor), `timers`, `faulted`, `faults`.
 
 `step` allocates no snapshot. A front end calls `step_n` for the ticks of a
 frame and `snapshot()` once. `step_n(n, inputs)` applies the inputs to the
@@ -245,7 +262,7 @@ tests:
 # tick_us=<u32> pickup_ticks=<u32> dropout_ticks=<u32> fault_policy=<halt|report>
 t=<tick> input <REF>.<pressed|closed|tripped> <0|1>-><0|1>
 t=<tick> signal <REF>.<active|out> <0|1>-><0|1>
-t=<tick> load <REF>.<symbol key> <on|off|forward|reverse>
+t=<tick> load <REF>.<symbol key> <on|off|forward|reverse|forward-star|forward-delta|reverse-star|reverse-delta>
 t=<tick> fault <OC-CODE> <started|cleared> <subject>[,<related>...]
 t=<tick> runtime latched
 t=<tick> runtime latch-reset

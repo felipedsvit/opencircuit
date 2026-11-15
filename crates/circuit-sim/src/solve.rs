@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_model::{
     Conductor, ConductorConflict, ConductorSet, Connection, DeviceId, Diagnostic, DiagnosticCode,
-    PhaseSequence, Subject, SupplyId, SupplyKind, sort_diagnostics,
+    PhaseSequence, Subject, SupplyId, SupplyKind, WindingConnection, sort_diagnostics,
 };
 
 use crate::bitset::BitSet;
@@ -82,6 +82,9 @@ pub enum LoadState {
     On,
     /// A motor is running.
     Rotating(Direction),
+    /// A six-terminal motor is running with its windings connected in star
+    /// or delta.
+    RotatingWound(Direction, WindingConnection),
 }
 
 impl LoadState {
@@ -320,6 +323,9 @@ impl Solver {
             (LoadRule::ThreePhaseMotor { rated_voltage_mv }, [u, v, w]) => {
                 self.evaluate_motor(rated_voltage_mv, [*u, *v, *w])
             }
+            (LoadRule::SixTerminalMotor { rated_voltage_mv }, [u1, v1, w1, u2, v2, w2]) => {
+                self.evaluate_six_terminal_motor(rated_voltage_mv, [*u1, *v1, *w1, *u2, *v2, *w2])
+            }
             _ => (LoadState::Off, None),
         }
     }
@@ -411,31 +417,43 @@ impl Solver {
             );
         }
 
-        let phases = states.map(|(_, set, _)| set.single());
+        match self.rotation(rated_voltage_mv, states.map(|(_, set, _)| set)) {
+            Ok(Some(direction)) => (LoadState::Rotating(direction), None),
+            Ok(None) => (LoadState::Off, None),
+            Err(diagnostic) => (LoadState::Off, Some(diagnostic)),
+        }
+    }
+
+    /// The direction a motor turns with `phases` on `u1`, `v1`, `w1`.
+    /// `Ok(None)` when the supply has no phase sequence; an error when the
+    /// phases are incomplete or do not match the motor.
+    fn rotation(
+        &self,
+        rated_voltage_mv: u32,
+        phases: [ConductorSet; 3],
+    ) -> Result<Option<Direction>, (DiagnosticCode, &'static str)> {
+        let phases = phases.map(ConductorSet::single);
         let [Some(u), Some(v), Some(w)] = phases else {
-            return (LoadState::Off, Some(phase_loss()));
+            return Err(phase_loss());
         };
         if u == v || v == w || u == w {
-            return (LoadState::Off, Some(phase_loss()));
+            return Err(phase_loss());
         }
 
         let Some(label) = self.labels.get(&u) else {
-            return (LoadState::Off, None);
+            return Ok(None);
         };
         let same_supply = [v, w]
             .iter()
             .all(|phase| self.labels.get(phase).map(|l| l.supply) == Some(label.supply));
         if !same_supply || label.nominal_voltage_mv != rated_voltage_mv {
-            return (
-                LoadState::Off,
-                Some((
-                    DiagnosticCode::LoadSupplyMismatch,
-                    "the supply voltage label does not match the rated voltage of the motor",
-                )),
-            );
+            return Err((
+                DiagnosticCode::LoadSupplyMismatch,
+                "the supply voltage label does not match the rated voltage of the motor",
+            ));
         }
         let Some(sequence) = label.phase_sequence else {
-            return (LoadState::Off, None);
+            return Ok(None);
         };
 
         // (u, v, w) follows L1-L2-L3 when it is one of its three rotations.
@@ -449,12 +467,74 @@ impl Solver {
             PhaseSequence::L1L2L3 => follows_l1_l2_l3,
             PhaseSequence::L1L3L2 => !follows_l1_l2_l3,
         };
-        let direction = if forward {
+        Ok(Some(if forward {
             Direction::Forward
         } else {
             Direction::Reverse
+        }))
+    }
+
+    /// A six-terminal motor (ADR-0005 §4): star when `u2`, `v2`, `w2` meet
+    /// at a dead star point apart from the line ends, delta when each line
+    /// end is joined to the second end of the next winding; open windings
+    /// are off; any other energized connection is refused.
+    fn evaluate_six_terminal_motor(
+        &self,
+        rated_voltage_mv: u32,
+        terminals: [NetIx; 6],
+    ) -> (LoadState, Option<(DiagnosticCode, &'static str)>) {
+        let states = terminals.map(|net| self.group_state(net));
+        if states.iter().any(|(_, _, faulted)| *faulted) {
+            return (LoadState::Off, None);
+        }
+        if states.iter().all(|(_, set, _)| set.is_empty()) {
+            return (LoadState::Off, None);
+        }
+        if states
+            .iter()
+            .any(|(_, set, _)| set.iter().any(|conductor| !conductor.is_phase()))
+        {
+            return (
+                LoadState::Off,
+                Some((
+                    DiagnosticCode::LoadSupplyMismatch,
+                    "a motor terminal is connected to a conductor that is not a phase",
+                )),
+            );
+        }
+
+        let [u1, v1, w1, u2, v2, w2] = states;
+        let line_groups = [u1.0, v1.0, w1.0];
+        let star = u2.0 == v2.0 && v2.0 == w2.0 && u2.1.is_empty() && !line_groups.contains(&u2.0);
+        let delta = u1.0 == w2.0
+            && v1.0 == u2.0
+            && w1.0 == v2.0
+            && u1.0 != v1.0
+            && v1.0 != w1.0
+            && u1.0 != w1.0;
+        let winding = if star {
+            WindingConnection::Star
+        } else if delta {
+            WindingConnection::Delta
+        } else {
+            let second_ends_dead = [u2, v2, w2].iter().all(|(_, set, _)| set.is_empty());
+            let open = second_ends_dead && u2.0 != v2.0 && v2.0 != w2.0 && u2.0 != w2.0;
+            if open {
+                return (LoadState::Off, None);
+            }
+            return (
+                LoadState::Off,
+                Some((
+                    DiagnosticCode::UnsupportedWindingConnection,
+                    "the motor windings are energized in a connection that is neither star nor delta",
+                )),
+            );
         };
-        (LoadState::Rotating(direction), None)
+        match self.rotation(rated_voltage_mv, [u1.1, v1.1, w1.1]) {
+            Ok(Some(direction)) => (LoadState::RotatingWound(direction, winding), None),
+            Ok(None) => (LoadState::Off, None),
+            Err(diagnostic) => (LoadState::Off, Some(diagnostic)),
+        }
     }
 
     /// Loads in series at run time.
