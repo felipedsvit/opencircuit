@@ -8,6 +8,7 @@
 
 use std::collections::BTreeSet;
 
+use circuit_commands::copy::{self, Fragment};
 use circuit_commands::{Anchor, CommandError, Transaction, ops};
 use circuit_model::{
     ComponentCatalog, GridPoint, GridRect, LayoutIndex, ModelRef, QuarterTurn, Schematic, Subject,
@@ -15,6 +16,11 @@ use circuit_model::{
 };
 
 use crate::hit::{Hit, hit_test};
+
+/// How far a duplicate, and each successive paste of one copy, lands from
+/// the original, in grid units: diagonal, so that the copy never hides the
+/// original or the previous paste.
+pub const PASTE_STEP: i32 = 2;
 
 /// What a click does.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,6 +67,12 @@ pub enum Key {
     },
     /// Select every symbol, junction and wire.
     SelectAll,
+    /// Keep a copy of the selection for [`Key::Paste`].
+    Copy,
+    /// Insert the last copy, one step further from the original each time.
+    Paste,
+    /// Copy the selection and insert it one step away, in one transaction.
+    Duplicate,
 }
 
 /// The result of an event.
@@ -134,6 +146,8 @@ pub struct Editor {
     gesture: Gesture,
     cursor: Option<GridPoint>,
     hover: Option<Hit>,
+    /// The last copy, and how many times it was pasted.
+    clipboard: Option<(Fragment, i32)>,
 }
 
 impl Default for Editor {
@@ -144,6 +158,7 @@ impl Default for Editor {
             gesture: Gesture::Idle,
             cursor: None,
             hover: None,
+            clipboard: None,
         }
     }
 }
@@ -479,6 +494,46 @@ impl Editor {
                     GridPoint::new(dx, dy),
                 ))
             }
+            Key::Copy => {
+                if !self.selection.is_empty() {
+                    let fragment = copy::copy(doc, &self.selection);
+                    if !fragment.is_empty() {
+                        self.clipboard = Some((fragment, 0));
+                    }
+                }
+                Outcome::default()
+            }
+            Key::Paste => {
+                if self.is_busy() {
+                    return Outcome::default();
+                }
+                let Some((fragment, pastes)) = &mut self.clipboard else {
+                    return Outcome::default();
+                };
+                *pastes = pastes.saturating_add(1);
+                let step = pastes.saturating_mul(PASTE_STEP);
+                let outcome = Outcome::from_result(copy::paste(
+                    doc,
+                    catalog,
+                    fragment,
+                    GridPoint::new(step, step),
+                ));
+                self.select_inserted(&outcome);
+                outcome
+            }
+            Key::Duplicate => {
+                if self.selection.is_empty() || self.is_busy() {
+                    return Outcome::default();
+                }
+                let outcome = Outcome::from_result(copy::duplicate(
+                    doc,
+                    catalog,
+                    &self.selection,
+                    GridPoint::new(PASTE_STEP, PASTE_STEP),
+                ));
+                self.select_inserted(&outcome);
+                outcome
+            }
             Key::SelectAll => {
                 if !self.is_busy() {
                     self.selection = doc
@@ -491,6 +546,15 @@ impl Editor {
                 }
                 Outcome::default()
             }
+        }
+    }
+
+    /// Select what a transaction inserts, so that the next move or delete
+    /// acts on the copy. If the transaction is then refused, the caller's
+    /// [`Editor::retain_existing`] drops the names it never created.
+    fn select_inserted(&mut self, outcome: &Outcome) {
+        if let Some(tx) = &outcome.commit {
+            self.selection = tx.inserted().into_iter().collect();
         }
     }
 

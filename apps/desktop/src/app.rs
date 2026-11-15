@@ -623,6 +623,27 @@ impl DesktopApp {
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::A) {
             actions.push(Key::SelectAll);
         }
+        // The window system may turn Ctrl+C and Ctrl+V into clipboard events
+        // instead of key presses; either one counts, once. The copy stays in
+        // the editor: the system clipboard is not used.
+        let clipboard_event = |ui: &mut Ui, wanted: fn(&egui::Event) -> bool| {
+            ui.input_mut(|input| {
+                let found = input.events.iter().any(wanted);
+                input.events.retain(|event| !wanted(event));
+                found
+            })
+        };
+        let copy = clipboard_event(ui, |event| matches!(event, egui::Event::Copy));
+        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::C) || copy {
+            actions.push(Key::Copy);
+        }
+        let paste = clipboard_event(ui, |event| matches!(event, egui::Event::Paste(_)));
+        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::V) || paste {
+            actions.push(Key::Paste);
+        }
+        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::D) {
+            actions.push(Key::Duplicate);
+        }
         // Shift moves five grid units; the plain arrow one.
         for (modifiers, step) in [(egui::Modifiers::SHIFT, 5), (egui::Modifiers::NONE, 1)] {
             for (key, dx, dy) in [

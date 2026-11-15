@@ -120,7 +120,10 @@ back, starting at tick 0 on the edited circuit).
 - Select: click a symbol, Shift+click to add, drag on empty space for a box,
   Ctrl+A for everything; drag a selection or press the arrow keys (Shift for
   five grid units) to move it, R to rotate, Delete to remove it with its
-  wires. W chooses the wire tool. The grid is shown as dots while editing.
+  wires. Ctrl+C and Ctrl+V copy and paste, Ctrl+D duplicates; a copy lands
+  two grid units down and right, with the next free designators, and a
+  copied auxiliary contact joins its own device when it has room. W chooses
+  the wire tool. The grid is shown as dots while editing.
 - View: + and - zoom about the centre, 0 frames the drawing and F the
   selection, in both modes. The palette lists the keys under **Keys**.
 - Wire: click a pin, junction or wire to start, empty space to bend, and a

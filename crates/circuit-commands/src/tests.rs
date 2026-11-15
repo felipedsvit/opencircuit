@@ -1437,3 +1437,237 @@ proptest! {
         prop_assert_eq!(doc.devices.len(), 0);
     }
 }
+
+// Copy, paste and duplicate.
+
+/// K1 with its coil and one auxiliary contact, coil a1 wired to contact p1,
+/// and a lamp H1 wired to nothing.
+fn contactor_with_contact() -> (Schematic, History, [SymbolId; 3]) {
+    let mut doc = Schematic::new("copy");
+    let mut history = History::new();
+    let catalog = ComponentCatalog::builtin();
+    let coil = place(
+        &mut doc,
+        &mut history,
+        "contactor.generic",
+        "coil",
+        point(0, 0),
+    );
+    let k1 = device_of(&doc, coil);
+    run(&mut doc, &mut history, |doc| {
+        ops::add_symbol(
+            doc,
+            &catalog,
+            k1,
+            &key("aux_no"),
+            point(6, 0),
+            QuarterTurn::Deg0,
+        )
+    });
+    let contact = doc.symbols.iter().find(|s| s.id != coil).unwrap().id;
+    let lamp = place(&mut doc, &mut history, "lamp.generic", "lamp", point(20, 0));
+    run(&mut doc, &mut history, |doc| {
+        ops::connect(
+            doc,
+            &catalog,
+            &Anchor::Endpoint(pin(coil, "a1")),
+            &Anchor::Endpoint(pin(contact, "p1")),
+            &[],
+        )
+    });
+    (doc, history, [coil, contact, lamp])
+}
+
+fn references(doc: &Schematic) -> Vec<&str> {
+    let mut references: Vec<&str> = doc.devices.iter().map(|d| d.reference.0.as_str()).collect();
+    references.sort_unstable();
+    references
+}
+
+#[test]
+fn duplicating_a_whole_device_makes_the_next_designator_with_its_wire() {
+    let (mut doc, mut history, [coil, contact, _]) = contactor_with_contact();
+    let catalog = ComponentCatalog::builtin();
+    let before = doc.clone();
+    let selection: BTreeSet<Subject> = [Subject::Symbol(coil), Subject::Symbol(contact)].into();
+
+    run(&mut doc, &mut history, |doc| {
+        crate::copy::duplicate(doc, &catalog, &selection, point(0, 10))
+    });
+
+    assert_eq!(references(&doc), ["H1", "K1", "K2"]);
+    assert_eq!(doc.symbols.len(), 5);
+    assert_eq!(doc.wires.len(), 2);
+    let k2 = doc.devices.iter().find(|d| d.reference.0 == "K2").unwrap();
+    let copies: Vec<GridPoint> = doc
+        .symbols
+        .iter()
+        .filter(|s| s.device_id == k2.id)
+        .map(|s| s.position)
+        .collect();
+    assert_eq!(copies.len(), 2);
+    assert!(copies.contains(&point(0, 10)) && copies.contains(&point(6, 10)));
+    assert_eq!(integrity(&doc), []);
+    assert!(wire_paths_are_orthogonal(&doc, &catalog));
+    assert_eq!(history.undo_label(), Some("Duplicate 3 items"));
+    history.undo(&mut doc).unwrap();
+    assert_eq!(doc.devices, before.devices);
+    assert_eq!(doc.symbols, before.symbols);
+    assert_eq!(doc.wires, before.wires);
+}
+
+#[test]
+fn duplicating_an_auxiliary_contact_adds_it_to_the_same_device() {
+    let (mut doc, mut history, [coil, contact, _]) = contactor_with_contact();
+    let catalog = ComponentCatalog::builtin();
+    let k1 = device_of(&doc, coil);
+
+    run(&mut doc, &mut history, |doc| {
+        crate::copy::duplicate(
+            doc,
+            &catalog,
+            &[Subject::Symbol(contact)].into(),
+            point(4, 0),
+        )
+    });
+
+    assert_eq!(references(&doc), ["H1", "K1"]);
+    let slots: Vec<Option<u8>> = doc
+        .symbols
+        .iter()
+        .filter(|s| s.device_id == k1 && s.symbol_key.0 == "aux_no")
+        .map(|s| s.slot)
+        .collect();
+    assert_eq!(slots, [Some(1), Some(2)]);
+    // The wire has one end outside the copy, so it is not copied.
+    assert_eq!(doc.wires.len(), 1);
+}
+
+#[test]
+fn duplicating_a_coil_alone_makes_a_new_device() {
+    let (mut doc, mut history, [coil, _, _]) = contactor_with_contact();
+    let catalog = ComponentCatalog::builtin();
+
+    run(&mut doc, &mut history, |doc| {
+        crate::copy::duplicate(doc, &catalog, &[Subject::Symbol(coil)].into(), point(0, 10))
+    });
+
+    assert_eq!(references(&doc), ["H1", "K1", "K2"]);
+    assert_eq!(integrity(&doc), []);
+}
+
+#[test]
+fn pasting_after_the_originals_are_deleted_recreates_them() {
+    let (mut doc, mut history, [coil, contact, lamp]) = contactor_with_contact();
+    let catalog = ComponentCatalog::builtin();
+    let selection: BTreeSet<Subject> = [coil, contact, lamp].map(Subject::Symbol).into();
+    let fragment = crate::copy::copy(&doc, &selection);
+    assert_eq!(fragment.len(), 4);
+
+    run(&mut doc, &mut history, |doc| {
+        ops::delete(doc, &catalog, &selection)
+    });
+    assert!(doc.devices.is_empty());
+    run(&mut doc, &mut history, |doc| {
+        crate::copy::paste(doc, &catalog, &fragment, point(0, 0))
+    });
+
+    assert_eq!(references(&doc), ["H1", "K1"]);
+    assert_eq!(doc.symbols.len(), 3);
+    assert_eq!(doc.wires.len(), 1);
+    assert_eq!(integrity(&doc), []);
+    // New IDs: nothing reuses an ID of the deleted elements.
+    let old: BTreeSet<u64> = fragment.symbols.iter().map(|s| s.id.0).collect();
+    assert!(doc.symbols.iter().all(|s| !old.contains(&s.id.0)));
+}
+
+#[test]
+fn a_duplicated_interlock_names_the_duplicated_contactors() {
+    let (mut doc, mut history, [k1, k2, link]) = interlocked_pair();
+    let catalog = ComponentCatalog::builtin();
+    let selection: BTreeSet<Subject> = [k1, k2, link].map(Subject::Device).into();
+
+    run(&mut doc, &mut history, |doc| {
+        crate::copy::duplicate(doc, &catalog, &selection, point(0, 20))
+    });
+
+    let id_of = |reference: &str| {
+        doc.devices
+            .iter()
+            .find(|d| d.reference.0 == reference)
+            .unwrap()
+            .id
+    };
+    let copy = doc.devices.iter().find(|d| d.reference.0 == "KX2").unwrap();
+    let named = |key: &str| match copy.params.get(key) {
+        Some(ParamValue::Int(raw)) => DeviceId(u64::try_from(*raw).unwrap()),
+        other => panic!("{key}: {other:?}"),
+    };
+    assert_eq!(named("first"), id_of("K3"));
+    assert_eq!(named("second"), id_of("K4"));
+}
+
+#[test]
+fn pasting_out_of_the_coordinate_range_is_refused() {
+    let (doc, _, [coil, _, _]) = contactor_with_contact();
+    let catalog = ComponentCatalog::builtin();
+
+    assert_eq!(
+        crate::copy::duplicate(
+            &doc,
+            &catalog,
+            &[Subject::Symbol(coil)].into(),
+            point(i32::MAX, 0)
+        ),
+        Err(CommandError::OutOfRange)
+    );
+}
+
+proptest! {
+    /// Duplicating any subset of a document applies without an integrity
+    /// error, keeps designators unique, and undoes to the same document.
+    #[test]
+    fn duplicating_any_selection_is_consistent_and_undoable(
+        mask in 0_u8..16,
+        dx in -20_i32..20,
+        dy in -20_i32..20,
+    ) {
+        let (mut doc, mut history, [coil, contact, lamp]) = contactor_with_contact();
+        let catalog = ComponentCatalog::builtin();
+        let junction_or_wire: Vec<Subject> = doc
+            .wires
+            .iter()
+            .map(|w| Subject::Wire(w.id))
+            .collect();
+        let candidates: Vec<Subject> = [coil, contact, lamp]
+            .map(Subject::Symbol)
+            .into_iter()
+            .chain(junction_or_wire)
+            .collect();
+        let selection: BTreeSet<Subject> = candidates
+            .into_iter()
+            .enumerate()
+            .filter(|(index, _)| mask & (1 << index) != 0)
+            .map(|(_, subject)| subject)
+            .collect();
+        let before = doc.clone();
+
+        let tx = crate::copy::duplicate(&doc, &catalog, &selection, point(dx, dy)).unwrap();
+        // Nothing selected copies nothing, and an empty transaction leaves
+        // no history entry to undo.
+        prop_assume!(!tx.is_empty());
+        history.execute(&mut doc, tx).unwrap();
+
+        prop_assert_eq!(integrity(&doc), Vec::<DiagnosticCode>::new());
+        let duplicated = doc
+            .validate()
+            .into_iter()
+            .any(|d| d.code() == DiagnosticCode::DuplicateReference);
+        prop_assert!(!duplicated);
+        history.undo(&mut doc).unwrap();
+        prop_assert_eq!(doc.devices, before.devices);
+        prop_assert_eq!(doc.symbols, before.symbols);
+        prop_assert_eq!(doc.wires, before.wires);
+        prop_assert_eq!(doc.junctions, before.junctions);
+    }
+}

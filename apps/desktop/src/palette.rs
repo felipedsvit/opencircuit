@@ -13,6 +13,8 @@ const KEYS: &[(&str, &str)] = &[
     ("R", "rotate"),
     ("Del", "delete"),
     ("Ctrl+A", "select all"),
+    ("Ctrl+C / Ctrl+V", "copy / paste"),
+    ("Ctrl+D", "duplicate"),
     ("Ctrl+Z / Ctrl+Y", "undo / redo"),
     ("+ / -", "zoom"),
     ("0", "fit the drawing"),

@@ -137,6 +137,43 @@ fn arrows_move_the_selection_and_ctrl_a_selects_everything() {
 }
 
 #[test]
+fn ctrl_d_duplicates_and_ctrl_c_ctrl_v_paste_the_selection() {
+    let mut harness = edit_mode(&project(|b| {
+        let first = b.device("S1", "pushbutton_no", &[]).unwrap();
+        b.symbol(first, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+    }));
+    let references = |harness: &Harness<'_, DesktopApp>| {
+        let mut references: Vec<String> = document(harness)
+            .devices
+            .iter()
+            .map(|d| d.reference.0.clone())
+            .collect();
+        references.sort();
+        references
+    };
+
+    click_grid(&mut harness, 1, 0);
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::D);
+    harness.run();
+    assert_eq!(references(&harness), ["S1", "S2"]);
+
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::C);
+    harness.run();
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::V);
+    harness.run();
+    assert_eq!(references(&harness), ["S1", "S2", "S3"]);
+    // A paste delivered as a clipboard event counts once, like the key.
+    harness.event(Event::Paste(String::new()));
+    harness.run();
+    assert_eq!(references(&harness), ["S1", "S2", "S3", "S4"]);
+
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::Z);
+    harness.run();
+    assert_eq!(references(&harness), ["S1", "S2", "S3"]);
+}
+
+#[test]
 fn w_chooses_the_wire_tool_and_zoom_keys_change_the_scale() {
     let mut harness = edit_mode(&project(|b| {
         let first = b.device("S1", "pushbutton_no", &[]).unwrap();

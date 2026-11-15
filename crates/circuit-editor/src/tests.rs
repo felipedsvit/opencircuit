@@ -657,6 +657,59 @@ fn select_all_selects_every_symbol_junction_and_wire() {
 }
 
 #[test]
+fn copy_then_paste_twice_lands_one_step_further_each_time_and_selects_the_copy() {
+    let mut bench = Bench::new();
+    let contact = bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.editor.set_tool(Tool::Select);
+    bench.click(point(1, 0));
+
+    bench.key(Key::Paste);
+    assert_eq!(bench.doc.symbols.len(), 1, "nothing copied yet");
+    bench.key(Key::Copy);
+    bench.key(Key::Paste);
+    bench.key(Key::Paste);
+
+    let mut positions: Vec<GridPoint> = bench.doc.symbols.iter().map(|s| s.position).collect();
+    positions.sort_unstable();
+    assert_eq!(positions, [point(0, 0), point(2, 2), point(4, 4)]);
+    let selected: Vec<&Subject> = bench.editor.selection().iter().collect();
+    assert_eq!(selected.len(), 1);
+    assert_ne!(selected[0], &Subject::Symbol(contact));
+    let mut references: Vec<&str> = bench
+        .doc
+        .devices
+        .iter()
+        .map(|d| d.reference.0.as_str())
+        .collect();
+    references.sort_unstable();
+    assert_eq!(references, ["S1", "S2", "S3"]);
+}
+
+#[test]
+fn duplicate_copies_the_wired_selection_in_one_undoable_step() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.place("contactor.generic", "coil", point(0, 12));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(0, 2));
+    bench.click(point(0, 10));
+    bench.editor.set_tool(Tool::Select);
+    bench.key(Key::SelectAll);
+    let before = bench.doc.clone();
+
+    bench.key(Key::Duplicate);
+
+    assert_eq!(bench.doc.symbols.len(), 4);
+    assert_eq!(bench.doc.wires.len(), 2);
+    assert_eq!(bench.editor.selection().len(), 3);
+    assert!(bench.wires_are_orthogonal());
+    bench.history.undo(&mut bench.doc).unwrap();
+    bench.editor.retain_existing(&bench.doc);
+    assert_eq!(bench.doc.symbols, before.symbols);
+    assert!(bench.editor.selection().is_empty());
+}
+
+#[test]
 fn rotate_key_turns_the_selected_symbols() {
     let mut bench = Bench::new();
     let contact = bench.place("pushbutton_no", "contact", point(0, 0));
