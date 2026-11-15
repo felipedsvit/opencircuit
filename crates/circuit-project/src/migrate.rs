@@ -2,9 +2,11 @@
 //!
 //! A migration is a pure function from the JSON of one schema version to the
 //! JSON of the next. Migrations are applied in order until the document
-//! reaches the current version. Version 1 is the first schema, so the table
-//! is empty; the driver exists so that the first schema change only adds an
-//! entry and a pair of fixtures.
+//! reaches the current version.
+//!
+//! | From | To | Change |
+//! | --- | --- | --- |
+//! | 1 | 2 | sheets (ADR-0011) and the title-block fields of `project` |
 
 use circuit_model::CURRENT_SCHEMA_VERSION;
 use serde_json::Value;
@@ -15,7 +17,33 @@ use crate::ProjectError;
 pub(crate) type Migration = (u32, fn(Value) -> Result<Value, String>);
 
 /// Migrations of the shipped schema versions, in ascending order.
-const MIGRATIONS: &[Migration] = &[];
+const MIGRATIONS: &[Migration] = &[(1, v1_to_v2)];
+
+/// Version 2 adds `sheets` (none: the drawing stays one page sized to its
+/// content) and the title-block fields `author`, `company`, `revision` and
+/// `date` of `project` (all `null`). A version-1 document that already has
+/// one of them is refused rather than overwritten.
+fn v1_to_v2(mut value: Value) -> Result<Value, String> {
+    let document = value
+        .as_object_mut()
+        .ok_or("the document is not a JSON object")?;
+    if document.contains_key("sheets") {
+        return Err("a version 1 document has no `sheets`".to_owned());
+    }
+    let project = document
+        .get_mut("project")
+        .and_then(Value::as_object_mut)
+        .ok_or("the document has no `project` object")?;
+    for field in ["author", "company", "revision", "date"] {
+        if project.contains_key(field) {
+            return Err(format!("a version 1 `project` has no `{field}`"));
+        }
+        project.insert(field.to_owned(), Value::Null);
+    }
+    document.insert("sheets".to_owned(), Value::Array(Vec::new()));
+    document.insert("schema_version".to_owned(), Value::from(2_u32));
+    Ok(value)
+}
 
 /// The `schema_version` of a parsed document. It must be a non-negative
 /// integer; a missing field, a string or a floating-point number is refused.

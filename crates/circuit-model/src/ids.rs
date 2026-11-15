@@ -58,6 +58,10 @@ entity_id!(
     /// A supply profile declared by the document.
     SupplyId
 );
+entity_id!(
+    /// A drawing sheet: a frame over the canvas (ADR-0011).
+    SheetId
+);
 
 /// The document ran out of identifiers below [`MAX_ENTITY_ID`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]

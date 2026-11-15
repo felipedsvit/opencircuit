@@ -18,6 +18,8 @@ pub const MAX_ROUTE_POINTS: usize = 1_024;
 pub const MAX_PARAMS_PER_DEVICE: usize = 64;
 /// Longest text value (name, designator, key, text parameter), in bytes.
 pub const MAX_TEXT_BYTES: usize = 256;
+/// Most sheets in one document.
+pub const MAX_SHEETS: usize = 1_000;
 
 /// A document beyond one of the limits.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -48,6 +50,7 @@ fn text(what: &'static str, value: &str) -> Result<(), LimitExceeded> {
 ///
 /// Returns the first limit the document exceeds.
 pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
+    count("sheets", doc.sheets.len(), MAX_SHEETS)?;
     count("supplies", doc.supplies.len(), MAX_ENTITIES_PER_COLLECTION)?;
     count("devices", doc.devices.len(), MAX_ENTITIES_PER_COLLECTION)?;
     count("symbols", doc.symbols.len(), MAX_ENTITIES_PER_COLLECTION)?;
@@ -59,6 +62,19 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
     count("wires", doc.wires.len(), MAX_ENTITIES_PER_COLLECTION)?;
 
     text("project name", &doc.project.name)?;
+    for (what, value) in [
+        ("project author", &doc.project.author),
+        ("project company", &doc.project.company),
+        ("project revision", &doc.project.revision),
+        ("project date", &doc.project.date),
+    ] {
+        if let Some(value) = value {
+            text(what, value)?;
+        }
+    }
+    for sheet in &doc.sheets {
+        text("sheet title", &sheet.title)?;
+    }
     for device in &doc.devices {
         text("reference designator", &device.reference.0)?;
         text("model id", &device.model.id)?;
@@ -97,6 +113,40 @@ mod tests {
     #[test]
     fn empty_document_is_within_every_limit() {
         assert_eq!(check(&Schematic::new("empty")), Ok(()));
+    }
+
+    #[test]
+    fn too_many_sheets_and_long_title_block_texts_are_refused() {
+        let mut doc = Schematic::new("sheets");
+        doc.project.author = Some("a".repeat(MAX_TEXT_BYTES + 1));
+        assert_eq!(
+            check(&doc),
+            Err(LimitExceeded {
+                what: "project author",
+                limit: MAX_TEXT_BYTES
+            })
+        );
+        doc.project.author = None;
+        let sheet = crate::Sheet {
+            id: crate::SheetId(1),
+            number: 1,
+            title: String::new(),
+            origin: GridPoint::new(0, 0),
+            size: crate::SheetSize::A4,
+            orientation: crate::Orientation::Landscape,
+            zones: crate::Zones {
+                columns: 1,
+                rows: 1,
+            },
+        };
+        doc.sheets = vec![sheet; MAX_SHEETS + 1];
+        assert_eq!(
+            check(&doc),
+            Err(LimitExceeded {
+                what: "sheets",
+                limit: MAX_SHEETS
+            })
+        );
     }
 
     #[test]
