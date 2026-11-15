@@ -1550,7 +1550,7 @@ A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte oper
 
 **Critério:** contratos documentados que compilam e têm testes iniciais.
 
-### M1 — Fatia vertical headless
+### M1 — Fatia vertical headless (concluído)
 
 - Consolidar `circuit-domain` e `circuit-diagnostics` em `circuit-model`.
 - `circuit-sim` com módulos de topologia, elétrica, lógica, runtime e trace.
@@ -1565,7 +1565,7 @@ A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte oper
 
 **Critério:** cenários de comando e de força rodam sem GUI com traces determinísticos; o caso simultâneo do reversor trava no primeiro curto; round-trip JSON e códigos de saída da CLI testados; propriedades da §17.3 verdes.
 
-### M2a — Viewer read-only
+### M2a — Viewer read-only (concluído)
 
 - `circuit-renderer` com cena neutra (§14.3).
 - `apps/desktop` com egui/eframe, em modo leitura.
@@ -1578,16 +1578,16 @@ A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte oper
 
 **Critério:** abrir a partida direta, reproduzir, pausar e inspecionar diagnósticos; `circuit-renderer` não depende de `circuit-sim`.
 
-### M2b — Editor desktop
+### M2b — Editor desktop (concluído)
 
 - `circuit-editor` e `circuit-commands`: comandos transacionais, undo/redo, hit-test e roteamento ortogonal (§14.6).
 - Canvas e câmera, biblioteca de componentes, seleção, movimentação, rotação, exclusão, fios e junções, inspetor.
 - Salvamento atômico (§15.4) e migrações iniciais do JSON.
-- `egui_kittest` nos fluxos essenciais; fuzzing do loader (§19.2).
+- `egui_kittest` nos fluxos essenciais; testes de propriedade do loader (§19.2; o `cargo-fuzz` ficou adiado).
 
 **Critério:** desenhar, salvar, reabrir e simular uma partida direta, com undo/redo sem aplicação parcial.
 
-### M3 — Circuitos avançados e exportação
+### M3 — Circuitos avançados e exportação (concluído)
 
 - Contatos de comutação e intertravamento completo.
 - Motor de seis terminais e enrolamentos.
@@ -1598,11 +1598,11 @@ A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte oper
 
 **Critério:** estrela-triângulo validada com modelo de enrolamentos adequado e sem sobreposição indevida; SVG determinístico; PDF escolhido com justificativa registrada ou explicitamente adiado.
 
-### M4 — Ecossistema
+### M4 — Ecossistema (concluído)
 
-- Aplicação WASM.
-- Plugins.
-- Modbus TCP por adaptador (`circuit-io`); avaliação de OPC UA e MQTT.
+- Aplicação WASM, compilada e verificada no CI e não publicada.
+- Extensões só de dados, sem plugins de código (ADR-0008).
+- Modbus TCP por adaptador (`circuit-io`), servido por `opencircuit serve`; OPC UA e MQTT avaliados e não implementados (ADR-0010).
 - Catálogo orientado a dados e símbolos de terceiros; mais componentes e exemplos.
 - Documentação de extensão e comunidade.
 
@@ -1628,7 +1628,7 @@ A numeração de marcos segue [`ROADMAP.md`](../ROADMAP.md), que é a fonte oper
 | egui em canvas CAD grande | Médio/alto | Benchmarks, culling e cache (§14.5) |
 | Portabilidade WASM | Médio | Núcleo sem I/O e sem relógio; `cargo check` WASM em CI (§5.4, §17.6) |
 | Símbolos e licenças | Médio | Símbolos próprios e proveniência registrada (§18.2) |
-| Arquivos `.ocircuit` hostis | Médio | Limites, validação estrita e fuzzing (§19.2) |
+| Arquivos `.ocircuit` hostis | Médio | Limites, validação estrita e testes de propriedade; fuzzing adiado (§19.2) |
 | Uso como validação de segurança real | Alto | Avisos, documentação e limites explícitos (§2.6) |
 
 ---
@@ -1764,23 +1764,23 @@ O primeiro marco é o golden do comando da partida direta rodando nos três sist
 
 ## Apêndice A — Checklist de aprovação da arquitetura
 
-- [ ] Device, SymbolInstance e Terminal separados; vínculo por `DeviceId`.
-- [ ] IDs `u64` com `next_id` persistido; chaves de terminal estruturais e rótulos derivados.
-- [ ] Junções explícitas e cruzamentos não ambíguos; `Wire` guarda só waypoints.
-- [ ] Conectividade em dois níveis (rede de cobre e grupo) documentada.
-- [ ] Condutores como máscara; um perfil por condutor; regras de conflito (§9.3).
-- [ ] Rótulos de tensão usados só para compatibilidade, nunca em cálculo.
-- [ ] Semântica do tick e do commit formalizada; snapshot coerente com o instante resolvido.
-- [ ] Atraso de atuação mínimo de 1 tick; TON e TOF com tabelas de ticks como testes.
-- [ ] `FaultPolicy` definida e testada (`Halt` por padrão; `Report` opt-in).
-- [ ] `CompileOutput` e diagnósticos com códigos `OC-<CAT>-NNN` estáveis.
-- [ ] Limites do solver documentados; `StaticSeriesLoads` e `DynamicUnsupportedTopology` implementados.
-- [ ] Regras de dependência verificadas no CI (`xtask`, `clippy.toml`, `cargo-deny`).
-- [ ] Formato JSON canônico, sem ponto flutuante, versionado, com leitura em duas fases e migrações.
-- [ ] CLI headless funcional (`validate`, `simulate`, `test`).
-- [ ] Golden da partida direta aprovado em Linux, Windows e macOS.
-- [ ] ADR-001 a ADR-004 escritos; `SIMULATION.md` e `FORMAT.md` criados.
-- [ ] Política de licenças e recursos gráficos documentada.
+- [x] Device, SymbolInstance e Terminal separados; vínculo por `DeviceId`.
+- [x] IDs `u64` com `next_id` persistido; chaves de terminal estruturais e rótulos derivados.
+- [x] Junções explícitas e cruzamentos não ambíguos; `Wire` guarda só waypoints.
+- [x] Conectividade em dois níveis (rede de cobre e grupo) documentada.
+- [x] Condutores como máscara; um perfil por condutor; regras de conflito (§9.3).
+- [x] Rótulos de tensão usados só para compatibilidade, nunca em cálculo.
+- [x] Semântica do tick e do commit formalizada; snapshot coerente com o instante resolvido.
+- [x] Atraso de atuação mínimo de 1 tick; TON e TOF com tabelas de ticks como testes.
+- [x] `FaultPolicy` definida e testada (`Halt` por padrão; `Report` opt-in).
+- [x] `CompileOutput` e diagnósticos com códigos `OC-<CAT>-NNN` estáveis.
+- [x] Limites do solver documentados; `StaticSeriesLoads` e `DynamicUnsupportedTopology` implementados.
+- [x] Regras de dependência verificadas no CI (`xtask`, `clippy.toml`, `cargo-deny`).
+- [x] Formato JSON canônico, sem ponto flutuante, versionado, com leitura em duas fases e migrações.
+- [x] CLI headless funcional (`validate`, `simulate`, `test`).
+- [x] Golden da partida direta aprovado em Linux, Windows e macOS.
+- [x] ADR-001 a ADR-004 escritos; `SIMULATION.md` e `FORMAT.md` criados.
+- [x] Política de licenças e recursos gráficos documentada.
 
 ## Apêndice B — Referências técnicas
 
