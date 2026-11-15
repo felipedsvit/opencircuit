@@ -93,7 +93,7 @@ impl SupplyPreset {
     }
 }
 
-fn model_of<'a>(
+pub(crate) fn model_of<'a>(
     catalog: &'a ComponentCatalog,
     model: &ModelRef,
 ) -> Result<&'a ComponentModel, CommandError> {
@@ -111,7 +111,7 @@ fn device_of(doc: &Schematic, device: DeviceId) -> Result<&Device, CommandError>
 
 /// Refuse a placement whose symbol area would leave the coordinate range:
 /// such a symbol could be neither drawn nor clicked.
-fn fits(
+pub(crate) fn fits(
     definition: &circuit_model::SymbolDefinition,
     at: GridPoint,
     rotation: QuarterTurn,
@@ -564,7 +564,7 @@ pub fn delete(
 
 /// The symbols and junctions a selection moves: the symbols named, every
 /// symbol of the devices named, and the junctions named.
-fn movable(
+pub(crate) fn movable(
     doc: &Schematic,
     subjects: &BTreeSet<Subject>,
 ) -> (BTreeSet<SymbolId>, BTreeSet<JunctionId>) {
