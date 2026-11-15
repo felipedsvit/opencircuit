@@ -1,0 +1,18 @@
+# opencircuit trace v1
+# fingerprint 5539fc31f097b586
+# tick_us=1000 pickup_ticks=1 dropout_ticks=3 fault_policy=halt
+t=2 input S1.pressed 0->1
+t=2 load KM3.coil on
+t=2 load KT1.coil on
+t=3 signal KM3.active 0->1
+t=3 load KM1.coil on
+t=4 signal KM1.active 0->1
+t=4 load M1.motor forward-star
+t=6 input S1.pressed 1->0
+t=12 signal KT1.out 0->1
+t=12 load KM2.coil on
+t=12 load KM3.coil off
+t=13 signal KM2.active 0->1
+t=13 load M1.motor off
+t=13 fault OC-ELEC-001 started L1,L2,L3
+t=13 runtime latched

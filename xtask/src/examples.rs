@@ -6,8 +6,8 @@
 
 use circuit_model::builder::pin;
 use circuit_model::{
-    DeviceId, Endpoint, GridPoint, IdExhausted, JunctionId, ParamValue, PhaseSequence, Schematic,
-    SchematicBuilder, SupplyId, SymbolId,
+    DeviceId, Endpoint, GridPoint, IdExhausted, JunctionId, ParamValue, PhaseSequence, QuarterTurn,
+    Schematic, SchematicBuilder, SupplyId, SymbolId,
 };
 
 /// One generated project file.
@@ -44,6 +44,14 @@ pub(crate) const EXAMPLES: &[Example] = &[
         build: interlocked,
     },
     Example {
+        path: "examples/star-delta/star-delta.ocircuit",
+        build: star_delta,
+    },
+    Example {
+        path: "tests/fixtures/star-delta-overlap/star-delta-overlap.ocircuit",
+        build: star_delta_overlap,
+    },
+    Example {
         path: "tests/fixtures/static-short/static-short.ocircuit",
         build: static_short,
     },
@@ -70,6 +78,28 @@ impl Sheet {
         params: &[(&str, ParamValue)],
     ) -> Built<DeviceId> {
         self.0.device(reference, model, params)
+    }
+
+    fn device_version(
+        &mut self,
+        reference: &str,
+        model: &str,
+        version: u32,
+        params: &[(&str, ParamValue)],
+    ) -> Built<DeviceId> {
+        self.0.device_version(reference, model, version, params)
+    }
+
+    fn symbol_turned(
+        &mut self,
+        device: DeviceId,
+        key: &str,
+        slot: Option<u8>,
+        at: (i32, i32),
+        rotation: QuarterTurn,
+    ) -> Built<SymbolId> {
+        self.0
+            .symbol_turned(device, key, slot, GridPoint::new(at.0, at.1), rotation)
     }
 
     fn symbol(
@@ -453,6 +483,209 @@ fn interlocked() -> Built<Schematic> {
     Ok(sheet.finish())
 }
 
+/// Star-delta starter, the M3 reference (spec §17.2): KM1 line, KM2 delta,
+/// KM3 star and timer KT1.
+///
+/// S1 energizes KM3 (star) through the resting side of the KT1 changeover;
+/// KM3 brings in KM1, which seals itself and keeps KT1 running. When KT1
+/// runs out, its changeover drops KM3 and, once KM3 is out, brings in KM2
+/// (delta). With `interlocked`, KM3 is fed through an NC auxiliary of KM2,
+/// KM2 through an NC auxiliary of KM3, and a mechanical interlock joins
+/// them; without, they are not interlocked at all.
+fn star_delta_with(interlocked: bool, name: &str) -> Built<Schematic> {
+    let mut sheet = Sheet::new(name);
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 54))?;
+    let phases = sheet.power_supply(40, 0)?;
+    let timer = [
+        ("rated_voltage_mv", ParamValue::Int(24_000)),
+        ("connection", ParamValue::Text("dc".to_owned())),
+        ("preset_ms", ParamValue::Int(10)),
+    ];
+
+    let q1 = sheet.part(
+        "Q1",
+        "main_switch.3p",
+        "main",
+        &[("initial_closed", ParamValue::Bool(true))],
+        (44, 5),
+    )?;
+    let f1 = sheet.device("F1", "thermal_overload.generic", &[])?;
+    let f1_element = sheet.symbol(f1, "element", None, (44, 11))?;
+    let f1_contact = sheet.symbol(f1, "aux_nc", None, (0, 3))?;
+    let stop = sheet.part("S0", "pushbutton_nc", "contact", &[], (0, 8))?;
+    let start = sheet.part("S1", "pushbutton_no", "contact", &[], (-4, 16))?;
+    let km1 = sheet.device("KM1", "contactor.generic", &dc_load())?;
+    let km1_coil = sheet.symbol(km1, "coil", None, (16, 36))?;
+    let km1_main = sheet.symbol(km1, "main", None, (44, 17))?;
+    let km1_seal = sheet.symbol(km1, "aux_no", Some(1), (4, 16))?;
+    let km1_hold = sheet.symbol(km1, "aux_no", Some(2), (20, 27))?;
+    let km2 = sheet.device("KM2", "contactor.generic", &dc_load())?;
+    let km2_coil = sheet.symbol(km2, "coil", None, (8, 42))?;
+    let km2_main = sheet.symbol(km2, "main", None, (60, 30))?;
+    let km2_lock = if interlocked {
+        Some(sheet.symbol(km2, "aux_nc", Some(1), (-4, 35))?)
+    } else {
+        None
+    };
+    let km3 = sheet.device("KM3", "contactor.generic", &dc_load())?;
+    let km3_coil = sheet.symbol(km3, "coil", None, (-4, 42))?;
+    let km3_main = sheet.symbol(km3, "main", None, (44, 48))?;
+    let km3_start = sheet.symbol(km3, "aux_no", Some(1), (14, 27))?;
+    let km3_lock = if interlocked {
+        Some(sheet.symbol(km3, "aux_nc", Some(2), (8, 35))?)
+    } else {
+        None
+    };
+    let kt1 = sheet.device_version("KT1", "timer_on.generic", 2, &timer)?;
+    let kt1_coil = sheet.symbol(kt1, "coil", None, (-12, 30))?;
+    // Turned upside down: `com` on top, `no` below it, `nc` below left.
+    let kt1_changeover =
+        sheet.symbol_turned(kt1, "delayed_co", Some(1), (2, 27), QuarterTurn::Deg180)?;
+    let motor = sheet.part("M1", "motor.3ph.6t", "motor", &motor_400v(), (44, 30))?;
+    if interlocked {
+        let id = |device: DeviceId| i64::try_from(device.0).map_err(|_| IdExhausted);
+        sheet.part(
+            "KX1",
+            "interlock.mechanical",
+            "link",
+            &[
+                ("first", ParamValue::Int(id(km2)?)),
+                ("second", ParamValue::Int(id(km3)?)),
+            ],
+            (2, 42),
+        )?;
+    }
+
+    // Control: P24, the thermal relay contact, stop, then start beside the
+    // seal-in of KM1 into node `a`, and a bus from `a` to the rungs.
+    let feed = sheet.junction((0, 12))?;
+    let a = sheet.junction((0, 20))?;
+    let bus = sheet.junction((0, 22))?;
+    let to_timer = sheet.junction((-12, 22))?;
+    let to_changeover = sheet.junction((2, 22))?;
+    let to_line = sheet.junction((14, 22))?;
+    let line_node = sheet.junction((16, 31))?;
+    let common_timer = sheet.junction((-12, 50))?;
+    let common_star = sheet.junction((-4, 50))?;
+    let common = sheet.junction((0, 50))?;
+    let common_delta = sheet.junction((8, 50))?;
+    let common_line = sheet.junction((16, 50))?;
+    sheet.wire(out(p24), pin(f1_contact, "p1"))?;
+    sheet.wire(pin(f1_contact, "p2"), pin(stop, "p1"))?;
+    sheet.wire(pin(stop, "p2"), feed)?;
+    sheet.route(feed, pin(start, "p1"), &[(-4, 12)])?;
+    sheet.route(feed, pin(km1_seal, "p1"), &[(4, 12)])?;
+    sheet.route(pin(start, "p2"), a, &[(-4, 20)])?;
+    sheet.route(pin(km1_seal, "p2"), a, &[(4, 20)])?;
+    sheet.wire(a, bus)?;
+    sheet.wire(bus, to_timer)?;
+    sheet.wire(bus, to_changeover)?;
+    sheet.wire(to_changeover, to_line)?;
+    // Timer.
+    sheet.wire(to_timer, pin(kt1_coil, "a1"))?;
+    sheet.wire(pin(kt1_coil, "a2"), common_timer)?;
+    // Star: the resting side of the changeover, then KM2 NC, then KM3.
+    sheet.wire(to_changeover, pin(kt1_changeover, "com"))?;
+    let star_feed = pin(kt1_changeover, "nc");
+    match km2_lock {
+        Some(lock) => {
+            sheet.route(star_feed, pin(lock, "p1"), &[(0, 31), (-4, 31)])?;
+            sheet.wire(pin(lock, "p2"), pin(km3_coil, "a1"))?;
+        }
+        None => sheet.route(star_feed, pin(km3_coil, "a1"), &[(0, 31), (-4, 31)])?,
+    }
+    sheet.wire(pin(km3_coil, "a2"), common_star)?;
+    // Delta: the working side of the changeover, then KM3 NC, then KM2.
+    let delta_feed = pin(kt1_changeover, "no");
+    match km3_lock {
+        Some(lock) => {
+            sheet.route(delta_feed, pin(lock, "p1"), &[(2, 31), (8, 31)])?;
+            sheet.wire(pin(lock, "p2"), pin(km2_coil, "a1"))?;
+        }
+        None => sheet.route(delta_feed, pin(km2_coil, "a1"), &[(2, 31), (8, 31)])?,
+    }
+    sheet.wire(pin(km2_coil, "a2"), common_delta)?;
+    // Line: KM3 NO beside KM1 NO, then KM1.
+    sheet.wire(to_line, pin(km3_start, "p1"))?;
+    sheet.route(to_line, pin(km1_hold, "p1"), &[(20, 22)])?;
+    sheet.route(pin(km3_start, "p2"), line_node, &[(14, 31)])?;
+    sheet.route(pin(km1_hold, "p2"), line_node, &[(20, 31)])?;
+    sheet.wire(line_node, pin(km1_coil, "a1"))?;
+    sheet.wire(pin(km1_coil, "a2"), common_line)?;
+    // Common rail.
+    sheet.wire(common_timer, common_star)?;
+    sheet.wire(common_star, common)?;
+    sheet.wire(common, common_delta)?;
+    sheet.wire(common_delta, common_line)?;
+    sheet.wire(common, out(p0))?;
+
+    // Power: Q1, F1, KM1 straight down; the line ends of the motor leave
+    // KM1 on staggered junctions so that the feeders of KM2 only cross them.
+    for (phase, (input, _)) in phases.into_iter().zip(POLES) {
+        sheet.wire(out(phase), pin(q1, input))?;
+    }
+    for (input, output) in POLES {
+        sheet.wire(pin(q1, output), pin(f1_element, input))?;
+        sheet.wire(pin(f1_element, output), pin(km1_main, input))?;
+    }
+    let line_ends = [
+        sheet.junction((40, 21))?,
+        sheet.junction((44, 23))?,
+        sheet.junction((48, 25))?,
+    ];
+    for ((node, (_, output)), terminal) in line_ends.into_iter().zip(POLES).zip(MOTOR_TERMINALS) {
+        sheet.wire(pin(km1_main, output), node)?;
+        sheet.wire(node, pin(motor, terminal))?;
+    }
+    // Second ends, staggered below the motor.
+    let second_ends = [
+        sheet.junction((40, 40))?,
+        sheet.junction((44, 42))?,
+        sheet.junction((48, 44))?,
+    ];
+    for (terminal, node) in ["u2", "v2", "w2"].into_iter().zip(second_ends) {
+        sheet.wire(pin(motor, terminal), node)?;
+    }
+    // KM2 closes the delta: u1 to w2, v1 to u2, w1 to v2. Each feeder
+    // leaves its line junction on its own row; each output turns on the row
+    // of the second end it reaches.
+    let [u_line, v_line, w_line] = line_ends;
+    let [u_end, v_end, w_end] = second_ends;
+    for ((line, end), ((input, output), (column, feeder_row, return_row))) in
+        [u_line, v_line, w_line]
+            .into_iter()
+            .zip([w_end, u_end, v_end])
+            .zip(
+                POLES
+                    .into_iter()
+                    .zip([(56, 21, 44), (60, 23, 40), (64, 25, 42)]),
+            )
+    {
+        sheet.route(line, pin(km2_main, input), &[(column, feeder_row)])?;
+        sheet.route(pin(km2_main, output), end, &[(column, return_row)])?;
+    }
+    // KM3 closes the star point.
+    let star_point = sheet.junction((44, 53))?;
+    for (end, (input, _)) in second_ends.into_iter().zip(POLES) {
+        sheet.wire(end, pin(km3_main, input))?;
+    }
+    sheet.route(pin(km3_main, "pole1.out"), star_point, &[(40, 53)])?;
+    sheet.wire(pin(km3_main, "pole2.out"), star_point)?;
+    sheet.route(pin(km3_main, "pole3.out"), star_point, &[(48, 53)])?;
+    Ok(sheet.finish())
+}
+
+fn star_delta() -> Built<Schematic> {
+    star_delta_with(true, "Star-delta starter")
+}
+
+/// The star-delta starter without any interlock between star and delta:
+/// with a dropout longer than the pickup, KM2 closes while KM3 still holds
+/// the star point and the phases meet there.
+fn star_delta_overlap() -> Built<Schematic> {
+    star_delta_with(false, "Fixture - star-delta without interlocks")
+}
+
 /// A lamp across the supply with the two poles also wired together: a
 /// permanent short circuit, rejected at compile time.
 fn static_short() -> Built<Schematic> {
@@ -574,6 +807,100 @@ mod tests {
                 "{} is stale; run `cargo run -p xtask -- generate-examples`",
                 example.path
             );
+        }
+    }
+
+    mod star_delta {
+        use circuit_model::{ComponentCatalog, DiagnosticCode, InputAction, ParamValue, Schematic};
+        use circuit_sim::{DelayConfig, FaultPolicy, SimConfig, Simulator, compile};
+        use proptest::prelude::*;
+
+        /// One operator action: tick, device (S0, S1, F1) and whether it is
+        /// engaged (pressed, tripped) or released.
+        type Stroke = (u64, usize, bool);
+
+        fn strokes() -> impl Strategy<Value = Vec<Stroke>> {
+            prop::collection::vec((0_u64..80, 0_usize..3, any::<bool>()), 0..30).prop_map(
+                |mut list| {
+                    list.sort_unstable();
+                    list.dedup_by_key(|(tick, device, _)| (*tick, *device));
+                    list
+                },
+            )
+        }
+
+        fn with_preset(mut doc: Schematic, preset_ms: i64) -> Schematic {
+            for device in &mut doc.devices {
+                if device.reference.0 == "KT1" {
+                    device
+                        .params
+                        .insert("preset_ms".to_owned(), ParamValue::Int(preset_ms));
+                }
+            }
+            doc
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(128))]
+
+            /// The exit criterion of M3: whatever the operator does and
+            /// whatever the delays, the star and delta contactors are never
+            /// picked up together and the starter never faults.
+            #[test]
+            fn star_and_delta_never_overlap(
+                script in strokes(),
+                preset_ms in 1_i64..20,
+                pickup_ticks in 1_u32..4,
+                dropout_ticks in 1_u32..5,
+            ) {
+                let doc = with_preset(super::super::star_delta().unwrap(), preset_ms);
+                let output = compile(&doc, &ComponentCatalog::builtin());
+                prop_assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+                let circuit = output.circuit.unwrap();
+                let config = SimConfig {
+                    delays: DelayConfig { pickup_ticks, dropout_ticks },
+                    fault_policy: FaultPolicy::Halt,
+                    record_trace: false,
+                    ..SimConfig::default()
+                };
+                let mut sim = Simulator::new(circuit, config).unwrap();
+                let id = |reference: &str| {
+                    sim.circuit().device_by_reference(reference).unwrap().id
+                };
+                let (km2, km3) = (id("KM2"), id("KM3"));
+                let devices = [id("S0"), id("S1"), id("F1")];
+                for tick in 0..90 {
+                    let actions: Vec<InputAction> = script
+                        .iter()
+                        .filter(|(at, _, _)| *at == tick)
+                        .map(|(_, device, engaged)| {
+                            let target = devices[*device];
+                            match (device, engaged) {
+                                (2, true) => InputAction::Trip(target),
+                                (2, false) => InputAction::ResetTrip(target),
+                                (_, true) => InputAction::Press(target),
+                                (_, false) => InputAction::Release(target),
+                            }
+                        })
+                        .collect();
+                    sim.step(&actions).unwrap();
+                    let snapshot = sim.snapshot().unwrap();
+
+                    prop_assert!(
+                        !(snapshot.active_devices.contains(&km2)
+                            && snapshot.active_devices.contains(&km3)),
+                        "tick {}: star and delta together", tick
+                    );
+                    prop_assert!(!snapshot.faulted, "tick {}: {:?}", tick, snapshot.faults);
+                    prop_assert!(
+                        !snapshot
+                            .faults
+                            .iter()
+                            .any(|f| f.code() == DiagnosticCode::UnsupportedWindingConnection),
+                        "tick {}: {:?}", tick, snapshot.faults
+                    );
+                }
+            }
         }
     }
 }

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "circuit": "star-delta.ocircuit",
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 6, "action": "release", "device": "S1" }
+  ],
+  "until_tick": 20,
+  "expect": { "trace": "start.trace", "diagnostics": [] }
+}

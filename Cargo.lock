@@ -3148,6 +3148,7 @@ dependencies = [
  "circuit-project",
  "circuit-renderer",
  "circuit-sim",
+ "proptest",
  "serde_json",
 ]
 
