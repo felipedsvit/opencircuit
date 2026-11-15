@@ -151,6 +151,9 @@ pub enum LoadRule {
 pub struct CompiledLoad {
     /// The device the load belongs to.
     pub device: DeviceIx,
+    /// Stable ID of that device, so a diagnostic or a trace event never has
+    /// to look it up.
+    pub device_id: DeviceId,
     /// The symbol instance that is the load.
     pub symbol: SymbolId,
     /// Key of that symbol in its model; used to name the load in traces.

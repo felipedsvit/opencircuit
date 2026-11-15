@@ -96,8 +96,12 @@ pub struct SimSnapshot {
     pub motors: Vec<MotorView>,
     /// Every timer.
     pub timers: Vec<TimerView>,
-    /// Whether the runtime is latched by a fault.
+    /// Whether the runtime is latched by a fault when the snapshot is taken.
+    /// This is the latch, not "this tick had a fault": under the `report`
+    /// policy `faults` is not empty while this stays `false`, and after
+    /// `reset_fault()` it is `false` while `faults` still lists the faults of
+    /// the tick that was solved.
     pub faulted: bool,
-    /// Faults active in this tick.
+    /// Faults active in the solved tick `tick`.
     pub faults: Vec<Diagnostic>,
 }

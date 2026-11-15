@@ -497,14 +497,10 @@ impl Simulator {
             }
             changed = true;
             if let (true, Some(load)) = (record, self.circuit.loads().get(*index)) {
-                let device = self
-                    .circuit
-                    .device(load.device)
-                    .map_or(DeviceId(0), |device| device.id);
                 self.trace.push(TraceEvent {
                     tick,
                     kind: TraceKind::Load {
-                        device,
+                        device: load.device_id,
                         symbol: load.symbol,
                         activity: activity(now),
                     },

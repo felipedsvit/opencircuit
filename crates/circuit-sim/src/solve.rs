@@ -304,15 +304,16 @@ impl Solver {
 
         // Loads.
         for (index, load) in circuit.loads().iter().enumerate() {
-            let device = circuit
-                .device(load.device)
-                .map_or(DeviceId(0), |device| device.id);
             let (state, fault) = self.evaluate_load(load);
             if let Some(slot) = self.solution.loads.get_mut(index) {
                 *slot = state;
             }
             if let Some((code, message)) = fault {
-                faults.push(Diagnostic::new(code, Subject::Device(device), message));
+                faults.push(Diagnostic::new(
+                    code,
+                    Subject::Device(load.device_id),
+                    message,
+                ));
             }
         }
 

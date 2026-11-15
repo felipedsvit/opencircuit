@@ -730,6 +730,7 @@ fn build(
                 let load = LoadIx(dense(loads.len(), out)?);
                 loads.push(CompiledLoad {
                     device: device_ix,
+                    device_id: owner.device.id,
                     symbol: id,
                     symbol_key: symbol.definition.key().clone(),
                     rule: LoadRule::TwoTerminal {
@@ -753,6 +754,7 @@ fn build(
                 };
                 loads.push(CompiledLoad {
                     device: device_ix,
+                    device_id: owner.device.id,
                     symbol: id,
                     symbol_key: symbol.definition.key().clone(),
                     rule: LoadRule::SixTerminalMotor { rated_voltage_mv },
@@ -770,6 +772,7 @@ fn build(
                 };
                 loads.push(CompiledLoad {
                     device: device_ix,
+                    device_id: owner.device.id,
                     symbol: id,
                     symbol_key: symbol.definition.key().clone(),
                     rule: LoadRule::ThreePhaseMotor { rated_voltage_mv },
