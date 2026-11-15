@@ -30,6 +30,9 @@ pub enum CommandError {
     /// The component model is not in the catalog.
     #[error("model `{0}` is not in the catalog")]
     UnknownModel(String),
+    /// No newer version of the model is registered as an upgrade.
+    #[error("model `{0}` has no upgrade")]
+    NoUpgrade(String),
     /// The model has no symbol with this key.
     #[error("model `{model}` has no symbol `{symbol}`")]
     UnknownSymbol {

@@ -132,6 +132,7 @@ Keys are structural and belong to the symbol kind; displayed numbers such as
 | --- | --- |
 | coil | `a1`, `a2` (both required) |
 | contact, fuse link | `p1`, `p2` |
+| changeover contact | `com`, `nc`, `no` |
 | main contacts, thermal element | `pole1.in`, `pole1.out`, … per pole |
 | motor | `u1`, `v1`, `w1` |
 | lamp, buzzer | `x1`, `x2` |
@@ -155,6 +156,7 @@ Terminal offsets, unrotated:
 | Symbol kind | Offsets |
 | --- | --- |
 | coil, contact, fuse link, lamp, buzzer | first terminal `(0, -2)`, second `(0, 2)` |
+| changeover contact | `com` `(0, 2)`, `nc` `(2, -2)`, `no` `(0, -2)` |
 | main contacts, thermal element (`n` poles) | pole `k`: `x = (2k - n - 1) * 2`, `in` at `y = -2`, `out` at `y = 2` |
 | motor | `u1` `(-4, -2)`, `v1` `(0, -2)`, `w1` `(4, -2)` |
 | supply terminal | `out` `(0, 0)` |
@@ -165,25 +167,32 @@ fingerprint. The editor draws wires with horizontal and vertical segments
 only; a file may contain other wires, which load normally and compile with
 the warning `OC-STR-009` (`NonOrthogonalWire`).
 
-## Catalog (version 1 of each model)
+## Catalog
 
-| Model | Symbols (instances) | Parameters |
-| --- | --- | --- |
-| `supply.terminal` | `terminal` (1..255) | `conductor`, `supply` |
-| `pushbutton_no`, `pushbutton_nc` | `contact` (1) | — |
-| `selector.latching` | `contact` (1, NO) | `initial_closed` (default `false`) |
-| `main_switch.3p` | `main` (1, three poles) | `initial_closed` (default `false`) |
-| `contactor.generic` | `coil` (1), `main` (0..1), `aux_no` (0..8, slotted), `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
-| `relay.generic` | `coil` (1), `aux_no`, `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
-| `thermal_overload.generic` | `element` (0..1, three poles), `aux_nc` (0..1), `aux_no` (0..1) | — |
-| `timer_on.generic`, `timer_off.generic` | `coil` (1), `delayed_no`, `delayed_nc` (0..4, slotted) | `rated_voltage_mv`, `connection`, `preset_ms` |
-| `fuse.generic` | `link` (1) | — |
-| `motor.3ph` | `motor` (1) | `rated_voltage_mv` |
-| `lamp.generic`, `buzzer.generic` | `lamp` / `buzzer` (1) | `rated_voltage_mv`, `connection` |
+| Model | Version | Symbols (instances) | Parameters |
+| --- | --- | --- | --- |
+| `supply.terminal` | 1 | `terminal` (1..255) | `conductor`, `supply` |
+| `pushbutton_no`, `pushbutton_nc` | 1 | `contact` (1) | — |
+| `selector.latching` | 1 | `contact` (1, NO) | `initial_closed` (default `false`) |
+| `main_switch.3p` | 1 | `main` (1, three poles) | `initial_closed` (default `false`) |
+| `contactor.generic` | 1 | `coil` (1), `main` (0..1), `aux_no` (0..8, slotted), `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
+| `relay.generic` | 1 | `coil` (1), `aux_no`, `aux_nc` (0..8, slotted) | `rated_voltage_mv`, `connection` |
+| `relay.generic` | 2 | `coil` (1), `aux_no`, `aux_nc`, `changeover` (0..8, slotted) | `rated_voltage_mv`, `connection` |
+| `thermal_overload.generic` | 1 | `element` (0..1, three poles), `aux_nc` (0..1), `aux_no` (0..1) | — |
+| `timer_on.generic`, `timer_off.generic` | 1 | `coil` (1), `delayed_no`, `delayed_nc` (0..4, slotted) | `rated_voltage_mv`, `connection`, `preset_ms` |
+| `timer_on.generic`, `timer_off.generic` | 2 | `coil` (1), `delayed_no`, `delayed_nc`, `delayed_co` (0..4, slotted) | `rated_voltage_mv`, `connection`, `preset_ms` |
+| `fuse.generic` | 1 | `link` (1) | — |
+| `motor.3ph` | 1 | `motor` (1) | `rated_voltage_mv` |
+| `lamp.generic`, `buzzer.generic` | 1 | `lamp` / `buzzer` (1) | `rated_voltage_mv`, `connection` |
 
 A published `(model id, version)` never changes. Changing a terminal key, a
 terminal offset, a parameter or a behaviour creates a new model version with a
-tested model migration.
+tested model migration. Older versions stay in the catalog, so a file keeps
+loading and saving byte for byte; new devices use the newest version. A
+migration is applied only when the user asks for it (an edit that changes the
+device's `model`), never on load. The registered migrations keep every symbol
+and parameter key: `relay.generic`, `timer_on.generic` and `timer_off.generic`
+from version 1 to version 2, which add changeover contacts.
 
 ## Canonical serialization
 

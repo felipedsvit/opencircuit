@@ -611,6 +611,28 @@ fn build(
                     owner: id,
                 });
             }
+            SymbolKind::Changeover => {
+                // Two switches on one signal: `com`-`nc` at rest, `com`-`no`
+                // while the signal is high. The `nc` side comes first, in
+                // terminal order.
+                let Some(sig) = signal else {
+                    continue;
+                };
+                let Some(common) = terminal_net(0) else {
+                    continue;
+                };
+                for (terminal, closed_when) in [(1, Level::Low), (2, Level::High)] {
+                    let Some(side) = terminal_net(terminal) else {
+                        continue;
+                    };
+                    switches.push(CompiledSwitch {
+                        a: common,
+                        b: side,
+                        drive: Drive::Signal { sig, closed_when },
+                        owner: id,
+                    });
+                }
+            }
             SymbolKind::PowerContacts { poles } => {
                 let Some(sig) = signal else {
                     continue;

@@ -80,6 +80,9 @@ pub enum SymbolKind {
     ContactNo,
     /// Normally closed contact.
     ContactNc,
+    /// Changeover contact: a common terminal that connects to `nc` at rest
+    /// and to `no` while the device signal is high.
+    Changeover,
     /// Main contacts; every pole closes together.
     PowerContacts {
         /// Number of poles.
@@ -117,17 +120,23 @@ pub const POLE_PITCH: i32 = 4;
 /// Offset of the leftmost motor terminal, one pitch left of the origin.
 const MOTOR_LEFT: i32 = -4;
 
+/// Horizontal offset of the `nc` terminal of a changeover contact; `com`
+/// and `no` sit on the vertical through the origin.
+const CHANGEOVER_NC: i32 = 2;
+
 impl SymbolKind {
     /// The terminals of a symbol of this kind, in canonical order, with their
     /// offsets from the symbol origin.
     ///
     /// Two-terminal elements list their two ends; multi-pole elements list
-    /// `poleN.in` then `poleN.out` for each pole; the motor lists `u1`, `v1`,
-    /// `w1`.
+    /// `poleN.in` then `poleN.out` for each pole; a changeover contact lists
+    /// `com`, `nc`, `no`; the motor lists `u1`, `v1`, `w1`.
     ///
     /// Unrotated, a symbol is drawn top to bottom around its origin: the
     /// first terminal of a two-terminal element is 2 grid units above it and
-    /// the second 2 below; the poles of a multi-pole element are
+    /// the second 2 below; a changeover contact has `com` 2 units below,
+    /// `no` 2 units above and `nc` 2 units above and 2 to the right; the
+    /// poles of a multi-pole element are
     /// [`POLE_PITCH`] apart and centred, with their inputs above and their
     /// outputs below; the motor terminals sit above the motor; a supply
     /// terminal is its own origin.
@@ -142,6 +151,11 @@ impl SymbolKind {
         match self {
             Self::Coil => pair("a1", "a2", true),
             Self::ContactNo | Self::ContactNc | Self::FuseLink => pair("p1", "p2", false),
+            Self::Changeover => vec![
+                TerminalDefinition::new("com", false, GridPoint::new(0, BELOW)),
+                TerminalDefinition::new("nc", false, GridPoint::new(CHANGEOVER_NC, ABOVE)),
+                TerminalDefinition::new("no", false, GridPoint::new(0, ABOVE)),
+            ],
             Self::PowerContacts { poles } | Self::ThermalElement { poles } => (1..=poles)
                 .flat_map(|pole| {
                     let x = pole_x(pole, poles);
@@ -182,6 +196,7 @@ impl SymbolKind {
             Self::Coil
             | Self::ContactNo
             | Self::ContactNc
+            | Self::Changeover
             | Self::FuseLink
             | Self::Lamp
             | Self::Buzzer => corners(-2, ABOVE, 2, BELOW),
@@ -666,6 +681,70 @@ impl ComponentCatalog {
             .iter()
             .find(|model| model.id == reference.id && model.version == reference.version)
     }
+
+    /// The newest version of every model, sorted by ID: what new devices
+    /// are made of. Older versions stay in the catalog so that existing
+    /// documents keep loading.
+    pub fn latest(&self) -> impl Iterator<Item = &ComponentModel> {
+        // Models are sorted by `(id, version)`, so the newest version of an
+        // ID is the last one before the ID changes.
+        self.models.iter().enumerate().filter_map(|(index, model)| {
+            let next = index.checked_add(1).and_then(|next| self.models.get(next));
+            match next {
+                Some(next) if next.id == model.id => None,
+                _ => Some(model),
+            }
+        })
+    }
+
+    /// The model a device of `from` can be upgraded to, when a model
+    /// migration is registered for it and both versions are in this
+    /// catalog.
+    ///
+    /// Every registered migration keeps symbol and parameter keys: the
+    /// target offers every symbol of the source with the same kind, slot
+    /// rule and at least the same instance range, and the same parameters.
+    /// A migration whose versions do not satisfy that is ignored, so an
+    /// upgrade never invalidates a document.
+    #[must_use]
+    pub fn upgrade(&self, from: &ModelRef) -> Option<&ComponentModel> {
+        let (_, _, to) = MODEL_MIGRATIONS
+            .iter()
+            .find(|(id, version, _)| *id == from.id && *version == from.version)?;
+        let source = self.model(from)?;
+        let target = self.model(&ModelRef {
+            id: from.id.clone(),
+            version: *to,
+        })?;
+        keeps_keys(source, target).then_some(target)
+    }
+}
+
+/// Registered model migrations: model ID, source version, target version.
+/// Applying one is an explicit edit; loading never upgrades a model.
+const MODEL_MIGRATIONS: &[(&str, u32, u32)] = &[
+    ("relay.generic", 1, 2),
+    ("timer_off.generic", 1, 2),
+    ("timer_on.generic", 1, 2),
+];
+
+/// Whether every device of `source` stays valid as a device of `target`
+/// with its symbols and parameters unchanged.
+fn keeps_keys(source: &ComponentModel, target: &ComponentModel) -> bool {
+    source.class == target.class
+        && source.params == target.params
+        && source.symbols.iter().all(|old| {
+            target.symbol(old.key()).is_some_and(|new| {
+                new.kind == old.kind
+                    && new.slotted == old.slotted
+                    && new.min_instances <= old.min_instances
+                    && new.max_instances >= old.max_instances
+            })
+        })
+        && target
+            .symbols
+            .iter()
+            .all(|new| source.symbol(new.key()).is_some() || new.min_instances == 0)
 }
 
 fn check_model(model: &ComponentModel) -> Result<(), String> {
@@ -750,7 +829,10 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
         ),
         DeviceClass::Relay | DeviceClass::Timer(_) => matches!(
             kind,
-            SymbolKind::Coil | SymbolKind::ContactNo | SymbolKind::ContactNc
+            SymbolKind::Coil
+                | SymbolKind::ContactNo
+                | SymbolKind::ContactNc
+                | SymbolKind::Changeover
         ),
         DeviceClass::ThermalOverload => matches!(
             kind,
@@ -874,6 +956,29 @@ fn builtin_models() -> Vec<ComponentModel> {
         ComponentModel::new(id, 1, class, params, symbols, Provenance::project_owned())
     };
     let aux = |key: &str, kind, max| SymbolDefinition::new(key, kind, 0, max, true);
+    // Version 2 adds changeover contacts to version 1; every symbol and
+    // parameter of version 1 is kept, so the upgrade maps keys to themselves.
+    let relay_symbols = || {
+        vec![
+            SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
+            aux("aux_no", SymbolKind::ContactNo, 8),
+            aux("aux_nc", SymbolKind::ContactNc, 8),
+        ]
+    };
+    let timer_symbols = || {
+        vec![
+            SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
+            aux("delayed_no", SymbolKind::ContactNo, 4),
+            aux("delayed_nc", SymbolKind::ContactNc, 4),
+        ]
+    };
+    let with = |mut symbols: Vec<SymbolDefinition>, extra: SymbolDefinition| {
+        symbols.push(extra);
+        symbols
+    };
+    let version_2 = |id: &str, class, params, symbols| {
+        ComponentModel::new(id, 2, class, params, symbols, Provenance::project_owned())
+    };
 
     vec![
         model(
@@ -967,11 +1072,16 @@ fn builtin_models() -> Vec<ComponentModel> {
             "relay.generic",
             DeviceClass::Relay,
             vec![rated_voltage(), connection()],
-            vec![
-                SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
-                aux("aux_no", SymbolKind::ContactNo, 8),
-                aux("aux_nc", SymbolKind::ContactNc, 8),
-            ],
+            relay_symbols(),
+        ),
+        version_2(
+            "relay.generic",
+            DeviceClass::Relay,
+            vec![rated_voltage(), connection()],
+            with(
+                relay_symbols(),
+                aux("changeover", SymbolKind::Changeover, 8),
+            ),
         ),
         model(
             "thermal_overload.generic",
@@ -993,21 +1103,31 @@ fn builtin_models() -> Vec<ComponentModel> {
             "timer_on.generic",
             DeviceClass::Timer(TimerMode::OnDelay),
             vec![rated_voltage(), connection(), preset()],
-            vec![
-                SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
-                aux("delayed_no", SymbolKind::ContactNo, 4),
-                aux("delayed_nc", SymbolKind::ContactNc, 4),
-            ],
+            timer_symbols(),
+        ),
+        version_2(
+            "timer_on.generic",
+            DeviceClass::Timer(TimerMode::OnDelay),
+            vec![rated_voltage(), connection(), preset()],
+            with(
+                timer_symbols(),
+                aux("delayed_co", SymbolKind::Changeover, 4),
+            ),
         ),
         model(
             "timer_off.generic",
             DeviceClass::Timer(TimerMode::OffDelay),
             vec![rated_voltage(), connection(), preset()],
-            vec![
-                SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
-                aux("delayed_no", SymbolKind::ContactNo, 4),
-                aux("delayed_nc", SymbolKind::ContactNc, 4),
-            ],
+            timer_symbols(),
+        ),
+        version_2(
+            "timer_off.generic",
+            DeviceClass::Timer(TimerMode::OffDelay),
+            vec![rated_voltage(), connection(), preset()],
+            with(
+                timer_symbols(),
+                aux("delayed_co", SymbolKind::Changeover, 4),
+            ),
         ),
         model(
             "fuse.generic",
@@ -1085,6 +1205,7 @@ mod tests {
             SymbolKind::Coil,
             SymbolKind::ContactNo,
             SymbolKind::ContactNc,
+            SymbolKind::Changeover,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
             SymbolKind::Lamp,
@@ -1189,13 +1310,114 @@ mod tests {
                 "pushbutton_nc@1",
                 "pushbutton_no@1",
                 "relay.generic@1",
+                "relay.generic@2",
                 "selector.latching@1",
                 "supply.terminal@1",
                 "thermal_overload.generic@1",
                 "timer_off.generic@1",
+                "timer_off.generic@2",
                 "timer_on.generic@1",
+                "timer_on.generic@2",
             ]
         );
+    }
+
+    #[test]
+    fn latest_lists_the_newest_version_of_each_model() {
+        let latest: Vec<String> = ComponentCatalog::builtin()
+            .latest()
+            .map(|model| format!("{}@{}", model.id(), model.version()))
+            .collect();
+
+        assert_eq!(latest.len(), 14);
+        assert!(latest.contains(&"relay.generic@2".to_owned()));
+        assert!(latest.contains(&"timer_on.generic@2".to_owned()));
+        assert!(latest.contains(&"timer_off.generic@2".to_owned()));
+        assert!(latest.contains(&"contactor.generic@1".to_owned()));
+        assert!(!latest.contains(&"relay.generic@1".to_owned()));
+    }
+
+    #[test]
+    fn changeover_terminals_are_common_below_and_both_sides_above() {
+        assert_eq!(terminal_keys(SymbolKind::Changeover), ["com", "nc", "no"]);
+        assert_eq!(offsets(SymbolKind::Changeover), [(0, 2), (2, -2), (0, -2)]);
+        assert!(
+            SymbolKind::Changeover
+                .terminals()
+                .iter()
+                .all(|t| !t.required)
+        );
+    }
+
+    #[test]
+    fn version_2_relays_and_timers_offer_slotted_changeover_contacts() {
+        for (id, key, max) in [
+            ("relay.generic", "changeover", 8),
+            ("timer_on.generic", "delayed_co", 4),
+            ("timer_off.generic", "delayed_co", 4),
+        ] {
+            let model = ComponentCatalog::builtin()
+                .model(&ModelRef {
+                    id: id.to_owned(),
+                    version: 2,
+                })
+                .cloned()
+                .unwrap();
+            let changeover = model.symbol(&SymbolKey(key.to_owned())).unwrap();
+
+            assert_eq!(changeover.kind(), SymbolKind::Changeover, "{id}");
+            assert_eq!(
+                (changeover.min_instances(), changeover.max_instances()),
+                (0, max)
+            );
+            assert!(changeover.slotted());
+            let version_1 = builtin_model(id);
+            assert!(version_1.symbol(&SymbolKey(key.to_owned())).is_none());
+        }
+    }
+
+    #[test]
+    fn relays_and_timers_upgrade_from_version_1_to_2() {
+        let catalog = ComponentCatalog::builtin();
+        for id in ["relay.generic", "timer_on.generic", "timer_off.generic"] {
+            let from = ModelRef {
+                id: id.to_owned(),
+                version: 1,
+            };
+
+            let target = catalog.upgrade(&from).map(ComponentModel::version);
+
+            assert_eq!(target, Some(2), "{id}");
+        }
+    }
+
+    #[test]
+    fn models_without_a_migration_do_not_upgrade() {
+        let catalog = ComponentCatalog::builtin();
+        for (id, version) in [("contactor.generic", 1), ("relay.generic", 2)] {
+            let from = ModelRef {
+                id: id.to_owned(),
+                version,
+            };
+
+            assert!(catalog.upgrade(&from).is_none(), "{id}@{version}");
+        }
+    }
+
+    #[test]
+    fn an_upgrade_that_would_drop_a_symbol_is_ignored() {
+        // A catalog whose version 2 lost `aux_nc`: the registered migration
+        // must not be offered, or devices with that symbol would break.
+        let mut broken = builtin_model("relay.generic");
+        broken.version = 2;
+        broken.symbols.retain(|symbol| symbol.key().0 != "aux_nc");
+        let catalog = ComponentCatalog::new(vec![builtin_model("relay.generic"), broken]).unwrap();
+        let from = ModelRef {
+            id: "relay.generic".to_owned(),
+            version: 1,
+        };
+
+        assert!(catalog.upgrade(&from).is_none());
     }
 
     #[test]

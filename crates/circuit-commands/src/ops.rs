@@ -781,6 +781,45 @@ pub fn set_param(
     Ok(tx)
 }
 
+/// Upgrade a device to the newer model version its catalog registers a
+/// migration for. The migration keeps every symbol and parameter key, so the
+/// device, its symbols and its wires stay as they are; only the model
+/// reference changes. Loading a document never does this on its own.
+///
+/// # Errors
+///
+/// Returns [`CommandError::Missing`] for a missing device,
+/// [`CommandError::UnknownModel`] when its model is not in the catalog, and
+/// [`CommandError::NoUpgrade`] when no migration is registered for it.
+pub fn upgrade_model(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    device: DeviceId,
+) -> Result<Transaction, CommandError> {
+    let current = device_of(doc, device)?;
+    model_of(catalog, &current.model)?;
+    let target = catalog
+        .upgrade(&current.model)
+        .ok_or_else(|| CommandError::NoUpgrade(current.model.id.clone()))?;
+    let mut tx = Transaction::new(
+        format!(
+            "Upgrade {} to {} version {}",
+            current.reference.0,
+            target.id(),
+            target.version()
+        ),
+        doc.next_id,
+    );
+    tx.edits.push(Edit::SetModel {
+        device,
+        model: ModelRef {
+            id: target.id().to_owned(),
+            version: target.version(),
+        },
+    });
+    Ok(tx)
+}
+
 /// Add a supply profile from a preset.
 ///
 /// # Errors

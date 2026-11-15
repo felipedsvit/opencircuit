@@ -380,6 +380,58 @@ fn maintained_switch_that_starts_closed_is_drawn_closed_at_rest() {
     assert!(styles_of(&scene, &Subject::Symbol(contact)).contains(&StyleKey::ContactClosed));
 }
 
+/// Relay `K1` (version 2) with one changeover contact at the origin.
+fn changeover_relay() -> (Schematic, SymbolId) {
+    let mut b = SchematicBuilder::new("changeover");
+    let device = b
+        .device_version(
+            "K1",
+            "relay.generic",
+            2,
+            &[
+                ("rated_voltage_mv", ParamValue::Int(24_000)),
+                ("connection", ParamValue::Text("dc".to_owned())),
+            ],
+        )
+        .unwrap();
+    b.symbol(device, "coil", None, GridPoint::new(8, 0))
+        .unwrap();
+    let changeover = b
+        .symbol(device, "changeover", Some(1), GridPoint::new(0, 0))
+        .unwrap();
+    (b.finish(), changeover)
+}
+
+/// Where the conducting blade of a contact at the origin ends.
+fn blade_tip(scene: &crate::Scene, symbol: SymbolId) -> Option<(i64, i64)> {
+    scene
+        .items
+        .iter()
+        .filter(|item| {
+            item.subject == Some(Subject::Symbol(symbol)) && item.style == StyleKey::ContactClosed
+        })
+        .find_map(|item| match &item.shape {
+            Shape::Line { to, .. } => Some((to.x, to.y)),
+            _ => None,
+        })
+}
+
+#[test]
+fn changeover_rests_on_its_nc_side_and_moves_to_no_when_closed() {
+    let catalog = ComponentCatalog::builtin();
+    let (doc, changeover) = changeover_relay();
+    let mut picked_up = snapshot();
+    picked_up.closed_symbols = vec![changeover];
+
+    let at_rest = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let running = build_scene(&doc, &catalog, Some(&picked_up), &SceneOptions::default());
+    let released = build_scene(&doc, &catalog, Some(&snapshot()), &SceneOptions::default());
+
+    assert_eq!(blade_tip(&at_rest, changeover), Some((6, -8)));
+    assert_eq!(blade_tip(&released, changeover), Some((6, -8)));
+    assert_eq!(blade_tip(&running, changeover), Some((0, -8)));
+}
+
 #[test]
 fn timer_coil_shows_elapsed_and_preset_ticks() {
     let catalog = ComponentCatalog::builtin();
@@ -452,13 +504,14 @@ fn symbol_at_the_edge_of_the_coordinate_range_does_not_panic() {
 
 /// Model references to draw from: every builtin model plus one that does
 /// not exist.
-fn model_ids() -> Vec<String> {
-    let mut ids: Vec<String> = ComponentCatalog::builtin()
+/// Every model and version of the catalog, and one that does not exist.
+fn model_ids() -> Vec<(String, u32)> {
+    let mut ids: Vec<(String, u32)> = ComponentCatalog::builtin()
         .models()
         .iter()
-        .map(|model| model.id().to_owned())
+        .map(|model| (model.id().to_owned(), model.version()))
         .collect();
-    ids.push("missing.model".to_owned());
+    ids.push(("missing.model".to_owned(), 1));
     ids
 }
 
@@ -489,12 +542,14 @@ prop_compose! {
         let mut b = SchematicBuilder::new("random");
         let mut symbols = Vec::new();
         for (index, (model, key, rotation, x, y)) in parts.iter().enumerate() {
-            let model_id: &str = model.get(ids.as_slice()).as_str();
-            let device = b.device(&format!("D{index}"), model_id, &[]).unwrap();
+            let (model_id, version) = model.get(ids.as_slice());
+            let device = b
+                .device_version(&format!("D{index}"), model_id, *version, &[])
+                .unwrap();
             let keys: Vec<String> = catalog
                 .models()
                 .iter()
-                .find(|m| m.id() == model_id)
+                .find(|m| m.id() == model_id && m.version() == *version)
                 .map(|m| m.symbols().iter().map(|s| s.key().0.clone()).collect())
                 .unwrap_or_else(|| vec!["nothing".to_owned()]);
             let symbol = b.symbol(device, key.get(keys.as_slice()).as_str(), None, GridPoint::new(*x, *y)).unwrap();

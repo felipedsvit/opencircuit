@@ -41,6 +41,17 @@ impl Rig {
         self.builder.device(reference, model, params).unwrap()
     }
 
+    pub(crate) fn device_v2(
+        &mut self,
+        reference: &str,
+        model: &str,
+        params: &[(&str, ParamValue)],
+    ) -> DeviceId {
+        self.builder
+            .device_version(reference, model, 2, params)
+            .unwrap()
+    }
+
     pub(crate) fn symbol(&mut self, device: DeviceId, key: &str, slot: Option<u8>) -> SymbolId {
         let position = self.place();
         self.builder.symbol(device, key, slot, position).unwrap()

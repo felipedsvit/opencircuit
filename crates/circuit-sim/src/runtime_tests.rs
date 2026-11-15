@@ -1068,6 +1068,106 @@ fn trace_text(sim: &mut Simulator) -> String {
     format_trace(sim.circuit(), &sim.trace_header(), &events)
 }
 
+/// `S1` feeds relay `K1` (version 2); its changeover contact takes the
+/// 24 V from `com` to lamp `H1` on `nc` at rest and to lamp `H2` on `no`
+/// when picked up. `model`, `key` and `extra` select a timer instead.
+fn changeover_circuit(model: &str, key: &str, extra: &[(&'static str, ParamValue)]) -> Schematic {
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let button = rig.part("S1", "pushbutton_no", "contact", &[]);
+    let mut params = dc_load();
+    params.extend_from_slice(extra);
+    let k1 = rig.device_v2("K1", model, &params);
+    let coil = rig.symbol(k1, "coil", None);
+    let changeover = rig.symbol(k1, key, Some(1));
+    let rest = rig.part("H1", "lamp.generic", "lamp", &dc_load());
+    let work = rig.part("H2", "lamp.generic", "lamp", &dc_load());
+    let feed = rig.junction();
+    let common = rig.junction();
+    rig.wire(out(p24), feed);
+    rig.wire(feed, pin(button, "p1"));
+    rig.wire(pin(button, "p2"), pin(coil, "a1"));
+    rig.wire(pin(coil, "a2"), common);
+    rig.wire(feed, pin(changeover, "com"));
+    rig.wire(pin(changeover, "nc"), pin(rest, "x1"));
+    rig.wire(pin(changeover, "no"), pin(work, "x1"));
+    rig.wire(pin(rest, "x2"), common);
+    rig.wire(pin(work, "x2"), common);
+    rig.wire(common, out(p0));
+    rig.finish()
+}
+
+#[test]
+fn changeover_moves_its_common_from_nc_to_no_one_tick_after_the_coil() {
+    let doc = changeover_circuit("relay.generic", "changeover", &[]);
+    let mut sim = default_sim(&doc);
+    let changeover = symbol_of(&doc, "K1", "changeover");
+    let (h1, h2, k1) = (id(&sim, "H1"), id(&sim, "H2"), id(&sim, "K1"));
+
+    run(&mut sim, 1, &[]);
+    let rest = sim.snapshot().unwrap();
+    run(&mut sim, 2, &[(2, "press S1")]);
+    let energizing = sim.snapshot().unwrap();
+    sim.step(&[]).unwrap();
+    let picked_up = sim.snapshot().unwrap();
+
+    assert_eq!(rest.energized_devices, [h1]);
+    assert!(!rest.closed_symbols.contains(&changeover));
+    assert_eq!(energizing.energized_devices, [k1, h1]);
+    assert_eq!(picked_up.energized_devices, [k1, h2]);
+    assert!(picked_up.closed_symbols.contains(&changeover));
+}
+
+#[test]
+fn changeover_never_connects_both_sides_at_once() {
+    let doc = changeover_circuit("relay.generic", "changeover", &[]);
+    let mut sim = default_sim(&doc);
+    let (h1, h2) = (id(&sim, "H1"), id(&sim, "H2"));
+
+    for tick in 0..12 {
+        let actions = match tick {
+            2 => vec![action(sim.circuit(), "press S1")],
+            7 => vec![action(sim.circuit(), "release S1")],
+            _ => Vec::new(),
+        };
+        sim.step(&actions).unwrap();
+        let lit = sim.snapshot().unwrap().energized_devices;
+
+        assert!(
+            lit.contains(&h1) != lit.contains(&h2),
+            "tick {tick}: {lit:?}"
+        );
+    }
+}
+
+#[test]
+fn timer_changeover_follows_the_delayed_output() {
+    let doc = changeover_circuit(
+        "timer_on.generic",
+        "delayed_co",
+        &[("preset_ms", ParamValue::Int(3))],
+    );
+    let mut sim = default_sim(&doc);
+    let (h1, h2) = (id(&sim, "H1"), id(&sim, "H2"));
+
+    let trace = run(&mut sim, 8, &[(2, "press S1")]);
+
+    let switched = trace
+        .iter()
+        .position(|line| line.contains("H2.lamp on"))
+        .unwrap();
+    // TON with P = 3 and the input from tick 2: the output is effective
+    // from tick 5 (SIMULATION.md, timer table), and the changeover moves
+    // with it.
+    assert!(trace[switched].starts_with("t=5 "), "{trace:?}");
+    assert!(
+        trace.contains(&"t=5 load H1.lamp off".to_owned()),
+        "{trace:?}"
+    );
+    let lit = sim.snapshot().unwrap().energized_devices;
+    assert!(lit.contains(&h2) && !lit.contains(&h1));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 

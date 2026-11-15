@@ -6,7 +6,7 @@
 //! Whole-document rules are checked once per transaction.
 
 use circuit_model::{
-    Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ParamValue, QuarterTurn,
+    Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue, QuarterTurn,
     ReferenceDesignator, Schematic, Subject, SupplyId, SupplyProfile, SymbolId, SymbolInstance,
     Wire, WireId,
 };
@@ -42,6 +42,13 @@ pub enum Edit {
         key: String,
         /// The new value, or `None` to fall back to the model default.
         value: Option<ParamValue>,
+    },
+    /// Change the model reference of a device.
+    SetModel {
+        /// The device.
+        device: DeviceId,
+        /// The new model reference.
+        model: ModelRef,
     },
     /// Add a symbol instance of an existing device.
     InsertSymbol(SymbolInstance),
@@ -172,6 +179,14 @@ impl Edit {
                     device,
                     key,
                     value: previous,
+                })
+            }
+            Self::SetModel { device, model } => {
+                let found = sorted::find_mut(&mut doc.devices, &device, |d| d.id)
+                    .ok_or_else(|| missing(Subject::Device(device)))?;
+                Ok(Self::SetModel {
+                    device,
+                    model: std::mem::replace(&mut found.model, model),
                 })
             }
             Self::InsertSymbol(symbol) => {
