@@ -484,8 +484,10 @@ impl Session {
             sim.reset_fault();
         }
         self.collect_events();
-        if let Some(snapshot) = &mut self.snapshot {
-            snapshot.faulted = false;
+        // The latch is read from the simulator, so the snapshot says
+        // `faulted = false` while it still lists the faults of the solved tick.
+        if let Some(sim) = &self.simulator {
+            self.snapshot = sim.snapshot();
         }
         self.message = None;
     }
