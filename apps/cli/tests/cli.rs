@@ -357,3 +357,90 @@ fn examples_and_fixtures_contain_no_carriage_return() {
 
     assert_eq!(offenders, Vec::<PathBuf>::new());
 }
+
+#[test]
+fn export_writes_the_same_svg_as_the_committed_drawing() {
+    let directory = scratch("export-svg");
+    let output = directory.join("star-delta.svg");
+    let output_text = output.to_str().expect("UTF-8 path");
+
+    let run = opencircuit(&[
+        "export",
+        "examples/star-delta/star-delta.ocircuit",
+        "--output",
+        output_text,
+    ]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert_eq!(
+        fs::read_to_string(&output).expect("written"),
+        fs::read_to_string(root().join("examples/star-delta/star-delta.svg")).expect("golden")
+    );
+}
+
+#[test]
+fn export_is_deterministic_in_the_live_theme() {
+    let directory = scratch("export-live");
+    let mut texts = Vec::new();
+    for name in ["first.svg", "second.svg"] {
+        let output = directory.join(name);
+        let run = opencircuit(&[
+            "export",
+            COMMAND,
+            "--output",
+            output.to_str().expect("UTF-8 path"),
+            "--theme",
+            "live",
+        ]);
+        assert_eq!(code(&run), 0, "{}", stderr(&run));
+        texts.push(fs::read(&output).expect("written"));
+    }
+
+    assert_eq!(texts[0], texts[1]);
+}
+
+#[test]
+fn export_draws_a_project_that_does_not_compile() {
+    let directory = scratch("export-broken");
+    let output = directory.join("short.svg");
+
+    let run = opencircuit(&[
+        "export",
+        STATIC_SHORT,
+        "--output",
+        output.to_str().expect("UTF-8 path"),
+    ]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert!(
+        fs::read_to_string(&output)
+            .expect("written")
+            .starts_with("<?xml")
+    );
+}
+
+#[test]
+fn export_of_an_unreadable_project_fails_and_writes_nothing() {
+    let directory = scratch("export-unreadable");
+    let project = directory.join("broken.ocircuit");
+    fs::write(&project, "{ not json").expect("project");
+    let output = directory.join("broken.svg");
+
+    let run = opencircuit(&[
+        "export",
+        project.to_str().expect("UTF-8 path"),
+        "--output",
+        output.to_str().expect("UTF-8 path"),
+    ]);
+
+    assert_eq!(code(&run), 1);
+    assert!(!output.exists());
+}
+
+#[test]
+fn export_with_an_unknown_extension_is_a_usage_error() {
+    let run = opencircuit(&["export", COMMAND, "--output", "drawing.png"]);
+
+    assert_eq!(code(&run), 2);
+    assert!(stderr(&run).contains("`.svg`"));
+}

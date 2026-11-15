@@ -1,4 +1,4 @@
-//! The three commands: `validate`, `simulate` and `test`.
+//! The four commands: `validate`, `simulate`, `test` and `export`.
 
 use std::io::{self, Write};
 use std::path::Path;
@@ -11,7 +11,7 @@ use circuit_sim::{
 };
 use serde::Serialize;
 
-use crate::args::{Command, OutputFormat};
+use crate::args::{Command, ExportFormat, OutputFormat};
 use crate::fsio::{find_scenarios, read_text, write_atomic};
 use crate::scenario::{ActionName, MAX_SCENARIO_BYTES, PolicyName, Scenario};
 use crate::{CliError, EXIT_FAILED, EXIT_OK, Env};
@@ -70,7 +70,45 @@ pub(crate) fn execute(
             }
             test(paths, *update_golden, out)
         }
+        Command::Export {
+            project,
+            output,
+            format,
+            theme,
+        } => export(project, output, *format, *theme, out, err),
     }
+}
+
+/// Draw a project at rest and write it. A project that loads is drawn even
+/// when it does not compile: the drawing is how its errors are found.
+fn export(
+    project: &Path,
+    output: &Path,
+    format: ExportFormat,
+    theme: circuit_export::Theme,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<u8, CliError> {
+    let text = read_text(project, MAX_PROJECT_BYTES)?;
+    let doc = match circuit_project::from_str(&text) {
+        Ok(doc) => doc,
+        Err(error) => {
+            writeln!(err, "error: {}: {error}", project.display())?;
+            return Ok(EXIT_FAILED);
+        }
+    };
+    let scene = circuit_renderer::build_scene(
+        &doc,
+        &ComponentCatalog::builtin(),
+        None,
+        &circuit_renderer::SceneOptions::default(),
+    );
+    let drawing = match format {
+        ExportFormat::Svg => circuit_export::svg(&scene, theme),
+    };
+    write_atomic(output, &drawing)?;
+    writeln!(out, "wrote  {}", output.display())?;
+    Ok(EXIT_OK)
 }
 
 #[derive(Serialize)]

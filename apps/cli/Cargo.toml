@@ -12,8 +12,10 @@ name = "opencircuit"
 path = "src/main.rs"
 
 [dependencies]
+circuit-export = { workspace = true }
 circuit-model = { workspace = true }
 circuit-project = { workspace = true }
+circuit-renderer = { workspace = true }
 circuit-sim = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1360,7 +1360,7 @@ opencircuit simulate <projeto.ocircuit> --scenario <cenario.json>
                      [--tick-us N] [--fault-policy halt|report]
                      [--trace saida.trace] [--snapshot-json saida.json]
 opencircuit test <caminho>... [--update-golden]
-opencircuit export <projeto.ocircuit> --format svg [-o saida.svg]      # M3
+opencircuit export <projeto.ocircuit> --output <saida.svg> [--theme print|live]   # M3; formato pela extensão
 ```
 
 Formato de cenário (referências por designador; a CLI resolve para `DeviceId`):

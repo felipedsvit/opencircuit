@@ -6,7 +6,8 @@
 //!
 //! Exit codes: `0` success; `1` validation failure (an error diagnostic, or
 //! a warning with `--deny-warnings`) or test failure (trace differs from the
-//! golden); `2` usage or I/O error.
+//! golden) or a project that cannot be loaded for `export`; `2` usage or I/O
+//! error.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -49,6 +50,7 @@ usage:
                        [--tick-us N] [--fault-policy halt|report]
                        [--trace <file>] [--snapshot-json <file>]
   opencircuit test <path>... [--update-golden]
+  opencircuit export <project.ocircuit> --output <file.svg> [--theme print|live]
 
 exit codes: 0 success, 1 validation or test failure, 2 usage or I/O error
 ";

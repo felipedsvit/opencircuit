@@ -177,3 +177,13 @@ fn invalid_project_text_shows_an_error_and_opens_nothing() {
     assert!(harness.state().session().is_none());
     assert!(harness.query_by_label_contains("broken.ocircuit").is_some());
 }
+
+#[test]
+fn toolbar_offers_svg_export() {
+    let mut app = DesktopApp::default();
+    app.open_text(COMMAND, "command.ocircuit");
+
+    let harness = harness(app);
+
+    assert!(harness.query_by_label("SVG…").is_some());
+}

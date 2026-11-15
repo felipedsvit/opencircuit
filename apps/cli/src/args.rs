@@ -1,10 +1,11 @@
 //! Command-line parsing.
 //!
-//! Three commands with a handful of options do not justify a parser
+//! Four commands with a handful of options do not justify a parser
 //! dependency. Options may be written `--name value` or `--name=value`.
 
 use std::path::PathBuf;
 
+use circuit_export::Theme;
 use circuit_sim::FaultPolicy;
 
 /// How `validate` prints its findings.
@@ -35,6 +36,18 @@ pub(crate) enum Command {
         paths: Vec<PathBuf>,
         update_golden: bool,
     },
+    Export {
+        project: PathBuf,
+        output: PathBuf,
+        format: ExportFormat,
+        theme: Theme,
+    },
+}
+
+/// The file format of `export`, chosen by the extension of the output.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExportFormat {
+    Svg,
 }
 
 /// Positional arguments and options of one command line.
@@ -183,6 +196,40 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 update_golden: words.flag("--update-golden"),
             })
         }
+        "export" => {
+            let words = Words::split(rest, &["--output", "--theme"], &[])?;
+            let output = words
+                .value("--output")
+                .map(PathBuf::from)
+                .ok_or("`export` needs `--output <file>`")?;
+            let format = match output
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .map(str::to_ascii_lowercase)
+                .as_deref()
+            {
+                Some("svg") => ExportFormat::Svg,
+                _ => {
+                    return Err(format!(
+                        "cannot tell the format of `{}`; the output must end in `.svg`",
+                        output.display()
+                    ));
+                }
+            };
+            let theme = match words.value("--theme") {
+                None | Some("print") => Theme::Print,
+                Some("live") => Theme::Live,
+                Some(other) => {
+                    return Err(format!("unknown theme `{other}`; use `print` or `live`"));
+                }
+            };
+            Ok(Command::Export {
+                project: words.single_positional("project file")?,
+                output,
+                format,
+                theme,
+            })
+        }
         other => Err(format!("unknown command `{other}`")),
     }
 }
@@ -314,6 +361,46 @@ mod tests {
             &["test", "--update-golden"],
         ] {
             assert!(parse_words(words).is_err(), "{words:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn export_reads_the_format_from_the_extension_and_defaults_to_print() {
+        assert_eq!(
+            parse_words(&["export", "a.ocircuit", "--output", "out/a.SVG"]),
+            Ok(Command::Export {
+                project: PathBuf::from("a.ocircuit"),
+                output: PathBuf::from("out/a.SVG"),
+                format: ExportFormat::Svg,
+                theme: Theme::Print,
+            })
+        );
+        assert!(matches!(
+            parse_words(&["export", "a.ocircuit", "--output=a.svg", "--theme", "live"]),
+            Ok(Command::Export {
+                theme: Theme::Live,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn export_refuses_an_unknown_format_or_theme_or_a_missing_output() {
+        for words in [
+            &["export", "a.ocircuit", "--output", "a.png"][..],
+            &["export", "a.ocircuit", "--output", "a"],
+            &[
+                "export",
+                "a.ocircuit",
+                "--output",
+                "a.svg",
+                "--theme",
+                "dark",
+            ],
+            &["export", "a.ocircuit"],
+            &["export", "--output", "a.svg"],
+        ] {
+            assert!(parse_words(words).is_err(), "{words:?}");
         }
     }
 }
