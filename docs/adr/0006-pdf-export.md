@@ -1,6 +1,7 @@
 # ADR-0006: PDF export with `pdf-writer`
 
-Status: Accepted (2026-11-15). Spec reference: `docs/spec02.md` §18.1, §24
+Status: Accepted (2026-11-15). The text part (Courier, non-ASCII as `?`) is
+amended by [ADR-0012](0012-pdf-font.md). Spec reference: `docs/spec02.md` §18.1, §24
 item 7, §20 (M3).
 
 ## Context
