@@ -411,7 +411,7 @@ pub struct Device {
     pub params: BTreeMap<String, ParamValue>,   // validados pelo catálogo
 }
 
-pub enum ParamValue { Bool(bool), Int(i64), Enum(String), Text(String) }   // sem ponto flutuante
+pub enum ParamValue { Bool(bool), Int(i64), Text(String) }   // sem ponto flutuante; uma escolha de lista é um Text validado por ParamType::Enum
 
 /// Propriedade do modelo no catálogo (não persistida no documento).
 pub enum DeviceClass {
