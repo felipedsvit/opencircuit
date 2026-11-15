@@ -291,7 +291,7 @@ runtime    → bitset, compiled, fingerprint, logic, solve, trace
 Mecanismos de verificação:
 
 - `cargo run -p xtask -- check-architecture`: usa `cargo metadata --locked` para checar as regras 1, 2, 3 e 5 (grafo de dependências resolvido, inclusive transitivas, contra allowlists que falham fechadas: um pacote ou módulo sem regra é violação) e examina os `use crate::…` de cada módulo de `circuit-sim` para a regra 6. A análise de módulos é textual (não resolve macros nem re-exports com glob); `pub(crate)` e revisão cobrem o resto.
-- `clippy.toml` em cada crate do núcleo, com `disallowed-types` (`std::time::Instant`, `std::time::SystemTime`, `std::collections::HashMap`) e `disallowed-methods` para I/O. O uso interno e ordenado de `HashMap` exige `#[allow]` com comentário (regra 4 e determinismo de saída).
+- `clippy.toml` em cada crate do núcleo, com `disallowed-types` (`std::time::Instant`, `std::time::SystemTime`, `HashMap`, `HashSet`, `std::fs::File`, `std::net::TcpStream`, `std::net::UdpSocket`). O uso interno e ordenado de `HashMap` exige `#[allow]` com comentário (regra 4 e determinismo de saída). Não há `disallowed-methods`: o acesso a `std::env`, `std::fs`, `std::net`, `std::process` e `std::thread` no núcleo é recusado pela análise textual do `check-architecture` (`FORBIDDEN_CORE_APIS`).
 - `cargo-deny` complementa com políticas de fontes, advisories e licenças; não substitui a validação das camadas internas.
 
 ### 5.5 Política de forks e dependências
@@ -1458,7 +1458,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 cargo deny check
-cargo xtask check-architecture
+cargo run --locked -p xtask -- check-architecture
 cargo check --locked --target wasm32-unknown-unknown \
       -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer \
       -p circuit-commands -p circuit-editor -p circuit-export -p circuit-io
