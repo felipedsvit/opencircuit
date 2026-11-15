@@ -146,8 +146,8 @@ fn press_all(circuit: &CompiledCircuit) -> Vec<InputAction> {
 pub(crate) fn run() -> Result<String, Vec<String>> {
     let catalog = ComponentCatalog::builtin();
     let mut table = String::from(
-        "| devices | compile | scene, at rest | scene, running | new + step_n(1000) | snapshot | symbol_at | move edit | SVG | PDF |\n\
-         | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+        "| devices | compile | scene, at rest | scene, running | new + step_n(1000) | snapshot | symbol_at | move edit | save | SVG | PDF |\n\
+         | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
     );
     for size in SIZES {
         let doc = ladder(size.div_ceil(DEVICES_PER_RUNG))
@@ -196,13 +196,14 @@ pub(crate) fn run() -> Result<String, Vec<String>> {
             ops::move_by(&doc, &catalog, &selection, GridPoint::new(1, 0))
                 .and_then(|tx| tx.apply_to(&doc))
         });
+        let save = time(|| circuit_project::to_string(&doc));
         let scene = build_scene(&doc, &catalog, None, &options);
         let svg = time(|| circuit_export::svg(&scene, circuit_export::Theme::Print));
         let pdf = time(|| circuit_export::pdf(&scene, circuit_export::Theme::Print));
 
         let _ = writeln!(
             table,
-            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
             doc.devices.len(),
             micros(compile_time),
             micros(rest),
@@ -211,6 +212,7 @@ pub(crate) fn run() -> Result<String, Vec<String>> {
             micros(snapshotting),
             micros(hit),
             micros(edit),
+            micros(save),
             micros(svg),
             micros(pdf),
         );
