@@ -19,9 +19,13 @@ controls. M3 is implemented: changeover contacts, full interlocking, the
 six-terminal motor with star/delta starting, separate supply sections, and
 SVG and PDF export. M4 is implemented: extension libraries, a Modbus TCP
 server for testing PLC programs and HMIs, the control transformer and more
-components, and a browser build of the application. How to extend
-OpenCircuit, and the safety limits of each interface, are in
-[`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
+components, and a browser build of the application. M5 is implemented: a
+more precise editor (snapping, a visible grid, keys, copy and paste, aligning),
+terminal numbers, drawing sheets with a frame, zones and a title block, PDF
+with one page per sheet, cross-references between coils and contacts, and
+`opencircuit new` and `opencircuit edit` to make and change a project from a
+script. How to extend OpenCircuit, and the safety limits of each interface,
+are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
 
