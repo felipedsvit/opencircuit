@@ -69,26 +69,31 @@ diagnostics and verify that the renderer does not depend on `circuit-sim`.
 **Exit criterion:** draw, save, reopen and simulate a direct-online starter,
 with undo/redo and no partially applied invalid operation.
 
-## M3 — Advanced circuits and export (next)
+## M3 — Advanced circuits and export (done)
 
-- Changeover contacts and full interlocking.
-- Six-terminal motor and windings.
-- Star-delta starting without star/triangle overlap.
-- Multiple galvanically separate supply sections.
-- SVG export from the neutral scene.
-- PDF decision after a spike.
-- Benchmarks for larger documents.
+- [x] Changeover contacts and full interlocking (combined pushbuttons and
+  mechanical interlocks).
+- [x] Six-terminal motor and windings.
+- [x] Star-delta starting without star/triangle overlap.
+- [x] Multiple galvanically separate supply sections.
+- [x] SVG export from the neutral scene.
+- [x] PDF decision after a spike: `pdf-writer`, implemented (ADR-0006).
+- [x] Benchmarks for larger documents.
 
 **Exit criterion:** star-delta is validated with an adequate winding model and
 no improper contactor overlap; SVG is deterministic; PDF is either chosen with a
 recorded rationale or explicitly deferred.
 
-## M4 — Ecosystem
+The decisions of M3 are in ADR-0005 (semantics) and ADR-0006 (PDF). The
+control transformer, which would feed one section from another, is deferred
+to M4.
+
+## M4 — Ecosystem (next)
 
 - WASM application.
 - Plugins.
 - Modbus TCP, OPC UA and MQTT evaluation.
-- More components and examples.
+- More components and examples, including the control transformer.
 - Third-party catalog and symbol library.
 - Extension and community documentation.
 
