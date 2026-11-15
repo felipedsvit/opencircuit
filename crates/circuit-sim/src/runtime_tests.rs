@@ -366,6 +366,55 @@ fn reset_fault_clears_the_latch_and_a_persisting_cause_latches_again() {
 }
 
 #[test]
+fn snapshot_faulted_is_the_latch_now_and_faults_belong_to_the_solved_tick() {
+    let mut sim = default_sim(&reversing_circuit());
+    run(&mut sim, 20, SIMULTANEOUS_START);
+    let latched = sim.snapshot().unwrap();
+    assert!(latched.faulted);
+    assert_eq!(latched.faults.len(), 1);
+
+    // Clearing the latch does not rewrite the tick that was solved.
+    sim.reset_fault();
+    let cleared = sim.snapshot().unwrap();
+    assert!(!cleared.faulted);
+    assert!(!sim.is_faulted());
+    assert_eq!(cleared.tick, latched.tick);
+    assert_eq!(cleared.faults, latched.faults);
+
+    // The next solved tick replaces the faults. The contactors drop in it, so
+    // it is clean, and the cause latches again one tick later.
+    sim.step(&[]).unwrap();
+    let clean = sim.snapshot().unwrap();
+    assert_eq!(clean.tick, latched.tick + 1);
+    assert!(!clean.faulted);
+    assert!(clean.faults.is_empty());
+
+    sim.step(&[]).unwrap();
+    let relatched = sim.snapshot().unwrap();
+    assert_eq!(relatched.tick, latched.tick + 2);
+    assert!(relatched.faulted);
+    assert_eq!(relatched.faults.len(), 1);
+}
+
+#[test]
+fn snapshot_reports_faults_without_the_latch_under_the_report_policy() {
+    let mut sim = report_sim(&reversing_circuit());
+    run(&mut sim, 6, SIMULTANEOUS_START);
+
+    let faulty: Vec<_> = (0..4)
+        .filter_map(|_| {
+            sim.step(&[]).unwrap();
+            sim.snapshot()
+        })
+        .filter(|snapshot| !snapshot.faults.is_empty())
+        .collect();
+
+    assert!(!faulty.is_empty());
+    assert!(faulty.iter().all(|snapshot| !snapshot.faulted));
+    assert!(!sim.is_faulted());
+}
+
+#[test]
 fn report_policy_keeps_running_and_the_reverser_oscillates_every_two_ticks() {
     let mut sim = report_sim(&reversing_circuit());
 
