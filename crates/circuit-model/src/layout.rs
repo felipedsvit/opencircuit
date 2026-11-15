@@ -140,16 +140,103 @@ impl<'a> LayoutIndex<'a> {
     }
 }
 
+/// Which way the single bend of an orthogonal route turns.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Bend {
+    /// Leave the start vertically, as wires run in a ladder diagram.
+    #[default]
+    VerticalFirst,
+    /// Leave the start horizontally.
+    HorizontalFirst,
+}
+
+impl Bend {
+    /// The other way.
+    #[must_use]
+    pub const fn flipped(self) -> Self {
+        match self {
+            Self::VerticalFirst => Self::HorizontalFirst,
+            Self::HorizontalFirst => Self::VerticalFirst,
+        }
+    }
+}
+
 /// Waypoints of an orthogonal path from `from` to `to`: none when the two
 /// points share a row or a column, otherwise one bend that leaves `from`
 /// vertically, as wires run in a ladder diagram. Deterministic.
 #[must_use]
 pub fn orthogonal_route(from: GridPoint, to: GridPoint) -> Vec<GridPoint> {
+    orthogonal_route_bent(from, to, Bend::VerticalFirst)
+}
+
+/// [`orthogonal_route`] with the bend turning the given way.
+#[must_use]
+pub fn orthogonal_route_bent(from: GridPoint, to: GridPoint, bend: Bend) -> Vec<GridPoint> {
     if from.x == to.x || from.y == to.y {
         Vec::new()
     } else {
-        vec![GridPoint::new(from.x, to.y)]
+        match bend {
+            Bend::VerticalFirst => vec![GridPoint::new(from.x, to.y)],
+            Bend::HorizontalFirst => vec![GridPoint::new(to.x, from.y)],
+        }
     }
+}
+
+/// The waypoints of an orthogonal wire after its ends moved from `old` to
+/// `new` (first end, last end), keeping the bends the user drew.
+///
+/// For each end that moved, the waypoint next to it slides along the segment
+/// that joined them: a vertical first segment moves the waypoint
+/// horizontally, so that the segment stays vertical and the next one keeps
+/// its row. A waypoint that lands on the point before it is dropped.
+/// Returns `None` when the wire has no waypoint, when the old path was not
+/// orthogonal, or when the result would not be orthogonal; the caller then
+/// routes the wire again.
+#[must_use]
+pub fn stretch_route(
+    route: &[GridPoint],
+    old: (GridPoint, GridPoint),
+    new: (GridPoint, GridPoint),
+) -> Option<Vec<GridPoint>> {
+    if route.is_empty() {
+        return None;
+    }
+    let old_path: Vec<GridPoint> = std::iter::once(old.0)
+        .chain(route.iter().copied())
+        .chain(std::iter::once(old.1))
+        .collect();
+    if !is_orthogonal(&old_path) {
+        return None;
+    }
+    let mut points = route.to_vec();
+    let slide = |end_old: GridPoint, end_new: GridPoint, next: &mut GridPoint| {
+        if end_old.x == next.x && end_old.y != next.y {
+            next.x = end_new.x;
+        } else if end_old.y == next.y && end_old.x != next.x {
+            next.y = end_new.y;
+        }
+    };
+    if old.0 != new.0 {
+        if let Some(first) = points.first_mut() {
+            slide(old.0, new.0, first);
+        }
+    }
+    if old.1 != new.1 {
+        if let Some(last) = points.last_mut() {
+            slide(old.1, new.1, last);
+        }
+    }
+    let mut path = vec![new.0];
+    for point in points.into_iter().chain(std::iter::once(new.1)) {
+        if path.last() != Some(&point) {
+            path.push(point);
+        }
+    }
+    if path.len() < 2 || !is_orthogonal(&path) {
+        return None;
+    }
+    let inner = path.len().saturating_sub(2);
+    Some(path.into_iter().skip(1).take(inner).collect())
 }
 
 /// Whether `p` lies on the segment from `a` to `b`, ends included. Exact on
@@ -366,6 +453,75 @@ mod tests {
     #[test]
     fn diagonal_segment_is_not_orthogonal() {
         assert!(!is_orthogonal(&[point(0, 0), point(0, 5), point(3, 6)]));
+    }
+
+    #[test]
+    fn the_bend_turns_the_way_asked() {
+        let (from, to) = (point(0, 0), point(4, 6));
+        assert_eq!(
+            orthogonal_route_bent(from, to, Bend::VerticalFirst),
+            [point(0, 6)]
+        );
+        assert_eq!(
+            orthogonal_route_bent(from, to, Bend::HorizontalFirst),
+            [point(4, 0)]
+        );
+        assert_eq!(orthogonal_route(from, to), [point(0, 6)]);
+        assert_eq!(Bend::default().flipped(), Bend::HorizontalFirst);
+    }
+
+    #[test]
+    fn stretching_keeps_the_bends_and_slides_the_one_next_to_the_moved_end() {
+        // (0,0) down to (0,5), across to (8,5), down to (8,10).
+        let route = [point(0, 5), point(8, 5)];
+        let old = (point(0, 0), point(8, 10));
+
+        // The first end moves right by 2: its vertical segment follows.
+        assert_eq!(
+            stretch_route(&route, old, (point(2, 0), point(8, 10))),
+            Some(vec![point(2, 5), point(8, 5)])
+        );
+        // The last end moves down by 3: nothing to slide, the run gets longer.
+        assert_eq!(
+            stretch_route(&route, old, (point(0, 0), point(8, 13))),
+            Some(vec![point(0, 5), point(8, 5)])
+        );
+        // Both ends moved, differently.
+        assert_eq!(
+            stretch_route(&route, old, (point(-1, 0), point(9, 10))),
+            Some(vec![point(-1, 5), point(9, 5)])
+        );
+    }
+
+    #[test]
+    fn stretching_drops_a_bend_that_collapses_and_gives_up_on_bad_input() {
+        let route = [point(0, 5), point(8, 5)];
+        let old = (point(0, 0), point(8, 10));
+
+        // The last end moves up onto the horizontal run: its bend vanishes.
+        assert_eq!(
+            stretch_route(&route, old, (point(0, 0), point(8, 5))),
+            Some(vec![point(0, 5)])
+        );
+        assert_eq!(stretch_route(&[], old, old), None);
+        // A diagonal old path is not stretched.
+        assert_eq!(
+            stretch_route(
+                &[point(3, 3)],
+                (point(0, 0), point(8, 10)),
+                (point(1, 0), point(8, 10))
+            ),
+            None
+        );
+        // The two ends meeting is a self-loop, not a route.
+        assert_eq!(
+            stretch_route(
+                &[point(0, 5)],
+                (point(0, 0), point(4, 5)),
+                (point(0, 5), point(0, 5))
+            ),
+            None
+        );
     }
 
     #[test]

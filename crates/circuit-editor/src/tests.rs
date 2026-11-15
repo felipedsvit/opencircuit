@@ -710,6 +710,31 @@ fn duplicate_copies_the_wired_selection_in_one_undoable_step() {
 }
 
 #[test]
+fn flip_bend_turns_the_next_bends_of_the_wire_tool_the_other_way() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.place("pushbutton_no", "contact", point(6, 8));
+    bench.editor.set_tool(Tool::Wire);
+
+    bench.key(Key::FlipBend);
+    assert_eq!(bench.editor.bend(), circuit_model::Bend::HorizontalFirst);
+    bench.click(point(0, 2));
+    let guide = {
+        bench
+            .editor
+            .pointer_move(&bench.doc, &bench.catalog, point(6, 6));
+        bench.editor.preview(&bench.doc, &bench.catalog).guide
+    };
+    assert_eq!(guide, [point(0, 2), point(6, 2), point(6, 6)]);
+    bench.click(point(6, 6));
+
+    assert_eq!(bench.doc.wires.len(), 1);
+    assert_eq!(bench.doc.wires[0].route, [point(6, 2)]);
+    bench.key(Key::FlipBend);
+    assert_eq!(bench.editor.bend(), circuit_model::Bend::VerticalFirst);
+}
+
+#[test]
 fn rotate_key_turns_the_selected_symbols() {
     let mut bench = Bench::new();
     let contact = bench.place("pushbutton_no", "contact", point(0, 0));

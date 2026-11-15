@@ -174,6 +174,28 @@ fn ctrl_d_duplicates_and_ctrl_c_ctrl_v_paste_the_selection() {
 }
 
 #[test]
+fn space_makes_the_next_bend_leave_horizontally() {
+    let mut harness = edit_mode(&project(|b| {
+        let first = b.device("S1", "pushbutton_no", &[]).unwrap();
+        b.symbol(first, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+        let second = b.device("S2", "pushbutton_no", &[]).unwrap();
+        b.symbol(second, "contact", None, GridPoint::new(6, 8))
+            .unwrap();
+    }));
+
+    click_label(&mut harness, "Wire");
+    harness.key_press(egui::Key::Space);
+    harness.run();
+    click_grid(&mut harness, 0, 2);
+    click_grid(&mut harness, 6, 6);
+
+    let doc = document(&harness);
+    assert_eq!(doc.wires.len(), 1);
+    assert_eq!(doc.wires[0].route, [GridPoint::new(6, 2)]);
+}
+
+#[test]
 fn w_chooses_the_wire_tool_and_zoom_keys_change_the_scale() {
     let mut harness = edit_mode(&project(|b| {
         let first = b.device("S1", "pushbutton_no", &[]).unwrap();

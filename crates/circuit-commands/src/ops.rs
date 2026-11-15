@@ -14,6 +14,7 @@ use circuit_model::{
     IdAllocator, Junction, JunctionId, LayoutIndex, ModelRef, Operator, ParamType, ParamValue,
     PhaseSequence, QuarterTurn, ReferenceDesignator, Schematic, Subject, SupplyId, SupplyKind,
     SupplyProfile, SymbolId, SymbolInstance, SymbolKey, Wire, WireId, orthogonal_route, segment_at,
+    stretch_route,
 };
 
 use crate::edit::Edit;
@@ -591,8 +592,10 @@ pub(crate) fn movable(
 }
 
 /// New routes for the wires whose ends were moved: shifted by `shift` when
-/// both ends moved together, routed again when only one did or when there
-/// is no shift (a rotation). `moved` is the document after the move.
+/// both ends moved together; otherwise (one end moved, or a rotation) the
+/// bends next to the moved ends slide with them ([`stretch_route`]), and a
+/// wire that cannot keep its bends that way is routed again. `moved` is the
+/// document after the move.
 fn reroute(
     before: &Schematic,
     moved: &Schematic,
@@ -602,6 +605,7 @@ fn reroute(
     shift: Option<GridPoint>,
 ) -> Result<Vec<Edit>, CommandError> {
     let layout = LayoutIndex::new(moved, catalog);
+    let old_layout = LayoutIndex::new(before, catalog);
     let mut edits = Vec::new();
     for wire in &before.wires {
         let from = touches(&wire.from, symbols, junctions);
@@ -621,7 +625,19 @@ fn reroute(
                 let (Some(start), Some(end)) = ends else {
                     continue;
                 };
-                orthogonal_route(start, end)
+                // Keep the bends the user drew when the moved end can slide
+                // its neighbour; route again only when it cannot.
+                let old = (
+                    old_layout.endpoint_position(&wire.from),
+                    old_layout.endpoint_position(&wire.to),
+                );
+                match old {
+                    (Some(old_start), Some(old_end)) => {
+                        stretch_route(&wire.route, (old_start, old_end), (start, end))
+                            .unwrap_or_else(|| orthogonal_route(start, end))
+                    }
+                    _ => orthogonal_route(start, end),
+                }
             }
         };
         if route != wire.route {
@@ -636,7 +652,7 @@ fn reroute(
 
 /// Move the symbols and junctions of a selection by `delta` grid units.
 /// Wires between two moved elements keep their shape; a wire with one end
-/// moved is routed again.
+/// moved keeps its bends where it can and is routed again otherwise.
 ///
 /// # Errors
 ///

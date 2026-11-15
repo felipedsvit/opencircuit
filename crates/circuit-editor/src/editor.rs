@@ -11,8 +11,8 @@ use std::collections::BTreeSet;
 use circuit_commands::copy::{self, Fragment};
 use circuit_commands::{Anchor, CommandError, Transaction, ops};
 use circuit_model::{
-    ComponentCatalog, GridPoint, GridRect, LayoutIndex, ModelRef, QuarterTurn, Schematic, Subject,
-    SymbolId, SymbolKey, orthogonal_route,
+    Bend, ComponentCatalog, GridPoint, GridRect, LayoutIndex, ModelRef, QuarterTurn, Schematic,
+    Subject, SymbolId, SymbolKey, orthogonal_route_bent,
 };
 
 use crate::hit::{Hit, hit_test};
@@ -73,6 +73,9 @@ pub enum Key {
     Paste,
     /// Copy the selection and insert it one step away, in one transaction.
     Duplicate,
+    /// Turn the next bends of the wire tool the other way: vertical first or
+    /// horizontal first.
+    FlipBend,
 }
 
 /// The result of an event.
@@ -148,6 +151,8 @@ pub struct Editor {
     hover: Option<Hit>,
     /// The last copy, and how many times it was pasted.
     clipboard: Option<(Fragment, i32)>,
+    /// Which way the wire tool turns a bend.
+    bend: Bend,
 }
 
 impl Default for Editor {
@@ -159,6 +164,7 @@ impl Default for Editor {
             cursor: None,
             hover: None,
             clipboard: None,
+            bend: Bend::VerticalFirst,
         }
     }
 }
@@ -189,6 +195,12 @@ impl Editor {
     pub fn set_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.gesture = Gesture::Idle;
+    }
+
+    /// Which way the wire tool turns its next bends.
+    #[must_use]
+    pub const fn bend(&self) -> Bend {
+        self.bend
     }
 
     /// The selected elements.
@@ -349,13 +361,17 @@ impl Editor {
             } => match anchor {
                 Some(end) => {
                     let mut via = waypoints;
-                    via.extend(orthogonal_route(last_point(start_at, &via), at));
+                    via.extend(orthogonal_route_bent(
+                        last_point(start_at, &via),
+                        at,
+                        self.bend,
+                    ));
                     Outcome::from_result(ops::connect(doc, catalog, &start, &end, &via))
                 }
                 None => {
                     let last = last_point(start_at, &waypoints);
                     if last != at {
-                        waypoints.extend(orthogonal_route(last, at));
+                        waypoints.extend(orthogonal_route_bent(last, at, self.bend));
                         waypoints.push(at);
                     }
                     self.gesture = Gesture::Wiring {
@@ -534,6 +550,10 @@ impl Editor {
                 self.select_inserted(&outcome);
                 outcome
             }
+            Key::FlipBend => {
+                self.bend = self.bend.flipped();
+                Outcome::default()
+            }
             Key::SelectAll => {
                 if !self.is_busy() {
                     self.selection = doc
@@ -588,7 +608,11 @@ impl Editor {
             ) => {
                 let mut guide = vec![*start_at];
                 guide.extend(waypoints.iter().copied());
-                guide.extend(orthogonal_route(last_point(*start_at, waypoints), *cursor));
+                guide.extend(orthogonal_route_bent(
+                    last_point(*start_at, waypoints),
+                    *cursor,
+                    self.bend,
+                ));
                 guide.push(*cursor);
                 Preview {
                     guide,

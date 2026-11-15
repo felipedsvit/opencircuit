@@ -50,7 +50,10 @@ pub use ids::{
     DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SupplyId, SymbolId, WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
-pub use layout::{LayoutIndex, is_orthogonal, orthogonal_route, segment_at, segment_contains};
+pub use layout::{
+    Bend, LayoutIndex, is_orthogonal, orthogonal_route, orthogonal_route_bent, segment_at,
+    segment_contains, stretch_route,
+};
 pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,

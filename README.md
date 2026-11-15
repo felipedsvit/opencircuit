@@ -130,7 +130,10 @@ back, starting at tick 0 on the edited circuit).
   pin, junction or wire to finish. Ending on a wire adds a junction. Wires
   are always horizontal and vertical. The pointer snaps to the nearest pin,
   then junction, then wire within about 12 screen points, at any zoom; a
-  ring, a square or a cross marks what it will connect to.
+  ring, a square or a cross marks what it will connect to. A bend leaves
+  vertically; Space makes the next ones leave horizontally, and back.
+  Moving one end of a wire keeps the bends you drew when the bend next to
+  that end can follow it.
 - The inspector on the right edits the designator and the parameters of the
   selected device, adds symbols to it (an auxiliary contact, for example),
   and holds the supply profiles.
