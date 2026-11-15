@@ -46,12 +46,17 @@ OpenCircuit headless tool
 
 usage:
   opencircuit validate <project.ocircuit> [--format text|json] [--deny-warnings]
+                       [--library <file.oclib|dir>]
   opencircuit simulate <project.ocircuit> --scenario <scenario.json>
                        [--tick-us N] [--fault-policy halt|report]
                        [--trace <file>] [--snapshot-json <file>]
+                       [--library <file.oclib|dir>]
   opencircuit test <path>... [--update-golden]
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
-                     [--theme print|live]
+                     [--theme print|live] [--library <file.oclib|dir>]
+
+A directory given to --library stands for its *.oclib files. Scenarios name
+their libraries in `libraries` (scenario schema version 2).
 
 exit codes: 0 success, 1 validation or test failure, 2 usage or I/O error
 ";

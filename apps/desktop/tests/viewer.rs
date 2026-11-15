@@ -190,3 +190,34 @@ fn export_menu_offers_svg_and_pdf() {
     assert!(harness.query_by_label("SVG…").is_some());
     assert!(harness.query_by_label("PDF…").is_some());
 }
+
+const ACME_LAMP: &str = include_str!("../../../examples/library/acme-lamp.ocircuit");
+const ACME_LIBRARY: &str = include_str!("../../../examples/library/acme.oclib");
+
+#[test]
+fn a_library_loaded_in_the_window_lets_its_project_compile() {
+    let mut app = DesktopApp::default();
+    app.open_text(ACME_LAMP, "acme-lamp.ocircuit");
+    let before: Vec<&str> = app
+        .session()
+        .unwrap()
+        .diagnostics()
+        .iter()
+        .map(|d| d.code().as_str())
+        .collect();
+    assert_eq!(before, ["OC-STR-003"]);
+
+    app.add_library_text(ACME_LIBRARY, "acme.oclib").unwrap();
+
+    assert!(app.session().unwrap().diagnostics().is_empty());
+    assert!(app.session().unwrap().can_simulate());
+    assert_eq!(app.libraries().len(), 1);
+    assert!(app.add_library_text(ACME_LIBRARY, "again.oclib").is_err());
+    assert_eq!(app.libraries().len(), 1);
+
+    // A project opened later uses the library too, and the toolbar offers it.
+    app.open_text(ACME_LAMP, "acme-lamp.ocircuit");
+    assert!(app.session().unwrap().can_simulate());
+    let harness = harness(app);
+    assert!(harness.query_by_label("Library…").is_some());
+}

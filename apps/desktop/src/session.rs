@@ -162,6 +162,13 @@ impl Session {
         session
     }
 
+    /// Use another catalog, such as the built-in one with extension
+    /// libraries, and compile the document again with it.
+    pub fn set_catalog(&mut self, catalog: ComponentCatalog) {
+        self.catalog = catalog;
+        self.recompile();
+    }
+
     /// Compile the document again and start a new simulator at tick 0. The
     /// state of the previous simulation is dropped: it belongs to a circuit
     /// that no longer exists.

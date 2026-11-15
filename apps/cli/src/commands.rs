@@ -12,7 +12,7 @@ use circuit_sim::{
 use serde::Serialize;
 
 use crate::args::{Command, ExportFormat, OutputFormat};
-use crate::fsio::{find_scenarios, read_text, write_atomic};
+use crate::fsio::{find_scenarios, load_catalog, read_text, write_atomic};
 use crate::scenario::{ActionName, MAX_SCENARIO_BYTES, PolicyName, Scenario};
 use crate::{CliError, EXIT_FAILED, EXIT_OK, Env};
 
@@ -35,10 +35,15 @@ pub(crate) fn execute(
             project,
             format,
             deny_warnings,
-        } => validate(project, *format, *deny_warnings, out),
+            library,
+        } => {
+            let catalog = load_catalog(library.as_slice())?;
+            validate(project, *format, *deny_warnings, &catalog, out)
+        }
         Command::Simulate {
             project,
             scenario,
+            library,
             tick_us,
             fault_policy,
             trace,
@@ -49,11 +54,14 @@ pub(crate) fn execute(
                 fault_policy: *fault_policy,
             };
             simulate(
-                project,
-                scenario,
-                overrides,
-                trace.as_deref(),
-                snapshot_json.as_deref(),
+                &SimulateRequest {
+                    project,
+                    scenario_path: scenario,
+                    overrides,
+                    library: library.as_deref(),
+                    trace: trace.as_deref(),
+                    snapshot_json: snapshot_json.as_deref(),
+                },
                 out,
                 err,
             )
@@ -75,7 +83,11 @@ pub(crate) fn execute(
             output,
             format,
             theme,
-        } => export(project, output, *format, *theme, out, err),
+            library,
+        } => {
+            let catalog = load_catalog(library.as_slice())?;
+            export(project, output, *format, *theme, &catalog, out, err)
+        }
     }
 }
 
@@ -86,6 +98,7 @@ fn export(
     output: &Path,
     format: ExportFormat,
     theme: circuit_export::Theme,
+    catalog: &ComponentCatalog,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<u8, CliError> {
@@ -99,7 +112,7 @@ fn export(
     };
     let scene = circuit_renderer::build_scene(
         &doc,
-        &ComponentCatalog::builtin(),
+        catalog,
         None,
         &circuit_renderer::SceneOptions::default(),
     );
@@ -133,14 +146,12 @@ fn validate(
     project: &Path,
     format: OutputFormat,
     deny_warnings: bool,
+    catalog: &ComponentCatalog,
     out: &mut dyn Write,
 ) -> Result<u8, CliError> {
     let text = read_text(project, MAX_PROJECT_BYTES)?;
     let (diagnostics, load_error) = match circuit_project::from_str(&text) {
-        Ok(doc) => (
-            compile(&doc, &ComponentCatalog::builtin()).diagnostics,
-            None,
-        ),
+        Ok(doc) => (compile(&doc, catalog).diagnostics, None),
         Err(error) => (Vec::new(), Some(error.to_string())),
     };
     let errors = count(&diagnostics, Severity::Error);
@@ -215,8 +226,9 @@ pub fn run_scenario(
     doc: &Schematic,
     scenario: &Scenario,
     overrides: Overrides,
+    catalog: &ComponentCatalog,
 ) -> Result<ScenarioRun, ScenarioFailure> {
-    let output = compile(doc, &ComponentCatalog::builtin());
+    let output = compile(doc, catalog);
     let Some(circuit) = output.circuit else {
         return Err(ScenarioFailure::Invalid(output.diagnostics));
     };
@@ -353,17 +365,39 @@ fn read_scenario(path: &Path) -> Result<Scenario, CliError> {
         .map_err(|message| CliError::Usage(format!("{}: {message}", path.display())))
 }
 
-fn simulate(
-    project: &Path,
-    scenario_path: &Path,
+/// What `simulate` was asked to do.
+struct SimulateRequest<'a> {
+    project: &'a Path,
+    scenario_path: &'a Path,
     overrides: Overrides,
-    trace: Option<&Path>,
-    snapshot_json: Option<&Path>,
+    /// `--library`, added before the libraries the scenario declares.
+    library: Option<&'a Path>,
+    trace: Option<&'a Path>,
+    snapshot_json: Option<&'a Path>,
+}
+
+fn simulate(
+    request: &SimulateRequest<'_>,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<u8, CliError> {
+    let SimulateRequest {
+        project,
+        scenario_path,
+        overrides,
+        library,
+        trace,
+        snapshot_json,
+    } = *request;
     let text = read_text(project, MAX_PROJECT_BYTES)?;
     let scenario = read_scenario(scenario_path)?;
+    let directory = scenario_path.parent().unwrap_or_else(|| Path::new("."));
+    let libraries: Vec<std::path::PathBuf> = library
+        .map(Path::to_path_buf)
+        .into_iter()
+        .chain(scenario.libraries.iter().map(|path| directory.join(path)))
+        .collect();
+    let catalog = load_catalog(&libraries)?;
     let doc = match circuit_project::from_str(&text) {
         Ok(doc) => doc,
         Err(error) => {
@@ -372,7 +406,7 @@ fn simulate(
         }
     };
 
-    match run_scenario(&doc, &scenario, overrides) {
+    match run_scenario(&doc, &scenario, overrides, &catalog) {
         Ok(run) => {
             for diagnostic in &run.diagnostics {
                 writeln!(err, "{diagnostic}")?;
@@ -476,7 +510,13 @@ fn check_scenario(path: &Path, update_golden: bool) -> Result<Verdict, CliError>
         })
     };
 
-    let run = match run_scenario(&doc, &scenario, Overrides::default()) {
+    let libraries: Vec<std::path::PathBuf> = scenario
+        .libraries
+        .iter()
+        .map(|library| directory.join(library))
+        .collect();
+    let catalog = load_catalog(&libraries)?;
+    let run = match run_scenario(&doc, &scenario, Overrides::default(), &catalog) {
         Ok(run) => run,
         Err(ScenarioFailure::Invalid(diagnostics)) => {
             let mut reasons: Vec<String> = code_mismatch(&diagnostics).into_iter().collect();
