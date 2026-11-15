@@ -685,7 +685,7 @@ pub fn move_by(
                 .ok_or(CommandError::OutOfRange)?,
         });
     }
-    let (moved, _) = tx.apply_to(doc)?;
+    let (moved, _) = tx.apply_edits(doc)?;
     let routes = reroute(doc, &moved, catalog, &symbols, &junctions, Some(delta))?;
     tx.edits.extend(routes);
     Ok(tx)
@@ -721,7 +721,7 @@ pub fn rotate(
     if tx.is_empty() {
         return Ok(tx);
     }
-    let (turned, _) = tx.apply_to(doc)?;
+    let (turned, _) = tx.apply_edits(doc)?;
     let routes = reroute(doc, &turned, catalog, symbols, &BTreeSet::new(), None)?;
     tx.edits.extend(routes);
     Ok(tx)
