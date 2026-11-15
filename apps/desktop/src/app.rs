@@ -1059,11 +1059,7 @@ impl DesktopApp {
         if let Some(at) = events.pressed.and_then(locate).map(|found| found.point) {
             outcomes.push(self.editor.pointer_down(doc, catalog, at, modifiers));
         }
-        if let Some(at) = events
-            .released_at
-            .and_then(locate)
-            .map(|found| found.point)
-        {
+        if let Some(at) = events.released_at.and_then(locate).map(|found| found.point) {
             // A press and its release in one frame: the release applies to the
             // document as it is after the press.
             let pressed_commit = outcomes.iter().any(|o: &Outcome| o.commit.is_some());
