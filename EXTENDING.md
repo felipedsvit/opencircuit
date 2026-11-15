@@ -10,6 +10,7 @@ the simulator.
 | --- | --- | --- |
 | [Extension libraries](#extension-libraries) | add component models, parameters and symbol artwork | [`LIBRARY.md`](LIBRARY.md), [ADR-0008](docs/adr/0008-extension-libraries.md) |
 | [Scenarios and traces](#scenarios-and-traces) | drive a simulation from a file and compare it with a golden trace | [`SIMULATION.md`](SIMULATION.md) |
+| [Editing from a script](#editing-from-a-script) | create and change a project from another program, with no GUI | this file |
 | [JSON output](#json-output) | read the result of any command from another program | this file |
 | [Project files](#project-files) | generate or transform schematics with another tool | [`FORMAT.md`](FORMAT.md) |
 | [Modbus TCP server](#modbus-tcp-server) | let a PLC program or an HMI under test press buttons and read outputs | [ADR-0009](docs/adr/0009-industrial-io.md) |
@@ -59,9 +60,79 @@ exit codes are `0` success, `1` validation or golden failure, `2` usage or
 I/O error. This is the interface for regression tests of your own circuits
 in continuous integration.
 
+## Editing from a script
+
+`opencircuit new <file>` writes an empty project, and `opencircuit edit
+<project> --apply <edit.json>` changes one. The edit file is **data**: a list
+of operations, applied one after the other through the same operations the
+editor uses, so every rule of the editor holds (a designator is unique, a
+sheet does not overlap another, a wire ends on something that exists, the
+size limits of the format). Nothing in the file is executed, and there is no
+loop or condition: a program that needs them writes the file.
+
+All of it or nothing: the project is replaced (atomically, or `--output
+<other>` is written) only when every operation succeeded; `--dry-run` checks
+and writes nothing. A file that is not an edit file (not JSON, an unknown
+field or operation, a list over its limit, a name that is not valid) is a
+usage error, exit code 2. An operation the project refuses is a failure,
+exit code 1, with its position and the reason: `operation 7 (connect): ...`.
+The compiler is not asked to accept the result: `errors` and `warnings` in
+the output say what it finds, and `validate` is the check to run after.
+
+```json
+{
+  "schema_version": 1,
+  "operations": [
+    { "op": "project", "name": "Pump", "author": "Ana", "revision": "A" },
+    { "op": "add_supply", "preset": "dc_24v", "as": "control" },
+    { "op": "place", "model": "supply.terminal", "symbol": "terminal",
+      "at": [0, 0], "reference": "P24", "as": "p24" },
+    { "op": "set_param", "device": "P24", "key": "supply", "value": { "supply": "control" } },
+    { "op": "place", "model": "contactor.generic", "symbol": "coil",
+      "at": [0, 20], "reference": "K1", "as": "coil" },
+    { "op": "connect", "from": { "symbol": "p24", "terminal": "out" },
+      "to": { "symbol": "coil", "terminal": "a1" } },
+    { "op": "add_sheet", "title": "Control", "origin": [-14, -8] }
+  ]
+}
+```
+
+`examples/edit/starter-sheets.edit.json` builds the two-sheet starter of
+`examples/sheets/` this way; the PDF it gives is byte for byte the committed
+one.
+
+**Names.** An operation that creates an element may give it a name with
+`"as"` (1 to 64 letters, digits, `_`, `-` or `.`; each name once), which the
+operations after it use, since the IDs exist only once it runs. A **device**
+is always named by its reference designator, such as `"K1"`. A **symbol** is a
+name, an ID, or `{ "device": "K1", "symbol": "aux_no", "slot": 1 }` (the slot
+only when the device has several of that symbol). The output lists the named
+elements with their kind and ID.
+
+**Operations.**
+
+| `op` | Fields | Does |
+| --- | --- | --- |
+| `project` | `name`, `author`, `company`, `revision`, `date` | sets what is present; `null` clears an optional field; absent keeps it |
+| `add_supply` | `preset` (`dc_24v`, `single_phase_230v`, `three_phase_400v`), `as` | adds a supply profile |
+| `place` | `model`, `version`, `symbol`, `at`, `rotation`, `reference`, `as` | a new device drawn as one symbol; the newest `version` unless given; `rotation` 0, 90, 180 or 270 |
+| `add_symbol` | `device`, `symbol`, `at`, `rotation`, `as` | another symbol of a device (an auxiliary contact) |
+| `set_param` | `device`, `key`, `value` | a boolean, a whole number, a text, `{ "supply": name or ID }`, `{ "device": designator }`, or `null` to clear |
+| `set_reference` | `device`, `to` | renames a device |
+| `junction` | `at`, `as` | a junction with no wire |
+| `connect` | `from`, `to`, `via`, `as` | a wire; an end is `{ "symbol": ..., "terminal": "a1" }`, `{ "junction": name or ID }` or `{ "wire": name or ID, "at": [x, y] }` (a branch); `via` are waypoints; without them the route has at most one bend |
+| `move` | `elements`, `by` | moves symbols, junctions or `{ "device": "K1" }` by `[dx, dy]`; wires follow |
+| `rotate` | `symbols` | a quarter turn clockwise |
+| `delete` | `elements` | deletes elements and the wires that hang on them |
+| `add_sheet` | `number`, `title`, `origin`, `size`, `orientation`, `zones` | a sheet; the next number unless given; `size` is `a4` (default), `a3`, `a2` or `{ "custom": { "width": w, "height": h } }`; `zones` is `[columns, rows]`, `[8, 6]` by default |
+| `remove_sheet` | `number` | removes a sheet; what was drawn on it stays |
+
+Limits: a file of at most 1 MiB, 10 000 operations, 10 000 entries in a list
+and 1 024 waypoints in a wire. Positions are grid units.
+
 ## JSON output
 
-`validate`, `simulate`, `test`, `export` and `serve --print-map` take
+`validate`, `simulate`, `test`, `export`, `new`, `edit` and `serve --print-map` take
 `--format json` and then write **one JSON document on stdout**, in place of
 their text. Every document starts with
 
@@ -83,6 +154,8 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 | `simulate` | `tick` (the last solved tick), `faulted`, `diagnostics`, `trace` (the text of the trace, `null` when `--trace` wrote it to a file), `snapshot` (the last solved tick, as `--snapshot-json` writes it) |
 | `test` | `total`, `failed`, `scenarios`: a list of `path`, `status` (`pass`, `updated` or `fail`) and `reasons` |
 | `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
+| `new` | `file` |
+| `edit` | `operations`, `created` (each named element with `kind` and `id`), `wrote` (the file, or `null` for a dry run), `errors`, `warnings`, `diagnostics` |
 | `serve --print-map` | `map`: a list of `table` (`coil`, `discrete_input` or `input_register`), `address`, `words`, `name`, `meaning`; the same lines as the text map |
 
 `diagnostics` are the structured diagnostics of `FORMAT.md` (`code`,

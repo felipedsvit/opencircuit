@@ -1103,3 +1103,259 @@ fn a_bad_format_and_serve_without_print_map_are_usage_errors() {
         assert_eq!(stdout(&run), "");
     }
 }
+
+// `new` and `edit`: a project made through the command line.
+
+const EDIT_FILE: &str = "examples/edit/starter-sheets.edit.json";
+
+/// A trace without its fingerprint line, which depends on the order in which
+/// the IDs were handed out and not on the circuit.
+fn without_fingerprint(trace: &str) -> String {
+    trace
+        .lines()
+        .filter(|line| !line.starts_with("# fingerprint"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn m5_exit_a_project_made_only_through_the_command_line_validates_simulates_and_exports() {
+    let directory = scratch("m5-exit");
+    let project = directory.join("starter-sheets.ocircuit");
+    let path = project.to_str().expect("UTF-8 path");
+
+    let made = opencircuit(&["new", path, "--name", "Partida direta"]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+
+    let edited = opencircuit(&["edit", path, "--apply", EDIT_FILE, "--format", "json"]);
+    assert_eq!(code(&edited), 0, "{}{}", stdout(&edited), stderr(&edited));
+    let report = json(&edited);
+    assert_eq!(report["operations"], 55);
+    assert_eq!(
+        (report["errors"].clone(), report["warnings"].clone()),
+        (0.into(), 0.into())
+    );
+    assert_eq!(report["created"]["coil"]["kind"], "symbol");
+    assert_eq!(report["created"]["control"]["kind"], "supply");
+
+    // Valid, with no warning at all.
+    let validate = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&validate), 0, "{}", stdout(&validate));
+
+    // Two sheets with the title block filled in.
+    let text = fs::read_to_string(&project).expect("written");
+    let doc: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    assert_eq!(doc["schema_version"], 2);
+    assert_eq!(doc["sheets"].as_array().expect("sheets").len(), 2);
+    assert_eq!(doc["project"]["author"], "OpenCircuit");
+
+    // Simulated: the same events as the example drawn by the generator.
+    fs::copy(
+        root().join("examples/sheets/starter-sheets.scenario.json"),
+        directory.join("starter-sheets.scenario.json"),
+    )
+    .expect("copy");
+    let simulate = opencircuit(&[
+        "simulate",
+        path,
+        "--scenario",
+        directory
+            .join("starter-sheets.scenario.json")
+            .to_str()
+            .expect("UTF-8 path"),
+    ]);
+    assert_eq!(code(&simulate), 0, "{}", stderr(&simulate));
+    let golden =
+        fs::read_to_string(root().join("examples/sheets/starter-sheets.trace")).expect("golden");
+    assert_eq!(
+        without_fingerprint(&stdout(&simulate)),
+        without_fingerprint(&golden)
+    );
+
+    // Exported: a two-page PDF that is, byte for byte, the committed one, so
+    // it has the frame, the terminal numbers and the cross-references of the
+    // example.
+    let pdf = directory.join("out.pdf");
+    let export = opencircuit(&[
+        "export",
+        path,
+        "--output",
+        pdf.to_str().expect("UTF-8 path"),
+    ]);
+    assert_eq!(code(&export), 0, "{}", stderr(&export));
+    let bytes = fs::read(&pdf).expect("written");
+    assert!(String::from_utf8_lossy(&bytes).contains("/Count 2"));
+    assert_eq!(
+        bytes,
+        fs::read(root().join("examples/sheets/starter-sheets.pdf")).expect("committed")
+    );
+
+    // And the text of the first sheet, readable in its SVG.
+    let svg = directory.join("one.svg");
+    let export = opencircuit(&[
+        "export",
+        path,
+        "--output",
+        svg.to_str().expect("UTF-8 path"),
+        "--sheet",
+        "1",
+    ]);
+    assert_eq!(code(&export), 0, "{}", stderr(&export));
+    let svg = fs::read_to_string(&svg).expect("written");
+    for text in [
+        ">A1<",
+        ">13-14 1/2C<",
+        ">1-6 2/2B<",
+        ">Sheet 1/2<",
+        ">Circuito de comando<",
+    ] {
+        assert!(svg.contains(text), "{text}");
+    }
+}
+
+#[test]
+fn new_writes_an_empty_project_and_refuses_to_replace_one_without_force() {
+    let directory = scratch("new");
+    let file = directory.join("pump.ocircuit");
+    let path = file.to_str().expect("UTF-8 path");
+
+    let run = opencircuit(&["new", path]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&file).expect("written")).expect("JSON");
+    // The name is the file name without its extension.
+    assert_eq!(doc["project"]["name"], "pump");
+    assert_eq!(doc["sheets"], serde_json::json!([]));
+    let valid = opencircuit(&["validate", path]);
+    assert_eq!(code(&valid), 0, "{}", stdout(&valid));
+
+    fs::write(&file, "keep me").expect("written");
+    let again = opencircuit(&["new", path]);
+    assert_eq!(code(&again), 2);
+    assert_eq!(fs::read_to_string(&file).expect("kept"), "keep me");
+
+    let forced = opencircuit(&[
+        "new", path, "--name", "Pump 2", "--force", "--format", "json",
+    ]);
+    assert_eq!(code(&forced), 0, "{}", stderr(&forced));
+    assert_eq!(json(&forced)["command"], "new");
+    assert!(
+        fs::read_to_string(&file)
+            .expect("written")
+            .contains("Pump 2")
+    );
+}
+
+#[test]
+fn edit_dry_run_and_output_leave_the_project_alone() {
+    let directory = scratch("edit-copies");
+    let project = directory.join("a.ocircuit");
+    let path = project.to_str().expect("UTF-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let before = fs::read(&project).expect("written");
+
+    let dry = opencircuit(&[
+        "edit",
+        path,
+        "--apply",
+        EDIT_FILE,
+        "--dry-run",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&dry), 0, "{}", stderr(&dry));
+    assert!(json(&dry)["wrote"].is_null());
+    assert_eq!(fs::read(&project).expect("kept"), before);
+
+    let elsewhere = directory.join("b.ocircuit");
+    let out = opencircuit(&[
+        "edit",
+        path,
+        "--apply",
+        EDIT_FILE,
+        "--output",
+        elsewhere.to_str().expect("UTF-8 path"),
+    ]);
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert_eq!(fs::read(&project).expect("kept"), before);
+    assert!(
+        fs::read_to_string(&elsewhere)
+            .expect("written")
+            .contains("\"sheets\"")
+    );
+}
+
+#[test]
+fn an_operation_that_is_refused_writes_nothing_and_says_which() {
+    let directory = scratch("edit-refused");
+    let project = directory.join("a.ocircuit");
+    let path = project.to_str().expect("UTF-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let before = fs::read(&project).expect("written");
+    let file = directory.join("bad.edit.json");
+    fs::write(
+        &file,
+        r#"{ "schema_version": 1, "operations": [
+             { "op": "junction", "at": [0, 0] },
+             { "op": "set_param", "device": "K9", "key": "x", "value": 1 } ] }"#,
+    )
+    .expect("written");
+
+    let run = opencircuit(&["edit", path, "--apply", file.to_str().expect("UTF-8 path")]);
+    assert_eq!(code(&run), 1);
+    assert!(
+        stderr(&run).contains("operation 2 (set_param)"),
+        "{}",
+        stderr(&run)
+    );
+    assert_eq!(fs::read(&project).expect("kept"), before);
+
+    let json_run = opencircuit(&[
+        "edit",
+        path,
+        "--apply",
+        file.to_str().expect("UTF-8 path"),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&json_run), 1);
+    let value = json(&json_run);
+    assert_eq!(
+        (value["ok"].clone(), value["command"].clone()),
+        (false.into(), "edit".into())
+    );
+    assert!(
+        value["error"]
+            .as_str()
+            .expect("a message")
+            .contains("no device `K9`")
+    );
+}
+
+#[test]
+fn a_file_that_is_not_an_edit_file_is_a_usage_error() {
+    let directory = scratch("edit-invalid");
+    let project = directory.join("a.ocircuit");
+    let path = project.to_str().expect("UTF-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    for (name, text) in [
+        ("garbage.json", "not json"),
+        (
+            "unknown.json",
+            r#"{ "schema_version": 1, "operations": [ { "op": "rm_rf" } ] }"#,
+        ),
+        (
+            "future.json",
+            r#"{ "schema_version": 9, "operations": [] }"#,
+        ),
+    ] {
+        let file = directory.join(name);
+        fs::write(&file, text).expect("written");
+        let run = opencircuit(&["edit", path, "--apply", file.to_str().expect("UTF-8 path")]);
+        assert_eq!(code(&run), 2, "{name}: {}", stderr(&run));
+        assert_eq!(stdout(&run), "");
+    }
+    // A missing project or edit file is an I/O error too.
+    let missing = opencircuit(&["edit", path, "--apply", "nowhere.json"]);
+    assert_eq!(code(&missing), 2);
+}
