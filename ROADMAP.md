@@ -88,21 +88,35 @@ The decisions of M3 are in ADR-0005 (semantics) and ADR-0006 (PDF). The
 control transformer, which would feed one section from another, is deferred
 to M4.
 
-## M4 — Ecosystem (next)
+## M4 — Ecosystem (done)
 
-- WASM application.
-- Plugins.
-- Modbus TCP, OPC UA and MQTT evaluation.
-- More components and examples, including the control transformer.
-- Third-party catalog and symbol library.
-- Extension and community documentation.
+- [x] WASM application: the desktop application builds for the browser and
+  is checked in CI; it is not published.
+- [x] Plugins, as data-only extension libraries (ADR-0008): no code runs.
+- [x] Modbus TCP server (`circuit-io`, `opencircuit serve`, ADR-0009); OPC UA
+  and MQTT evaluated and not implemented (ADR-0010).
+- [x] More components and examples: control transformer (ADR-0007), latching
+  emergency stop, limit switch, pump-level example.
+- [x] Third-party catalog and symbol library: namespaced models with declared
+  provenance and their own artwork (`LIBRARY.md`).
+- [x] Extension and community documentation (`EXTENDING.md`,
+  `CONTRIBUTING.md`, `SECURITY.md`).
 
 **Exit criterion:** extensible platform with documented integration interfaces
-and explicit safety limits.
+and explicit safety limits. The exit test loads the example third-party
+library, simulates the project that uses it against its golden trace and
+operates it through the Modbus server
+(`m4_exit_a_library_component_is_simulated_and_served` in
+`apps/cli/tests/cli.rs`); the interfaces and their limits are in
+`EXTENDING.md`.
+
+No milestone after M4 is planned yet; new work starts with an issue.
 
 ## Out of scope for the MVP
 
 Analog simulation, rigorous voltage/current/impedance calculation, transients,
 pneumatics, hydraulics, real PLC execution, industrial protocols, plugins,
 real-time collaboration, proprietary CAD import and a certified compliance
-claim.
+claim. M4 added data-only libraries and a Modbus TCP server for testing;
+code plugins, a Modbus client and control of real equipment remain out of
+scope.

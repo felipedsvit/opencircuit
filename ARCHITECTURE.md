@@ -44,9 +44,8 @@ runtime  -> bitset, compiled, fingerprint, logic, solve, trace
 ```
 
 M2 adds `circuit-renderer`, `apps/desktop`, `circuit-commands` and
-`circuit-editor` (all present). M3 adds `circuit-export` (present). The remaining directories are placeholders
-until their milestone; they are not workspace members before they have a real
-`src/lib.rs` and a consumer.
+`circuit-editor`; M3 adds `circuit-export`; M4 adds `circuit-io`. A new crate
+is not a workspace member before it has a real `src/lib.rs` and a consumer.
 
 ## Dependency rules
 
@@ -137,3 +136,16 @@ deterministic SVG and, with `pdf-writer`, as PDF (ADR-0006), from the
 command line and the desktop application. The star-delta starter under
 `examples/star-delta` is validated by goldens and by a property test that
 star and delta are never picked up together.
+
+M4 is implemented. The control transformer feeds one supply section from
+another, its secondary live from the tick after the primary is energized
+(ADR-0007). Extension libraries are data: `circuit_project::library` reads
+them and `ComponentCatalog::with_library` adds their namespaced models,
+which reuse the behaviour classes of the core and may carry their own
+artwork (ADR-0008, `LIBRARY.md`). `circuit-io` holds the Modbus TCP codec
+and the I/O map with no socket or clock; `opencircuit serve` owns the
+socket and the real-time loop (ADR-0009). OPC UA and MQTT were evaluated
+and not implemented (ADR-0010). `apps/desktop` builds for
+`wasm32-unknown-unknown`, with `eframe::WebRunner` and file drop and
+download in place of the native dialogs; CI lints and builds it. The
+interfaces and their safety limits are summarised in `EXTENDING.md`.

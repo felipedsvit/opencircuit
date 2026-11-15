@@ -532,7 +532,7 @@ mod serve {
     use std::process::{Child, Command, Stdio};
     use std::time::Duration;
 
-    use super::{COMMAND, opencircuit, root, stdout};
+    use super::{ACME_LAMP, COMMAND, code, opencircuit, root, stdout};
 
     /// A running server, killed when dropped.
     struct Server {
@@ -548,6 +548,10 @@ mod serve {
     }
 
     fn start(project: &str) -> Server {
+        start_with(project, &[])
+    }
+
+    fn start_with(project: &str, options: &[&str]) -> Server {
         let mut child = Command::new(env!("CARGO_BIN_EXE_opencircuit"))
             .args([
                 "serve",
@@ -557,6 +561,7 @@ mod serve {
                 "--duration-ms",
                 "20000",
             ])
+            .args(options)
             .current_dir(root())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -600,19 +605,27 @@ mod serve {
     }
 
     fn k1_active(stream: &mut TcpStream) -> bool {
-        let answer = ask(stream, 9, &[2, 0, 0, 0, 1]);
+        discrete_input(stream, 0)
+    }
+
+    fn discrete_input(stream: &mut TcpStream, address: u8) -> bool {
+        let answer = ask(stream, 9, &[2, 0, address, 0, 1]);
         assert_eq!(&answer[..2], &[2, 1]);
         answer[2] & 1 == 1
     }
 
     fn eventually(stream: &mut TcpStream, expected: bool) {
+        eventually_at(stream, 0, expected);
+    }
+
+    fn eventually_at(stream: &mut TcpStream, address: u8, expected: bool) {
         for _ in 0..200 {
-            if k1_active(stream) == expected {
+            if discrete_input(stream, address) == expected {
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        panic!("K1 never became {expected}");
+        panic!("discrete input {address} never became {expected}");
     }
 
     #[test]
@@ -704,5 +717,38 @@ mod serve {
         let mut byte = [0_u8; 1];
 
         assert_eq!(fifth.read(&mut byte).unwrap_or(0), 0);
+    }
+
+    /// The exit test of M4 (ROADMAP.md): a third-party library is loaded,
+    /// the example that uses it simulates against its golden trace, and the
+    /// Modbus server operates it.
+    #[test]
+    fn m4_exit_a_library_component_is_simulated_and_served() {
+        let library = "examples/library/acme.oclib";
+
+        // Loaded: the project validates with the library only.
+        let validate = opencircuit(&["validate", ACME_LAMP, "--library", library]);
+        assert_eq!(code(&validate), 0, "{}", stdout(&validate));
+
+        // Simulated: the scenario declares the library and matches its golden.
+        let test = opencircuit(&["test", "examples/library"]);
+        assert_eq!(code(&test), 0, "{}", stdout(&test));
+
+        // Served: the map lists the library relay, and a client holding S1
+        // picks it up and lights H1.
+        let map = opencircuit(&["serve", ACME_LAMP, "--library", library, "--print-map"]);
+        assert!(
+            stdout(&map).contains("coil 0 S1 (1 = pressed)\ndiscrete input 0 K1 (1 = active)\ndiscrete input 1 H1 (1 = energized)\n"),
+            "{}",
+            stdout(&map)
+        );
+        let server = start_with(ACME_LAMP, &["--library", library]);
+        let mut client = connect(&server);
+        assert!(!discrete_input(&mut client, 1));
+        ask(&mut client, 1, &[5, 0, 0, 0xFF, 0x00]);
+        eventually_at(&mut client, 0, true);
+        eventually_at(&mut client, 1, true);
+        ask(&mut client, 2, &[5, 0, 0, 0x00, 0x00]);
+        eventually_at(&mut client, 1, false);
     }
 }

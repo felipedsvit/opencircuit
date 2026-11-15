@@ -14,7 +14,7 @@ talks to a network must not become a way to command real equipment.
 ## Decision
 
 - **The simulator is a server, never a client.** `opencircuit serve
-  <project> --modbus <address>` answers Modbus TCP requests; OpenCircuit
+  <project> [--listen <address>]` answers Modbus TCP requests; OpenCircuit
   never connects to another device.
 - **Split between core and application.** `circuit-io` is a core crate: it
   encodes and decodes Modbus TCP frames (MBAP header and PDU) and builds the

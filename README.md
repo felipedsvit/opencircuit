@@ -17,7 +17,11 @@ M2a, the viewer, and M2b, the editor, are implemented: the desktop
 application creates, opens, edits, saves and runs a project with operator
 controls. M3 is implemented: changeover contacts, full interlocking, the
 six-terminal motor with star/delta starting, separate supply sections, and
-SVG and PDF export. M4 (ecosystem) is next. See [`ROADMAP.md`](ROADMAP.md).
+SVG and PDF export. M4 is implemented: extension libraries, a Modbus TCP
+server for testing PLC programs and HMIs, the control transformer and more
+components, and a browser build of the application. How to extend
+OpenCircuit, and the safety limits of each interface, are in
+[`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
 
@@ -39,8 +43,6 @@ examples/              reference projects with scenarios and golden traces
 tests/fixtures/        projects that must be rejected, with their scenarios
 ```
 
-The other directories under `crates/` and `apps/` are placeholders for M4.
-
 The dependency direction is enforced by
 `cargo run -p xtask -- check-architecture`:
 
@@ -49,6 +51,7 @@ circuit-model <- circuit-sim
 circuit-model <- circuit-project
 circuit-model <- circuit-renderer <- circuit-export
 circuit-model <- circuit-commands <- circuit-editor
+circuit-model <- circuit-io
 the renderer consumes SimSnapshot, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```
@@ -83,7 +86,8 @@ onto the page; Save, Save as and Export download the file.
 
 `serve` (without `--print-map`) answers Modbus TCP on 127.0.0.1:5020 for a
 PLC program or an HMI under test. OpenCircuit is a simulator, not a
-controller: never connect it to a real plant.
+controller: never connect it to a real plant. Modbus has no authentication;
+see the safety limits in [`EXTENDING.md`](EXTENDING.md#safety-limits).
 
 `simulate` prints the change-log trace. The simultaneous start of the
 reversing starter ends with `runtime latched` at the first short circuit;
@@ -148,8 +152,11 @@ cargo deny check
 - [`docs/spec02.md`](docs/spec02.md) — consolidated technical specification v0.3 (Portuguese); the contract reference.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — implementation-facing architecture summary.
 - [`FORMAT.md`](FORMAT.md) — `.ocircuit` project format.
-- [`SIMULATION.md`](SIMULATION.md) — virtual time and tick semantics.
-- [`docs/adr/`](docs/adr/README.md) — architecture decision records (identity and IDs, tick semantics, conductor model, file format).
+- [`SIMULATION.md`](SIMULATION.md) — virtual time, tick semantics, scenarios and traces.
+- [`LIBRARY.md`](LIBRARY.md) — extension library format.
+- [`EXTENDING.md`](EXTENDING.md) — extension and integration interfaces, with their safety limits.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md) — contributing code, components and libraries; reporting vulnerabilities.
+- [`docs/adr/`](docs/adr/README.md) — architecture decision records.
 - [`ROADMAP.md`](ROADMAP.md) — milestones and scope.
 
 ## Safety notice
@@ -157,7 +164,8 @@ cargo deny check
 OpenCircuit is a drawing, learning and preliminary simulation tool. Its results
 do not replace a professional electrical design, risk analysis, commissioning,
 protection validation or compliance with applicable standards. The software does
-not certify installations or guarantee operational safety.
+not certify installations or guarantee operational safety. It is not a
+controller: never connect it, or its Modbus server, to real equipment.
 
 ## License
 
