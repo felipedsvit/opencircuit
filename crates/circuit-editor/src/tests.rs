@@ -585,6 +585,78 @@ fn undo_brings_back_what_was_deleted_without_selecting_ghosts() {
 }
 
 #[test]
+fn arrow_keys_nudge_the_selection_with_its_wires_and_undo_in_one_step() {
+    let mut bench = Bench::new();
+    let contact = bench.place("pushbutton_no", "contact", point(0, 0));
+    let coil = bench.place("contactor.generic", "coil", point(0, 12));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(0, 2));
+    bench.click(point(0, 10));
+    bench.editor.set_tool(Tool::Select);
+    bench.click(point(1, 0));
+    let before = bench.doc.clone();
+
+    bench.key(Key::Nudge { dx: 5, dy: 0 });
+    bench.key(Key::Nudge { dx: 0, dy: -1 });
+
+    assert_eq!(bench.position(contact), point(5, -1));
+    assert_eq!(bench.position(coil), point(0, 12));
+    assert!(bench.wires_are_orthogonal());
+    assert_eq!(bench.history.undo_label(), Some("Move"));
+    bench.history.undo(&mut bench.doc).unwrap();
+    assert_eq!(bench.position(contact), point(5, 0));
+    bench.history.undo(&mut bench.doc).unwrap();
+    assert_eq!(bench.doc, before);
+}
+
+#[test]
+fn nudge_does_nothing_without_a_selection_or_during_a_gesture() {
+    let mut bench = Bench::new();
+    let contact = bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.editor.set_tool(Tool::Select);
+    bench.editor.set_selection(BTreeSet::new());
+    let before = bench.doc.clone();
+
+    bench.key(Key::Nudge { dx: 1, dy: 0 });
+    assert_eq!(bench.doc, before);
+
+    bench.click(point(1, 0));
+    let _ = bench.editor.pointer_down(
+        &bench.doc,
+        &bench.catalog,
+        point(1, 0),
+        Modifiers::default(),
+    );
+    bench
+        .editor
+        .pointer_move(&bench.doc, &bench.catalog, point(3, 0));
+    assert!(bench.editor.is_busy());
+    bench.key(Key::Nudge { dx: 1, dy: 0 });
+    assert_eq!(bench.position(contact), point(0, 0));
+}
+
+#[test]
+fn select_all_selects_every_symbol_junction_and_wire() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.place("contactor.generic", "coil", point(0, 12));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(0, 2));
+    bench.click(point(0, 10));
+    bench.place("pushbutton_no", "contact", point(6, 6));
+    bench.editor.set_tool(Tool::Wire);
+    bench.click(point(6, 4));
+    bench.click(point(0, 5));
+    bench.editor.set_tool(Tool::Select);
+
+    bench.key(Key::SelectAll);
+
+    let expected = bench.doc.symbols.len() + bench.doc.junctions.len() + bench.doc.wires.len();
+    assert_eq!(bench.editor.selection().len(), expected);
+    assert!(!bench.doc.junctions.is_empty());
+}
+
+#[test]
 fn rotate_key_turns_the_selected_symbols() {
     let mut bench = Bench::new();
     let contact = bench.place("pushbutton_no", "contact", point(0, 0));

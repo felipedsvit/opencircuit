@@ -52,6 +52,15 @@ pub enum Key {
     /// Cancel the gesture in progress, then leave the tool, then clear the
     /// selection.
     Escape,
+    /// Move the selection by whole grid units, as one undoable step.
+    Nudge {
+        /// Horizontal step, right positive.
+        dx: i32,
+        /// Vertical step, down positive.
+        dy: i32,
+    },
+    /// Select every symbol, junction and wire.
+    SelectAll,
 }
 
 /// The result of an event.
@@ -458,6 +467,29 @@ impl Editor {
                     return Outcome::default();
                 }
                 Outcome::from_result(ops::delete(doc, catalog, &self.selection))
+            }
+            Key::Nudge { dx, dy } => {
+                if self.selection.is_empty() || self.is_busy() {
+                    return Outcome::default();
+                }
+                Outcome::from_result(ops::move_by(
+                    doc,
+                    catalog,
+                    &self.selection,
+                    GridPoint::new(dx, dy),
+                ))
+            }
+            Key::SelectAll => {
+                if !self.is_busy() {
+                    self.selection = doc
+                        .symbols
+                        .iter()
+                        .map(|symbol| Subject::Symbol(symbol.id))
+                        .chain(doc.junctions.iter().map(|j| Subject::Junction(j.id)))
+                        .chain(doc.wires.iter().map(|wire| Subject::Wire(wire.id)))
+                        .collect();
+                }
+                Outcome::default()
             }
         }
     }

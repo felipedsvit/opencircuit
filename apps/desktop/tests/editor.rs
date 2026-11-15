@@ -102,6 +102,100 @@ fn undo_and_redo_work_from_the_toolbar_and_the_keyboard() {
 }
 
 #[test]
+fn arrows_move_the_selection_and_ctrl_a_selects_everything() {
+    let mut harness = edit_mode(&project(|b| {
+        let first = b.device("S1", "pushbutton_no", &[]).unwrap();
+        b.symbol(first, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+        let second = b.device("S2", "pushbutton_no", &[]).unwrap();
+        b.symbol(second, "contact", None, GridPoint::new(6, 0))
+            .unwrap();
+    }));
+    let position =
+        |harness: &Harness<'_, DesktopApp>, index: usize| document(harness).symbols[index].position;
+
+    click_grid(&mut harness, 1, 0);
+    harness.key_press(egui::Key::ArrowRight);
+    harness.run();
+    harness.key_press_modifiers(Modifiers::SHIFT, egui::Key::ArrowDown);
+    harness.run();
+    assert_eq!(position(&harness, 0), GridPoint::new(1, 5));
+    assert_eq!(position(&harness, 1), GridPoint::new(6, 0));
+
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::A);
+    harness.run();
+    assert_eq!(harness.state().selection().len(), 2);
+    harness.key_press(egui::Key::ArrowLeft);
+    harness.run();
+    assert_eq!(position(&harness, 0), GridPoint::new(0, 5));
+    assert_eq!(position(&harness, 1), GridPoint::new(5, 0));
+
+    // Each press is one step of the history.
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::Z);
+    harness.run();
+    assert_eq!(position(&harness, 0), GridPoint::new(1, 5));
+}
+
+#[test]
+fn w_chooses_the_wire_tool_and_zoom_keys_change_the_scale() {
+    let mut harness = edit_mode(&project(|b| {
+        let first = b.device("S1", "pushbutton_no", &[]).unwrap();
+        b.symbol(first, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+        let second = b.device("S2", "pushbutton_no", &[]).unwrap();
+        b.symbol(second, "contact", None, GridPoint::new(6, 8))
+            .unwrap();
+    }));
+    let grid_width = |harness: &Harness<'_, DesktopApp>| {
+        let state = harness.state();
+        let [a, _] = state.grid_to_screen(GridPoint::new(0, 0)).unwrap();
+        let [b, _] = state.grid_to_screen(GridPoint::new(1, 0)).unwrap();
+        b - a
+    };
+
+    let before = grid_width(&harness);
+    harness.key_press(egui::Key::Minus);
+    harness.run();
+    let zoomed_out = grid_width(&harness);
+    assert!(zoomed_out < before, "{zoomed_out} < {before}");
+    harness.key_press(egui::Key::Plus);
+    harness.run();
+    assert!((grid_width(&harness) - before).abs() < 0.01);
+    harness.key_press(egui::Key::Minus);
+    harness.run();
+    harness.key_press(egui::Key::Num0);
+    harness.run();
+    harness.run();
+    // Framing the drawing in a 1200 x 800 window zooms far in on two
+    // symbols.
+    assert!(
+        grid_width(&harness) > before,
+        "{} > {before}",
+        grid_width(&harness)
+    );
+
+    // F frames the selection: one symbol fills more of the window than the
+    // whole drawing does.
+    let whole = grid_width(&harness);
+    click_grid(&mut harness, 1, 0);
+    harness.key_press(egui::Key::F);
+    harness.run();
+    assert!(
+        grid_width(&harness) > whole,
+        "{} > {whole}",
+        grid_width(&harness)
+    );
+    harness.key_press(egui::Key::Num0);
+    harness.run();
+
+    harness.key_press(egui::Key::W);
+    harness.run();
+    click_grid(&mut harness, 0, 2);
+    click_grid(&mut harness, 6, 6);
+    assert_eq!(document(&harness).wires.len(), 1);
+}
+
+#[test]
 fn two_pins_are_wired_with_the_wire_tool() {
     let mut harness = edit_mode(&project(|b| {
         let first = b.device("S1", "pushbutton_no", &[]).unwrap();
