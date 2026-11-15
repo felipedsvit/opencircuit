@@ -1,18 +1,23 @@
 //! PDF written from the scene with `pdf-writer` (ADR-0006).
 
+use std::collections::BTreeSet;
+
 use circuit_renderer::{Anchor, Scene, ScenePoint, SceneRect, Shape};
-use pdf_writer::types::{LineCapStyle, LineJoinStyle};
+use pdf_writer::types::{
+    CidFontType, FontFlags, LineCapStyle, LineJoinStyle, SystemInfo, UnicodeCmap,
+};
 use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref, Str};
 
+use crate::font::Subset;
 use crate::svg::MARGIN;
 use crate::theme::{Look, Rgb, Theme};
 
 /// Height of a text, in points (one point per scene subunit).
 const FONT_SIZE: f32 = 8.0;
 
-/// Width of every Courier glyph at [`FONT_SIZE`], in tenths of a point:
-/// 0.6 em of 8 points.
-const COURIER_ADVANCE_TENTHS: i64 = 48;
+/// Width of every glyph of the monospaced font at [`FONT_SIZE`], in tenths
+/// of a point: 0.6 em of 8 points.
+const ADVANCE_TENTHS: i64 = 48;
 
 /// How far below its anchor the baseline of a text lies, in tenths of a
 /// point (0.3 em of 8 points), so that it is centred vertically as in SVG.
@@ -26,9 +31,11 @@ const KAPPA: f32 = 0.552_284_8;
 ///
 /// The page is the area of the scene plus the SVG margin, one point per
 /// scene subunit, so the PDF and the SVG of a scene have the same size.
-/// Texts use Courier, one of the standard fonts, so nothing is embedded;
-/// characters other than printable ASCII are written as `?`. The document
-/// has no date and no identifier, so the same scene gives the same bytes.
+/// Texts use Liberation Mono, embedded as a subset with only the glyphs of
+/// the scene, so any character the font has is drawn as itself and can be
+/// searched and copied; one it lacks is drawn as the font's empty box. The
+/// document has no date and no identifier, so the same scene gives the same
+/// bytes.
 #[must_use]
 pub fn pdf(scene: &Scene, theme: Theme) -> Vec<u8> {
     let area = scene.bounds.unwrap_or(SceneRect::from_corners(
@@ -53,14 +60,41 @@ pub fn pdf(scene: &Scene, theme: Theme) -> Vec<u8> {
     let catalog = Ref::new(1);
     let tree = Ref::new(2);
     let page_ref = Ref::new(3);
-    let font = Ref::new(4);
-    let content_ref = Ref::new(5);
+    let content_ref = Ref::new(4);
+    let fonts = FontRefs {
+        type0: Ref::new(5),
+        cid: Ref::new(6),
+        descriptor: Ref::new(7),
+        file: Ref::new(8),
+        unicode: Ref::new(9),
+    };
+
+    let chars: BTreeSet<char> = scene
+        .items
+        .iter()
+        .filter_map(|item| match &item.shape {
+            Shape::Text { text, .. } => Some(text.chars()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let subset = if chars.is_empty() {
+        None
+    } else {
+        Subset::new(&chars)
+    };
 
     let mut content = Content::new();
     content.set_line_cap(LineCapStyle::RoundCap);
     content.set_line_join(LineJoinStyle::RoundJoin);
     for item in &scene.items {
-        draw(&mut content, &page, &item.shape, theme.look(item.style));
+        draw(
+            &mut content,
+            &page,
+            subset.as_ref(),
+            &item.shape,
+            theme.look(item.style),
+        );
     }
     let content = content.finish();
 
@@ -71,13 +105,89 @@ pub fn pdf(scene: &Scene, theme: Theme) -> Vec<u8> {
     page_writer.media_box(Rect::new(0.0, 0.0, real(page.width), real(page.height)));
     page_writer.parent(tree);
     page_writer.contents(content_ref);
-    page_writer.resources().fonts().pair(Name(b"F1"), font);
+    let mut resources = page_writer.resources();
+    if subset.is_some() {
+        resources.fonts().pair(Name(b"F1"), fonts.type0);
+    }
+    resources.finish();
     page_writer.finish();
-    pdf.type1_font(font)
-        .base_font(Name(b"Courier"))
-        .encoding_predefined(Name(b"WinAnsiEncoding"));
     pdf.stream(content_ref, &content);
+    if let Some(subset) = &subset {
+        write_font(&mut pdf, &fonts, subset);
+    }
     pdf.finish()
+}
+
+/// The objects of the embedded font.
+struct FontRefs {
+    type0: Ref,
+    cid: Ref,
+    descriptor: Ref,
+    file: Ref,
+    unicode: Ref,
+}
+
+/// The subset as a composite font whose codes are its glyph IDs
+/// (`Identity-H`), with a `ToUnicode` map for searching and copying. Every
+/// glyph has the width of the font, so one default width serves them all.
+fn write_font(pdf: &mut Pdf, refs: &FontRefs, subset: &Subset) {
+    let name_bytes: Vec<u8> = subset
+        .tag
+        .iter()
+        .copied()
+        .chain(b"+LiberationMono".iter().copied())
+        .collect();
+    let base = Name(&name_bytes);
+    let metrics = subset.metrics;
+    let to_real = |value: i32| f32::from(i16::try_from(value).unwrap_or(0));
+
+    pdf.type0_font(refs.type0)
+        .base_font(base)
+        .encoding_predefined(Name(b"Identity-H"))
+        .descendant_font(refs.cid)
+        .to_unicode(refs.unicode);
+    pdf.cid_font(refs.cid)
+        .subtype(CidFontType::Type2)
+        .base_font(base)
+        .system_info(SystemInfo {
+            registry: Str(b"Adobe"),
+            ordering: Str(b"Identity"),
+            supplement: 0,
+        })
+        .font_descriptor(refs.descriptor)
+        .default_width(to_real(metrics.advance))
+        .cid_to_gid_map_predefined(Name(b"Identity"));
+    pdf.font_descriptor(refs.descriptor)
+        .name(base)
+        .flags(FontFlags::FIXED_PITCH | FontFlags::NON_SYMBOLIC)
+        .bbox(Rect::new(
+            to_real(metrics.bbox[0]),
+            to_real(metrics.bbox[1]),
+            to_real(metrics.bbox[2]),
+            to_real(metrics.bbox[3]),
+        ))
+        .italic_angle(0.0)
+        .ascent(to_real(metrics.ascent))
+        .descent(to_real(metrics.descent))
+        .cap_height(to_real(metrics.cap_height))
+        .stem_v(80.0)
+        .font_file2(refs.file);
+    let length = i32::try_from(subset.data.len()).unwrap_or(i32::MAX);
+    pdf.stream(refs.file, &subset.data)
+        .pair(Name(b"Length1"), length);
+
+    let mut map = UnicodeCmap::new(
+        Name(b"Adobe-Identity-UCS"),
+        SystemInfo {
+            registry: Str(b"Adobe"),
+            ordering: Str(b"UCS"),
+            supplement: 0,
+        },
+    );
+    for (glyph, c) in subset.unicode() {
+        map.pair(glyph, c);
+    }
+    pdf.cmap(refs.unicode, map.finish().as_slice());
 }
 
 /// The page in scene coordinates.
@@ -130,21 +240,7 @@ fn circle(content: &mut Content, (cx, cy): (f32, f32), radius: f32) {
     content.close_path();
 }
 
-/// Printable ASCII as it is; everything else, which WinAnsi Courier may
-/// not have, as `?`.
-fn win_ansi(text: &str) -> Vec<u8> {
-    text.chars()
-        .map(|c| {
-            if c.is_ascii_graphic() || c == ' ' {
-                u8::try_from(c).unwrap_or(b'?')
-            } else {
-                b'?'
-            }
-        })
-        .collect()
-}
-
-fn draw(content: &mut Content, page: &Page, shape: &Shape, look: Look) {
+fn draw(content: &mut Content, page: &Page, subset: Option<&Subset>, shape: &Shape, look: Look) {
     match shape {
         Shape::Line { from, to } => {
             stroke(content, look);
@@ -189,15 +285,18 @@ fn draw(content: &mut Content, page: &Page, shape: &Shape, look: Look) {
             content.fill_nonzero();
         }
         Shape::Text { at, text, anchor } => {
-            let encoded = win_ansi(text);
+            let Some(subset) = subset else {
+                return;
+            };
+            let encoded = subset.encode(text);
             // Positions in integer tenths of a point, so that they are
             // written as short exact decimals.
             let tenths = |value: i64| value.saturating_mul(10);
             let x = tenths(at.x.saturating_sub(page.left));
             let y = tenths(page.top.saturating_add(page.height).saturating_sub(at.y));
-            let width = i64::try_from(encoded.len())
+            let width = i64::try_from(text.chars().count())
                 .unwrap_or(i64::MAX)
-                .saturating_mul(COURIER_ADVANCE_TENTHS);
+                .saturating_mul(ADVANCE_TENTHS);
             let start = match anchor {
                 Anchor::Left => x,
                 Anchor::Center => x.saturating_sub(width.checked_div(2).unwrap_or(0)),
@@ -259,7 +358,54 @@ mod tests {
         for key in ["/CreationDate", "/ModDate", "/ID"] {
             assert!(!text.contains(key), "{key}");
         }
-        assert!(text.contains("/BaseFont /Courier"));
+    }
+
+    #[test]
+    fn text_is_drawn_with_an_embedded_subset_of_liberation_mono() {
+        let text = as_text(&pdf(&text_scene("K1"), Theme::Print));
+
+        assert!(!text.contains("/BaseFont /Courier"));
+        for part in [
+            "/Subtype /Type0",
+            "/Encoding /Identity-H",
+            "/Subtype /CIDFontType2",
+            "/CIDToGIDMap /Identity",
+            "+LiberationMono",
+            "/FontFile2",
+            "/ToUnicode",
+            "/Length1",
+        ] {
+            assert!(text.contains(part), "{part}");
+        }
+    }
+
+    #[test]
+    fn a_scene_without_text_embeds_no_font() {
+        let text = as_text(&pdf(&Scene::default(), Theme::Print));
+
+        assert!(!text.contains("/FontFile2") && !text.contains("/Type0"));
+    }
+
+    #[test]
+    fn characters_beyond_ascii_are_kept_and_searchable() {
+        let text = as_text(&pdf(&text_scene("Mot\u{e9}r \u{394} 3~"), Theme::Print));
+
+        // The ToUnicode map names the code points of the scene.
+        for code in ["<00E9>", "<0394>"] {
+            assert!(text.contains(code), "{code}");
+        }
+    }
+
+    #[test]
+    fn a_character_the_font_lacks_is_drawn_as_the_empty_box_not_as_a_question_mark() {
+        let with = pdf(&text_scene("K\u{4e2d}1"), Theme::Print);
+        let without = pdf(&text_scene("K1"), Theme::Print);
+
+        // Three glyph codes against two, and no question mark in the codes.
+        assert_ne!(with, without);
+        let text = as_text(&with);
+        assert!(text.contains("/ToUnicode"));
+        assert!(!text.contains("<003F>"));
     }
 
     #[test]
@@ -271,12 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn non_ascii_characters_are_written_as_question_marks() {
-        assert_eq!(win_ansi("K\u{394}1 (x)"), b"K?1 (x)");
-    }
-
-    #[test]
-    fn centred_text_starts_half_its_courier_width_left_of_the_anchor() {
+    fn centred_text_starts_half_its_glyph_width_left_of_the_anchor() {
         // "KM1": 3 glyphs of 0.6 em at 8 pt is 14.4 pt wide; the anchor is
         // at x = 20 on a page with a margin of 20.
         let text = as_text(&pdf(&text_scene("KM1"), Theme::Print));

@@ -10,6 +10,7 @@ rust-version.workspace = true
 circuit-model = { workspace = true }
 circuit-renderer = { workspace = true }
 pdf-writer = "0.15"
+subsetter = { version = "0.2.6", default-features = false }
 
 [dev-dependencies]
 proptest = { workspace = true }

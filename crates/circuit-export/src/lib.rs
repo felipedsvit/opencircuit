@@ -26,7 +26,9 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+mod font;
 mod pdf;
+mod sfnt;
 mod svg;
 mod theme;
 

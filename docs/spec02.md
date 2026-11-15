@@ -1485,7 +1485,7 @@ O CI nunca executa `--update-golden`. Desde o M4 o CI também passa o clippy e c
 O exportador recebe `Scene` (coordenadas lógicas e estilos semânticos), não estruturas de egui. Formatos planejados:
 
 - **SVG:** escrito diretamente a partir da `Scene`; é texto e dispensa biblioteca.
-- **PDF:** **[decidido]** no M3 após spike: `pdf-writer` (MIT OR Apache-2.0, poucas dependências, compila no MSRV 1.85 e em WASM), uma página do tamanho do desenho, texto em Courier (fonte padrão, sem embutir) e bytes determinísticos ([ADR-0006](adr/0006-pdf-export.md)).
+- **PDF:** **[decidido]** no M3 após spike: `pdf-writer` (MIT OR Apache-2.0, poucas dependências, compila no MSRV 1.85 e em WASM), uma página do tamanho do desenho, bytes determinísticos ([ADR-0006](adr/0006-pdf-export.md)) e texto em um subconjunto embutido da Liberation Mono, que mantém acentos, grego e cirílico ([ADR-0012](adr/0012-pdf-font.md)).
 - PNG ou outros formatos vetoriais, se necessário.
 
 A exportação é executável pela CLI.
@@ -1671,11 +1671,13 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-003](adr/0003-conductor-model.md) | Modelo de condutores (máscara de bits, um perfil por condutor), regras de conflito e limites do solver discreto |
 | [ADR-004](adr/0004-canonical-json-format.md) | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
 | [ADR-005](adr/0005-m3-circuit-semantics.md) | M3: seções de alimentação, contatos comutadores e versões de modelo, intertravamento mecânico e enrolamentos do motor de seis terminais |
-| [ADR-006](adr/0006-pdf-export.md) | Exportação PDF com `pdf-writer`: página do tamanho do desenho, texto em Courier, bytes determinísticos |
+| [ADR-006](adr/0006-pdf-export.md) | Exportação PDF com `pdf-writer`: página do tamanho do desenho, bytes determinísticos; a fonte do texto foi alterada pela ADR-0012 |
 | [ADR-007](adr/0007-control-transformer.md) | M4: transformador de comando, secundário vivo no tick seguinte (`Powered`), `OC-SEM-010` |
 | [ADR-008](adr/0008-extension-libraries.md) | M4: bibliotecas de extensão só de dados (namespace, proveniência, desenho próprio) |
 | [ADR-009](adr/0009-industrial-io.md) | M4: E/S industrial como servidor Modbus TCP; codec no núcleo, socket na CLI; limites de segurança |
 | [ADR-010](adr/0010-opcua-mqtt-evaluation.md) | M4: avaliação de OPC UA (não implementado: só há implementações MPL-2.0) e MQTT (viável, adiado, desenho registrado) |
+| [ADR-011](adr/0011-sheets-as-frames.md) | M5: folhas como molduras sobre a tela única, com tamanho de papel, zonas e carimbo; o simulador não muda |
+| [ADR-012](adr/0012-pdf-font.md) | M5: subconjunto embutido da Liberation Mono no PDF, com um leitor mínimo de fonte no lugar de um crate sem manutenção |
 
 ---
 
