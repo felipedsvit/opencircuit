@@ -40,8 +40,10 @@ The circuit is present exactly when no diagnostic has error severity.
    signal: `Actuated` (pushbutton, latching switch), `Tripped` (thermal
    overload), `CoilActive` (contactor, relay), `TimerOut` (timer).
 4. **Elements**: a contact is a switch between two nets driven by its
-   device signal (NO closed while high, NC closed while low); main contacts
-   are one switch per pole sharing the signal; fuse links and thermal
+   device signal (NO closed while high, NC closed while low); a changeover
+   contact is two switches from `com` on the same signal, `com`–`nc` closed
+   while low and `com`–`no` closed while high, so exactly one side conducts;
+   main contacts are one switch per pole sharing the signal; fuse links and thermal
    elements are always closed; supply terminals are sources; coils, lamps,
    buzzers and motors are loads.
 5. **Static checks**: required terminals, devices without symbols, one supply
@@ -196,7 +198,8 @@ refused.
 IDs only and every list is sorted: `tick`, `t_us`, `energized_devices`,
 `active_devices` (picked-up contactors/relays, timers with output high),
 `actuated_devices`, `tripped_devices`, `closed_symbols` (driven contacts
-closed in the solve), `live_wires`, `live_junctions` (with their conductor
+closed in the solve; a changeover contact while its `no` side conducts),
+`live_wires`, `live_junctions` (with their conductor
 set), `motors`, `timers`, `faulted`, `faults`.
 
 `step` allocates no snapshot. A front end calls `step_n` for the ticks of a

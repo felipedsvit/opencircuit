@@ -96,13 +96,28 @@ impl SchematicBuilder {
         model_id: &str,
         params: &[(&str, ParamValue)],
     ) -> Result<DeviceId, IdExhausted> {
+        self.device_version(reference, model_id, 1, params)
+    }
+
+    /// Add a device that uses a given version of a model.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdExhausted`] when the document has no identifier left.
+    pub fn device_version(
+        &mut self,
+        reference: &str,
+        model_id: &str,
+        version: u32,
+        params: &[(&str, ParamValue)],
+    ) -> Result<DeviceId, IdExhausted> {
         let id = DeviceId(self.ids.alloc()?);
         self.doc.devices.push(Device {
             id,
             reference: ReferenceDesignator(reference.to_owned()),
             model: ModelRef {
                 id: model_id.to_owned(),
-                version: 1,
+                version,
             },
             params: params
                 .iter()

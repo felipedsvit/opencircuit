@@ -137,6 +137,14 @@ fn device_section(
         ui.colored_label(ui.visuals().error_fg_color, "Model not in the catalog.");
         return request;
     };
+    if let Some(newer) = catalog.upgrade(&device.model)
+        && ui
+            .button(format!("Upgrade to version {}", newer.version()))
+            .on_hover_text("Keeps every symbol, wire and parameter and offers the newer symbols")
+            .clicked()
+    {
+        request = Some(ops::upgrade_model(doc, catalog, device.id));
+    }
     if !model.params().is_empty() {
         ui.strong("Parameters");
     }

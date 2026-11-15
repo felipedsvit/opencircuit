@@ -125,6 +125,27 @@ fn contact(x: i64, normally_closed: bool, closed: bool, out: &mut Vec<(Shape, St
     out.push(blade);
 }
 
+/// A changeover contact: the blade pivots on the `com` lead below; at rest
+/// it rests on the stub of the `nc` lead, which comes down 2 grid units to
+/// the right; picked up, it reaches the `no` lead straight above. The blade
+/// always conducts on one side.
+fn changeover(no_side: bool, out: &mut Vec<(Shape, StyleKey)>) {
+    leads(0, out);
+    let body_top = BODY.saturating_neg();
+    let nc_x = LEAD;
+    out.push((
+        line((nc_x, LEAD.saturating_neg()), (nc_x, body_top)),
+        StyleKey::Symbol,
+    ));
+    out.push((line((nc_x, body_top), (6, body_top)), StyleKey::Symbol));
+    let tip = if no_side {
+        (0, body_top)
+    } else {
+        (6, body_top)
+    };
+    out.push((line((0, BODY), tip), StyleKey::ContactClosed));
+}
+
 /// The operator part of a contact whose blade is at `x`: a push rod for a
 /// pushbutton, a bracketed rod for a maintained switch.
 fn actuator(x: i64, kind: Actuator, actuated: bool, out: &mut Vec<(Shape, StyleKey)>) {
@@ -163,6 +184,7 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
             contact(0, kind == SymbolKind::ContactNc, look.closed, &mut out);
             actuator(0, operator, look.actuated, &mut out);
         }
+        SymbolKind::Changeover => changeover(look.closed, &mut out),
         SymbolKind::PowerContacts { poles } => {
             for index in 0..poles {
                 contact(pole_x(index, poles), false, look.closed, &mut out);
@@ -362,6 +384,7 @@ mod tests {
             SymbolKind::Coil,
             SymbolKind::ContactNo,
             SymbolKind::ContactNc,
+            SymbolKind::Changeover,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
             SymbolKind::Lamp,

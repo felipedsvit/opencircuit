@@ -17,6 +17,7 @@
 //! state committed for the tick after it.
 
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 
 use circuit_model::{
     DeviceClass, DeviceId, Diagnostic, DiagnosticCode, InputAction, Live, MotorState, MotorView,
@@ -595,13 +596,34 @@ impl Simulator {
                 .collect()
         };
 
+        // A changeover contact owns a switch closed while its signal is high
+        // and one closed while it is low; it counts as closed only while its
+        // `no` side conducts.
+        let owners_by_level = |level: Level| -> BTreeSet<SymbolId> {
+            self.circuit
+                .switches()
+                .iter()
+                .filter(|switch| {
+                    matches!(switch.drive, Drive::Signal { closed_when, .. } if closed_when == level)
+                })
+                .map(|switch| switch.owner)
+                .collect()
+        };
+        let opening_at_rest = owners_by_level(Level::High);
+        let closed_at_rest = owners_by_level(Level::Low);
         let mut closed_symbols: Vec<SymbolId> = self
             .circuit
             .switches()
             .iter()
             .enumerate()
-            .filter(|(index, switch)| {
-                switch.drive != Drive::Always && self.view.mask.closed_index(*index)
+            .filter(|(index, switch)| match switch.drive {
+                Drive::Always => false,
+                Drive::Signal { closed_when, .. } => {
+                    let changeover_rest_side = closed_when == Level::Low
+                        && opening_at_rest.contains(&switch.owner)
+                        && closed_at_rest.contains(&switch.owner);
+                    !changeover_rest_side && self.view.mask.closed_index(*index)
+                }
             })
             .map(|(_, switch)| switch.owner)
             .collect();

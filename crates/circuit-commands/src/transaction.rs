@@ -74,6 +74,7 @@ impl Transaction {
                 | Edit::RemoveDevice(_)
                 | Edit::SetReference { .. }
                 | Edit::SetParam { .. }
+                | Edit::SetModel { .. }
                 | Edit::RemoveSymbol(_)
                 | Edit::Place { .. }
                 | Edit::RemoveJunction(_)

@@ -537,6 +537,63 @@ fn main_contacts_become_one_switch_per_pole_with_a_shared_signal() {
 }
 
 #[test]
+fn changeover_becomes_two_switches_from_its_common_on_one_signal() {
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let k1 = rig.device_v2("K1", "relay.generic", &dc_load());
+    let coil = rig.symbol(k1, "coil", None);
+    let changeover = rig.symbol(k1, "changeover", Some(1));
+    rig.wire(out(p24), pin(coil, "a1"));
+    rig.wire(pin(coil, "a2"), out(p0));
+    rig.wire(out(p24), pin(changeover, "com"));
+    let doc = rig.finish();
+    let circuit = compile_ok(&doc);
+    let switches: Vec<&CompiledSwitch> = circuit
+        .switches()
+        .iter()
+        .filter(|switch| switch.owner == changeover)
+        .collect();
+    let common = net_of(&circuit, changeover, "com");
+
+    assert_eq!(switches.len(), 2);
+    let sides: Vec<(NetIx, Level)> = switches
+        .iter()
+        .map(|switch| {
+            assert_eq!(switch.a, common);
+            let Drive::Signal { closed_when, .. } = switch.drive else {
+                panic!("a changeover is driven by its device");
+            };
+            (switch.b, closed_when)
+        })
+        .collect();
+    assert_eq!(
+        sides,
+        [
+            (net_of(&circuit, changeover, "nc"), Level::Low),
+            (net_of(&circuit, changeover, "no"), Level::High)
+        ]
+    );
+    let [first, second] = [switches[0].drive, switches[1].drive].map(|drive| match drive {
+        Drive::Signal { sig, .. } => Some(sig),
+        Drive::Always => None,
+    });
+    assert_eq!(first, second);
+}
+
+#[test]
+fn version_1_relays_offer_no_changeover() {
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let k1 = rig.device("K1", "relay.generic", &dc_load());
+    let coil = rig.symbol(k1, "coil", None);
+    rig.symbol(k1, "changeover", Some(1));
+    rig.wire(out(p24), pin(coil, "a1"));
+    rig.wire(pin(coil, "a2"), out(p0));
+
+    assert!(codes(&compile_doc(&rig.finish())).contains(&DiagnosticCode::UnknownSymbolKey));
+}
+
+#[test]
 fn thermal_element_and_fuse_are_always_closed_switches() {
     let doc = direct_online_circuit();
     let circuit = compile_ok(&doc);

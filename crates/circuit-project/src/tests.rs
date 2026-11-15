@@ -157,10 +157,17 @@ fn format_document_catalog_table_matches_the_builtin_catalog() {
 
     for model in ComponentCatalog::builtin().models() {
         let id = format!("`{}`", model.id());
+        let version = format!("| {} |", model.version());
         let row = section
             .lines()
-            .find(|line| line.starts_with('|') && line.contains(&id))
-            .unwrap_or_else(|| panic!("FORMAT.md does not list {}", model.id()));
+            .find(|line| line.starts_with('|') && line.contains(&id) && line.contains(&version))
+            .unwrap_or_else(|| {
+                panic!(
+                    "FORMAT.md does not list {} version {}",
+                    model.id(),
+                    model.version()
+                )
+            });
         let symbols = model.symbols().iter().map(|symbol| symbol.key().0.as_str());
         let params = model.params().iter().map(|param| param.key.as_str());
         for key in symbols.chain(params) {
@@ -170,7 +177,6 @@ fn format_document_catalog_table_matches_the_builtin_catalog() {
                 model.id()
             );
         }
-        assert_eq!(model.version(), 1, "FORMAT.md documents version 1 only");
     }
 }
 

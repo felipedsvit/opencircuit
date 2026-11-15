@@ -179,6 +179,71 @@ fn slotted_symbol_is_placed_in_slot_one_and_the_next_one_in_slot_two() {
 }
 
 #[test]
+fn upgrading_a_relay_keeps_its_symbols_and_allows_a_changeover() {
+    let mut doc = Schematic::new("upgrade");
+    let mut history = History::new();
+    let catalog = ComponentCatalog::builtin();
+    let coil = place(&mut doc, &mut history, "relay.generic", "coil", point(0, 0));
+    let device = device_of(&doc, coil);
+    let before = doc.clone();
+    let changeover = |doc: &Schematic| {
+        ops::add_symbol(
+            doc,
+            &catalog,
+            device,
+            &key("changeover"),
+            point(4, 0),
+            QuarterTurn::Deg0,
+        )
+    };
+    assert!(matches!(
+        changeover(&doc),
+        Err(CommandError::UnknownSymbol { .. })
+    ));
+
+    run(&mut doc, &mut history, |doc| {
+        ops::upgrade_model(doc, &catalog, device)
+    });
+    run(&mut doc, &mut history, changeover);
+
+    let relay = doc.devices.iter().find(|d| d.id == device).unwrap();
+    assert_eq!(relay.model.version, 2);
+    assert_eq!(doc.symbols.len(), 2);
+    assert_eq!(integrity(&doc), []);
+    history.undo(&mut doc).unwrap();
+    history.undo(&mut doc).unwrap();
+    // Undo never lowers `next_id`; everything else is back.
+    assert_eq!(
+        (&doc.devices, &doc.symbols),
+        (&before.devices, &before.symbols)
+    );
+}
+
+#[test]
+fn upgrading_a_model_without_a_newer_version_is_refused() {
+    let mut doc = Schematic::new("upgrade");
+    let mut history = History::new();
+    let catalog = ComponentCatalog::builtin();
+    let coil = place(
+        &mut doc,
+        &mut history,
+        "contactor.generic",
+        "coil",
+        point(0, 0),
+    );
+    let device = device_of(&doc, coil);
+
+    assert_eq!(
+        ops::upgrade_model(&doc, &catalog, device),
+        Err(CommandError::NoUpgrade("contactor.generic".to_owned()))
+    );
+    assert!(matches!(
+        ops::upgrade_model(&doc, &catalog, DeviceId(999)),
+        Err(CommandError::Missing(_))
+    ));
+}
+
+#[test]
 fn symbol_beyond_its_instance_limit_is_refused() {
     let mut doc = Schematic::new("limit");
     let mut history = History::new();
