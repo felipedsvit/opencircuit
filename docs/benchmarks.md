@@ -56,9 +56,11 @@ Switching on every tick (oscillators):
 - **symbol_at:** `LayoutIndex::symbol_at` on the first coil, the query behind
   a click on the canvas.
 - **move edit:** `circuit_commands::ops::move_by` of one symbol, then
-  `Transaction::apply_to`: what one drag step of the editor costs. Both
-  steps copy the document and validate it, so the cost grows with the
-  document, not with the selection.
+  `Transaction::apply_to`: what one drag step of the editor costs. Each
+  step copies the document and the committed result is checked for
+  integrity, so the cost grows with the document, not with the selection.
+- **save:** `circuit_project::to_string` of the document, already in
+  canonical order as it is after an edit.
 - **SVG / PDF:** `circuit_export::svg` and `circuit_export::pdf` of the scene
   at rest, print theme.
 

@@ -25,6 +25,22 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     out
 }
 
+/// The checks of [`validate`] that report the five integrity codes
+/// (`UnsupportedSchemaVersion`, `IdOutOfRange`, `DuplicateId`,
+/// `DanglingReference`, `SelfLoopWire`) and nothing else. The result is the
+/// same as filtering [`validate`] by those codes, at a fraction of the cost.
+pub(crate) fn integrity(doc: &Schematic) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+
+    check_schema_version(doc, &mut out);
+    check_id_ranges(doc, &mut out);
+    check_unique_ids(doc, &mut out);
+    check_references(doc, &mut out);
+
+    sort_diagnostics(&mut out);
+    out
+}
+
 /// Every entity of the document as `(raw id, subject)`.
 fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
     let supplies = doc.supplies.iter().map(|s| (s.id.0, Subject::Supply(s.id)));
@@ -571,6 +587,56 @@ mod tests {
                 Subject::Supply(SupplyId(1))
             )]
         );
+    }
+
+    /// The integrity diagnostics are what `validate` reports for the same
+    /// five codes, so a new check that emits one of them cannot be left out
+    /// of `integrity` unnoticed.
+    #[test]
+    fn integrity_is_the_integrity_part_of_validate() {
+        const INTEGRITY: [DiagnosticCode; 5] = [
+            DiagnosticCode::UnsupportedSchemaVersion,
+            DiagnosticCode::IdOutOfRange,
+            DiagnosticCode::DuplicateId,
+            DiagnosticCode::DanglingReference,
+            DiagnosticCode::SelfLoopWire,
+        ];
+        let mut broken: Vec<Schematic> = vec![valid()];
+        let mut doc = valid();
+        doc.schema_version += 1;
+        broken.push(doc);
+        let mut doc = valid();
+        doc.symbols[0].id = SymbolId(0);
+        doc.next_id = 3;
+        broken.push(doc);
+        let mut doc = valid();
+        doc.devices.push(device(2, "K2"));
+        broken.push(doc);
+        let mut doc = valid();
+        doc.symbols[0].device_id = DeviceId(99);
+        broken.push(doc);
+        let mut doc = valid();
+        doc.wires[0].from = pin(99, "a1");
+        doc.wires[1].to = doc.wires[1].from.clone();
+        broken.push(doc);
+        // Findings of the checks `integrity` leaves out.
+        let mut doc = valid();
+        doc.devices.push(device(7, "K1"));
+        doc.junctions.push(Junction {
+            id: JunctionId(8),
+            position: GridPoint::default(),
+        });
+        doc.next_id = 9;
+        broken.push(doc);
+
+        for doc in broken {
+            let expected: Vec<Diagnostic> = doc
+                .validate()
+                .into_iter()
+                .filter(|diagnostic| INTEGRITY.contains(&diagnostic.code()))
+                .collect();
+            assert_eq!(doc.integrity_errors(), expected);
+        }
     }
 
     #[test]

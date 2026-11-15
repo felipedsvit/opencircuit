@@ -258,6 +258,17 @@ impl Schematic {
         }
     }
 
+    /// Whether every collection is already sorted by ID, so that
+    /// [`sort_canonical`](Self::sort_canonical) would change nothing.
+    #[must_use]
+    pub fn is_canonical(&self) -> bool {
+        self.supplies.is_sorted_by_key(|supply| supply.id)
+            && self.devices.is_sorted_by_key(|device| device.id)
+            && self.symbols.is_sorted_by_key(|symbol| symbol.id)
+            && self.junctions.is_sorted_by_key(|junction| junction.id)
+            && self.wires.is_sorted_by_key(|wire| wire.id)
+    }
+
     /// Sort every collection by ID, the canonical order of a saved file.
     pub fn sort_canonical(&mut self) {
         self.supplies.sort_by_key(|supply| supply.id);
@@ -276,6 +287,19 @@ impl Schematic {
     #[must_use]
     pub fn validate(&self) -> Vec<Diagnostic> {
         validate::validate(self)
+    }
+
+    /// The diagnostics of [`validate`](Self::validate) that make a document
+    /// unsafe to edit: an unsupported schema version, IDs out of range or
+    /// used twice, references to something that does not exist, and a wire
+    /// that starts and ends at the same point.
+    ///
+    /// It returns exactly those diagnostics, in the same order, without the
+    /// work of the other checks (junction degrees, designators and supply
+    /// profiles), so an editor can ask it for every transaction.
+    #[must_use]
+    pub fn integrity_errors(&self) -> Vec<Diagnostic> {
+        validate::integrity(self)
     }
 }
 
@@ -322,9 +346,28 @@ mod tests {
             });
         }
 
+        assert!(!doc.is_canonical());
         doc.sort_canonical();
+        assert!(doc.is_canonical());
 
         let ids: Vec<u64> = doc.junctions.iter().map(|j| j.id.0).collect();
         assert_eq!(ids, [1, 2, 3]);
+    }
+
+    #[test]
+    fn is_canonical_looks_at_every_collection() {
+        assert!(Schematic::new("empty").is_canonical());
+
+        let mut doc = Schematic::new("test");
+        doc.wires = [2, 1]
+            .map(|id| Wire {
+                id: WireId(id),
+                from: Endpoint::Junction(JunctionId(1)),
+                to: Endpoint::Junction(JunctionId(2)),
+                route: Vec::new(),
+            })
+            .to_vec();
+
+        assert!(!doc.is_canonical());
     }
 }

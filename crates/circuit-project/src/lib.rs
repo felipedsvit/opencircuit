@@ -153,9 +153,18 @@ pub fn from_str(text: &str) -> Result<Schematic, ProjectError> {
 /// read back, and [`ProjectError::Serialize`] if JSON serialization fails.
 pub fn to_string(doc: &Schematic) -> Result<String, ProjectError> {
     limits::check(doc)?;
-    let mut canonical = doc.clone();
-    canonical.sort_canonical();
-    let mut text = serde_json::to_string_pretty(&canonical)
+    // A document saved after an edit is already in order; copy it only when
+    // it is not.
+    let sorted;
+    let canonical = if doc.is_canonical() {
+        doc
+    } else {
+        let mut copy = doc.clone();
+        copy.sort_canonical();
+        sorted = copy;
+        &sorted
+    };
+    let mut text = serde_json::to_string_pretty(canonical)
         .map_err(|error| ProjectError::Serialize(error.to_string()))?;
     text.push('\n');
     Ok(text)
