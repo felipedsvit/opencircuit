@@ -1,8 +1,8 @@
 //! Native file dialogs, on the platforms that have them.
 //!
-//! In a browser (`wasm32`) there is no synchronous file dialog: these
-//! functions answer `None`, and files reach the application by drag and
-//! drop instead, as bytes.
+//! In a browser (`wasm32`) there is no synchronous file dialog: the pickers
+//! answer `None` and files reach the application by drag and drop, and
+//! saving or exporting becomes a download (see `web`).
 
 use std::path::PathBuf;
 
@@ -28,14 +28,17 @@ pub fn pick_project() -> Option<PathBuf> {
 }
 
 /// Ask where to save a project named `name`. The extension is added when
-/// the user leaves it out.
+/// the user leaves it out. A browser downloads instead.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn choose_save_path(name: &str) -> Option<PathBuf> {
     save_path("OpenCircuit project", name, PROJECT_EXTENSION)
 }
 
 /// Ask where to write a drawing in the format of `extension` (`svg` or
-/// `pdf`). The extension is added when the user leaves it out.
+/// `pdf`). The extension is added when the user leaves it out. A browser
+/// downloads instead.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
     let filter = if extension == "pdf" {
@@ -63,21 +66,14 @@ pub fn pick_libraries() -> Vec<PathBuf> {
     }
 }
 
-#[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
+#[cfg(not(target_arch = "wasm32"))]
 fn save_path(filter: &str, name: &str, extension: &str) -> Option<PathBuf> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let mut path = rfd::FileDialog::new()
-            .add_filter(filter, &[extension])
-            .set_file_name(format!("{name}.{extension}"))
-            .save_file()?;
-        if path.extension().is_none() {
-            path.set_extension(extension);
-        }
-        Some(path)
+    let mut path = rfd::FileDialog::new()
+        .add_filter(filter, &[extension])
+        .set_file_name(format!("{name}.{extension}"))
+        .save_file()?;
+    if path.extension().is_none() {
+        path.set_extension(extension);
     }
-    #[cfg(target_arch = "wasm32")]
-    {
-        None
-    }
+    Some(path)
 }

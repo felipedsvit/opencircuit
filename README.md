@@ -66,6 +66,21 @@ cargo run -p opencircuit-desktop -- examples/star-delta/star-delta.ocircuit
 cargo run -p opencircuit-cli -- serve examples/direct-starter/command.ocircuit --print-map
 ```
 
+### In a browser
+
+The same application builds for WebAssembly. It is not published; run it
+locally with [Trunk](https://trunkrs.dev), which builds the binary, runs
+`wasm-bindgen` and serves the page (no JavaScript is written by hand):
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install trunk --locked
+trunk serve apps/desktop/index.html
+```
+
+In the browser, open a project or a library (`.oclib`) by dropping the file
+onto the page; Save, Save as and Export download the file.
+
 `serve` (without `--print-map`) answers Modbus TCP on 127.0.0.1:5020 for a
 PLC program or an HMI under test. OpenCircuit is a simulator, not a
 controller: never connect it to a real plant.

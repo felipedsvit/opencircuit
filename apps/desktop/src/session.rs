@@ -288,6 +288,21 @@ impl Session {
         Ok(())
     }
 
+    /// The project as canonical text, for a browser download.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SaveError::Project`] when the document cannot be written.
+    pub fn text(&self) -> Result<String, SaveError> {
+        circuit_project::to_string(&self.doc).map_err(SaveError::Project)
+    }
+
+    /// Record that the document as it is now has been saved elsewhere (a
+    /// browser download), so that closing it asks nothing.
+    pub fn mark_saved(&mut self) {
+        self.history.mark_saved();
+    }
+
     fn write(&mut self, path: &Path) -> Result<(), SaveError> {
         let text = circuit_project::to_string(&self.doc).map_err(SaveError::Project)?;
         write_atomic(path, &text).map_err(SaveError::File)?;
