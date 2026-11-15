@@ -18,6 +18,26 @@ fn net_of(circuit: &CompiledCircuit, symbol: SymbolId, terminal: &str) -> NetIx 
         .net
 }
 
+#[test]
+fn every_load_carries_the_stable_id_of_its_device() {
+    for doc in [
+        direct_online_circuit(),
+        reversing_circuit(),
+        transformer_circuit(Secondary::Own),
+    ] {
+        let circuit = compile_ok(&doc);
+        assert!(!circuit.loads().is_empty());
+        for load in circuit.loads() {
+            assert_ne!(load.device_id, DeviceId(0));
+            assert_eq!(
+                circuit.device(load.device).map(|device| device.id),
+                Some(load.device_id)
+            );
+            assert!(doc.devices.iter().any(|device| device.id == load.device_id));
+        }
+    }
+}
+
 fn symbol_of(doc: &Schematic, reference: &str, key: &str) -> SymbolId {
     let device = doc
         .devices
