@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ConductorSet, DeviceClass, DeviceId, JunctionId, LayoutIndex, MotorState,
-    Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView,
+    Operator, Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView,
     WindingConnection, Wire, WireId,
 };
 
@@ -234,10 +234,12 @@ fn draw_symbol(
             _ => initially_closed,
         }
     };
-    let operator = match class {
-        DeviceClass::Pushbutton => Actuator::Push,
-        DeviceClass::LatchingSwitch => Actuator::Latch,
-        _ => Actuator::None,
+    let operator = match model.operator() {
+        Operator::Push => Actuator::Push,
+        Operator::Latch => Actuator::Latch,
+        Operator::Emergency => Actuator::Emergency,
+        Operator::Position => Actuator::Position,
+        Operator::None => Actuator::None,
     };
     let look = Look {
         closed,

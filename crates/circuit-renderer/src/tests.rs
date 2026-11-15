@@ -473,6 +473,32 @@ fn running_six_terminal_motor_is_marked_with_its_winding_connection() {
 }
 
 #[test]
+fn limit_switch_is_drawn_with_a_roller_and_emergency_stop_without() {
+    let catalog = ComponentCatalog::builtin();
+    let mut b = SchematicBuilder::new("operators");
+    let limit = b.device("B1", "limit_switch", &[]).unwrap();
+    let roller = b.symbol(limit, "no", None, GridPoint::new(0, 0)).unwrap();
+    let estop = b.device("S0", "estop.latching", &[]).unwrap();
+    let mushroom = b
+        .symbol(estop, "contact", None, GridPoint::new(8, 0))
+        .unwrap();
+    let doc = b.finish();
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let circles = |symbol: SymbolId| {
+        scene
+            .items
+            .iter()
+            .filter(|item| item.subject == Some(Subject::Symbol(symbol)))
+            .filter(|item| matches!(item.shape, Shape::Circle { .. }))
+            .count()
+    };
+
+    assert_eq!(circles(roller), 1);
+    assert_eq!(circles(mushroom), 0);
+    assert!(styles_of(&scene, &Subject::Symbol(mushroom)).contains(&StyleKey::ContactClosed));
+}
+
+#[test]
 fn timer_coil_shows_elapsed_and_preset_ticks() {
     let catalog = ComponentCatalog::builtin();
     let mut b = SchematicBuilder::new("timer");

@@ -11,9 +11,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::{PARAM_FIRST, PARAM_SECOND, PARAM_SUPPLY};
 use circuit_model::{
     ComponentCatalog, ComponentModel, Device, DeviceClass, DeviceId, Endpoint, GridPoint,
-    IdAllocator, Junction, JunctionId, LayoutIndex, ModelRef, ParamType, ParamValue, PhaseSequence,
-    QuarterTurn, ReferenceDesignator, Schematic, Subject, SupplyId, SupplyKind, SupplyProfile,
-    SymbolId, SymbolInstance, SymbolKey, Wire, WireId, orthogonal_route, segment_at,
+    IdAllocator, Junction, JunctionId, LayoutIndex, ModelRef, Operator, ParamType, ParamValue,
+    PhaseSequence, QuarterTurn, ReferenceDesignator, Schematic, Subject, SupplyId, SupplyKind,
+    SupplyProfile, SymbolId, SymbolInstance, SymbolKey, Wire, WireId, orthogonal_route, segment_at,
 };
 
 use crate::edit::Edit;
@@ -142,13 +142,19 @@ fn still_fits(
 /// and relays, KT for timers, S for pushbuttons and switches, Q for a main
 /// switch, F for thermal relays and fuses, M for motors, H for lamps and
 /// buzzers, X for supply terminals, KX for mechanical interlocks, T for
-/// transformers.
+/// transformers, B for position and level switches.
 #[must_use]
 pub fn designator_prefix(model: &ComponentModel) -> &'static str {
     match model.class() {
         DeviceClass::Contactor | DeviceClass::Relay => "K",
         DeviceClass::Timer(_) => "KT",
-        DeviceClass::Pushbutton => "S",
+        DeviceClass::Pushbutton => {
+            if model.operator() == Operator::Position {
+                "B"
+            } else {
+                "S"
+            }
+        }
         DeviceClass::LatchingSwitch => {
             if model.id().starts_with("main_switch") {
                 "Q"

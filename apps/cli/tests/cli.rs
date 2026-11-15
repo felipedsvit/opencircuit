@@ -251,7 +251,7 @@ fn every_committed_scenario_passes() {
     let output = opencircuit(&["test", "examples", "tests/fixtures"]);
 
     assert_eq!(code(&output), 0, "{}", stdout(&output));
-    assert!(stdout(&output).ends_with("20 scenario(s), 0 failed\n"));
+    assert!(stdout(&output).ends_with("22 scenario(s), 0 failed\n"));
 }
 
 #[test]

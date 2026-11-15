@@ -37,8 +37,9 @@ mod validate;
 
 pub use builder::SchematicBuilder;
 pub use catalog::{
-    CatalogError, ComponentCatalog, ComponentModel, Connection, DeviceClass, ParamDefinition,
-    ParamType, Provenance, SymbolDefinition, SymbolKind, TerminalDefinition, TimerMode,
+    CatalogError, ComponentCatalog, ComponentModel, Connection, DeviceClass, Operator,
+    ParamDefinition, ParamType, Provenance, SymbolDefinition, SymbolKind, TerminalDefinition,
+    TimerMode,
 };
 pub use diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticCode, Severity, Subject, has_errors, sort_diagnostics,

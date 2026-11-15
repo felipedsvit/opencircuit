@@ -106,6 +106,10 @@ pub(crate) const EXAMPLES: &[Example] = &[
         build: control_transformer,
     },
     Example {
+        path: "examples/pump-level/pump-level.ocircuit",
+        build: pump_level,
+    },
+    Example {
         path: "tests/fixtures/sections-bridged/sections-bridged.ocircuit",
         build: sections_bridged,
     },
@@ -920,6 +924,67 @@ fn control_transformer() -> Built<Schematic> {
     sheet.wire(pin(lamp, "x2"), rail_lamp)?;
     sheet.wire(rail, rail_lamp)?;
     sheet.route(rail_lamp, pin(secondary, "x2"), &[(16, 34)])?;
+    Ok(sheet.finish())
+}
+
+/// A pump that fills a tank between two level switches: B2 (low level
+/// reached) starts K1, which seals itself until B1 (high level reached)
+/// opens. The latching emergency stop S0 cuts the control circuit; after it
+/// is released the pump waits for the low level again. H1 shows the pump
+/// running.
+fn pump_level() -> Built<Schematic> {
+    let mut sheet = Sheet::new("Pump with level switches");
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 31))?;
+    let phases = sheet.power_supply(20, 0)?;
+
+    let estop = sheet.part("S0", "estop.latching", "contact", &[], (0, 3))?;
+    let high = sheet.device("B1", "limit_switch", &[])?;
+    let high_contact = sheet.symbol(high, "nc", None, (0, 19))?;
+    let low = sheet.device("B2", "limit_switch", &[])?;
+    let low_contact = sheet.symbol(low, "no", None, (-4, 11))?;
+    let k1 = sheet.device("K1", "contactor.generic", &dc_load())?;
+    let k1_coil = sheet.symbol(k1, "coil", None, (0, 25))?;
+    let k1_main = sheet.symbol(k1, "main", None, (24, 11))?;
+    let k1_seal = sheet.symbol(k1, "aux_no", Some(1), (4, 11))?;
+    let k1_lamp = sheet.symbol(k1, "aux_no", Some(2), (8, 11))?;
+    let lamp = sheet.part("H1", "lamp.generic", "lamp", &dc_load(), (8, 19))?;
+    let q1 = sheet.part(
+        "Q1",
+        "main_switch.3p",
+        "main",
+        &[("initial_closed", ParamValue::Bool(true))],
+        (24, 5),
+    )?;
+    let motor = sheet.part("M1", "motor.3ph", "motor", &motor_400v(), (24, 18))?;
+
+    // Control.
+    let feed = sheet.junction((0, 7))?;
+    let to_seal = sheet.junction((4, 7))?;
+    let node = sheet.junction((0, 15))?;
+    let rail = sheet.junction((0, 29))?;
+    let rail_lamp = sheet.junction((8, 29))?;
+    sheet.wire(out(p24), pin(estop, "p1"))?;
+    sheet.wire(pin(estop, "p2"), feed)?;
+    sheet.route(feed, pin(low_contact, "p1"), &[(-4, 7)])?;
+    sheet.wire(feed, to_seal)?;
+    sheet.wire(to_seal, pin(k1_seal, "p1"))?;
+    sheet.route(to_seal, pin(k1_lamp, "p1"), &[(8, 7)])?;
+    sheet.route(pin(low_contact, "p2"), node, &[(-4, 15)])?;
+    sheet.route(pin(k1_seal, "p2"), node, &[(4, 15)])?;
+    sheet.wire(node, pin(high_contact, "p1"))?;
+    sheet.wire(pin(high_contact, "p2"), pin(k1_coil, "a1"))?;
+    sheet.wire(pin(k1_coil, "a2"), rail)?;
+    sheet.wire(pin(k1_lamp, "p2"), pin(lamp, "x1"))?;
+    sheet.wire(pin(lamp, "x2"), rail_lamp)?;
+    sheet.wire(rail, rail_lamp)?;
+    sheet.wire(rail, out(p0))?;
+
+    // Power.
+    for ((phase, (input, output)), terminal) in phases.into_iter().zip(POLES).zip(MOTOR_TERMINALS) {
+        sheet.wire(out(phase), pin(q1, input))?;
+        sheet.wire(pin(q1, output), pin(k1_main, input))?;
+        sheet.wire(pin(k1_main, output), pin(motor, terminal))?;
+    }
     Ok(sheet.finish())
 }
 

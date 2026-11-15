@@ -150,6 +150,23 @@ fn placed_devices_get_the_first_free_designator_of_their_kind() {
 }
 
 #[test]
+fn position_switches_are_named_b_and_emergency_stops_s() {
+    let mut doc = Schematic::new("prefixes");
+    let mut history = History::new();
+    place(&mut doc, &mut history, "limit_switch", "no", point(0, 0));
+    place(
+        &mut doc,
+        &mut history,
+        "estop.latching",
+        "contact",
+        point(4, 0),
+    );
+
+    let names: Vec<&str> = doc.devices.iter().map(|d| d.reference.0.as_str()).collect();
+    assert_eq!(names, ["B1", "S1"]);
+}
+
+#[test]
 fn slotted_symbol_is_placed_in_slot_one_and_the_next_one_in_slot_two() {
     let mut doc = Schematic::new("slots");
     let mut history = History::new();

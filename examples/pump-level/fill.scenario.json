@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit": "pump-level.ocircuit",
+  "events": [
+    { "tick": 2, "action": "press", "device": "B2" },
+    { "tick": 5, "action": "release", "device": "B2" },
+    { "tick": 12, "action": "press", "device": "B1" },
+    { "tick": 15, "action": "release", "device": "B1" }
+  ],
+  "until_tick": 18,
+  "expect": { "trace": "fill.trace", "diagnostics": [] }
+}
