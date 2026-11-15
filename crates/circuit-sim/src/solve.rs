@@ -174,15 +174,16 @@ struct SupplyLabel {
 }
 
 /// Loads that share conductor-less groups, and what feeds them from outside.
-#[derive(Default)]
+/// One per component of the dead groups, kept in a buffer the solver reuses.
+#[derive(Clone, Copy, Debug, Default)]
 struct DeadComponent {
     /// Conductors and section of the first live group reached through a
     /// load.
     boundary: Option<(ConductorSet, Option<SupplyId>)>,
     /// Whether live groups with different conductors were reached.
     mixed: bool,
-    loads: BTreeSet<usize>,
-    devices: BTreeSet<DeviceId>,
+    /// How many loads touch the component.
+    loads: usize,
 }
 
 /// Reusable solver for one compiled circuit.
@@ -202,6 +203,10 @@ pub struct Solver {
     feeds: Vec<GroupFeed>,
     /// The groups with at least one enabled source, in the order found.
     fed: Vec<u32>,
+    /// The series-load accumulators, by root of `dead`. Only the roots listed
+    /// in `touched` hold a value.
+    components: Vec<DeadComponent>,
+    touched: Vec<u32>,
 }
 
 impl Solver {
@@ -237,6 +242,8 @@ impl Solver {
             solve_count: 0,
             feeds: vec![GroupFeed::default(); nets as usize],
             fed: Vec::new(),
+            components: vec![DeadComponent::default(); nets as usize],
+            touched: Vec::new(),
         }
     }
 
@@ -643,23 +650,28 @@ impl Solver {
             }
         }
 
-        let mut components: BTreeMap<u32, DeadComponent> = BTreeMap::new();
-        for (index, load) in circuit.loads().iter().enumerate() {
-            let states: Vec<(u32, ConductorSet, bool)> =
-                load.nets.iter().map(|net| self.group_state(*net)).collect();
-            let Some(dead_group) = states
-                .iter()
-                .find(|(_, conductors, _)| conductors.is_empty())
-                .map(|(group, _, _)| *group)
-            else {
+        // The accumulators leave the solver while they are filled, so that
+        // the group lookups below can borrow it.
+        let mut components = std::mem::take(&mut self.components);
+        let mut touched = std::mem::take(&mut self.touched);
+        for root in touched.drain(..) {
+            if let Some(component) = components.get_mut(root as usize) {
+                *component = DeadComponent::default();
+            }
+        }
+        for load in circuit.loads() {
+            let Some(root) = self.dead_root_of(load) else {
                 continue;
             };
-            let component = components.entry(self.dead.find(dead_group)).or_default();
-            component.loads.insert(index);
-            if let Some(device) = circuit.device(load.device) {
-                component.devices.insert(device.id);
+            let Some(component) = components.get_mut(root as usize) else {
+                continue;
+            };
+            if component.loads == 0 {
+                touched.push(root);
             }
-            for (group, conductors, faulted) in states {
+            component.loads = component.loads.saturating_add(1);
+            for net in &load.nets {
+                let (group, conductors, faulted) = self.group_state(*net);
                 if conductors.is_empty() || faulted {
                     continue;
                 }
@@ -672,23 +684,58 @@ impl Solver {
             }
         }
 
-        for component in components.into_values() {
-            if !component.mixed || component.loads.len() < 2 {
-                continue;
+        // Only a component with two loads fed from different conductors is
+        // reported, so the devices are collected for those alone.
+        let mut reported: Vec<u32> = touched
+            .iter()
+            .copied()
+            .filter(|root| {
+                components
+                    .get(*root as usize)
+                    .is_some_and(|component| component.mixed && component.loads >= 2)
+            })
+            .collect();
+        reported.sort_unstable();
+        if !reported.is_empty() {
+            let mut devices: BTreeMap<u32, BTreeSet<DeviceId>> = BTreeMap::new();
+            for load in circuit.loads() {
+                let Some(root) = self.dead_root_of(load) else {
+                    continue;
+                };
+                if reported.binary_search(&root).is_ok() {
+                    devices.entry(root).or_default().insert(load.device_id);
+                }
             }
-            let mut devices = component.devices.into_iter();
-            let Some(first) = devices.next() else {
-                continue;
-            };
-            faults.push(
-                Diagnostic::new(
-                    DiagnosticCode::DynamicUnsupportedTopology,
-                    Subject::Device(first),
-                    "loads are connected in series, which the discrete model does not represent",
-                )
-                .with_related(devices.map(Subject::Device).collect()),
-            );
+            for devices in devices.into_values() {
+                let mut devices = devices.into_iter();
+                let Some(first) = devices.next() else {
+                    continue;
+                };
+                faults.push(
+                    Diagnostic::new(
+                        DiagnosticCode::DynamicUnsupportedTopology,
+                        Subject::Device(first),
+                        "loads are connected in series, which the discrete model does not represent",
+                    )
+                    .with_related(devices.map(Subject::Device).collect()),
+                );
+            }
         }
+        self.components = components;
+        self.touched = touched;
+    }
+
+    /// The component of the dead groups a load touches, named by its root,
+    /// or `None` when no terminal of the load is on a group without
+    /// conductors.
+    fn dead_root_of(&mut self, load: &CompiledLoad) -> Option<u32> {
+        let dead_group = load
+            .nets
+            .iter()
+            .map(|net| self.group_state(*net))
+            .find(|(_, conductors, _)| conductors.is_empty())
+            .map(|(group, _, _)| group)?;
+        Some(self.dead.find(dead_group))
     }
 }
 
