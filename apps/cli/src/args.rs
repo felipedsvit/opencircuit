@@ -43,6 +43,7 @@ pub(crate) enum Command {
         output: PathBuf,
         format: ExportFormat,
         theme: Theme,
+        sheet: SheetChoice,
         library: Option<PathBuf>,
     },
     Serve {
@@ -63,6 +64,18 @@ pub(crate) const DEFAULT_LISTEN: &str = "127.0.0.1:5020";
 pub(crate) enum ExportFormat {
     Svg,
     Pdf,
+}
+
+/// Which sheets `export` writes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SheetChoice {
+    /// A PDF has one page per sheet, and a drawing without sheets one page; an
+    /// SVG is the whole canvas.
+    Default,
+    /// Every sheet, one PDF page each.
+    All,
+    /// The sheet with this number.
+    Number(u32),
 }
 
 /// Positional arguments and options of one command line.
@@ -215,7 +228,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
             })
         }
         "export" => {
-            let words = Words::split(rest, &["--output", "--theme", "--library"], &[])?;
+            let words = Words::split(rest, &["--output", "--theme", "--sheet", "--library"], &[])?;
             let output = words
                 .value("--output")
                 .map(PathBuf::from)
@@ -242,11 +255,30 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                     return Err(format!("unknown theme `{other}`; use `print` or `live`"));
                 }
             };
+            let sheet = match words.value("--sheet") {
+                None => SheetChoice::Default,
+                Some("all") => SheetChoice::All,
+                Some(number) => number
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|number| *number > 0)
+                    .map(SheetChoice::Number)
+                    .ok_or_else(|| {
+                        format!("`--sheet` takes `all` or a sheet number from 1, not `{number}`")
+                    })?,
+            };
+            if format == ExportFormat::Svg && sheet == SheetChoice::All {
+                return Err(
+                    "an SVG holds one page; give `--sheet <number>` or write a `.pdf` for every sheet"
+                        .to_owned(),
+                );
+            }
             Ok(Command::Export {
                 project: words.single_positional("project file")?,
                 output,
                 format,
                 theme,
+                sheet,
                 library: words.value("--library").map(PathBuf::from),
             })
         }
@@ -419,6 +451,7 @@ mod tests {
                 output: PathBuf::from("out/a.SVG"),
                 format: ExportFormat::Svg,
                 theme: Theme::Print,
+                sheet: SheetChoice::Default,
                 library: None,
             })
         );

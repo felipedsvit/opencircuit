@@ -117,6 +117,14 @@ deterministic: the same project gives the same bytes on every platform,
 which is what the committed drawings under `examples/` are checked against.
 Library artwork is drawn when its library is loaded.
 
+A project with sheets (ADR-0011, `FORMAT.md`) draws the frame, the zone
+marks and the title block of each sheet. Its PDF has one page per sheet, in
+sheet-number order, each the size of the paper (A4 landscape is 840 by 590
+points); `--sheet <number>` writes one sheet as a PDF or an SVG, and
+`--sheet all` is the default for a PDF. An SVG without `--sheet` is the whole
+canvas. Text is set in Liberation Mono, embedded in the PDF as a subset
+(ADR-0012).
+
 ## Rust crates
 
 The crates under `crates/` are libraries with no GUI, filesystem, socket or

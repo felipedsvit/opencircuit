@@ -349,33 +349,38 @@ impl Session {
     /// The scene and theme of an export. With `with_state` and a solved
     /// tick, that tick in the live theme; otherwise the document at rest in
     /// the print theme.
-    fn export_scene(&self, with_state: bool) -> (Scene, circuit_export::Theme) {
+    fn export_scene(&self, with_state: bool) -> (Scene, Vec<Scene>, circuit_export::Theme) {
         let options = SceneOptions::default();
-        match (with_state, self.snapshot.as_ref()) {
-            (true, Some(snapshot)) => (
-                build_scene(&self.doc, &self.catalog, Some(snapshot), &options),
-                circuit_export::Theme::Live,
-            ),
-            _ => (
-                build_scene(&self.doc, &self.catalog, None, &options),
-                circuit_export::Theme::Print,
-            ),
-        }
+        let (snapshot, theme) = match (with_state, self.snapshot.as_ref()) {
+            (true, Some(snapshot)) => (Some(snapshot), circuit_export::Theme::Live),
+            _ => (None, circuit_export::Theme::Print),
+        };
+        (
+            build_scene(&self.doc, &self.catalog, snapshot, &options),
+            circuit_renderer::sheet_scenes(&self.doc, &self.catalog, snapshot, &options),
+            theme,
+        )
     }
 
-    /// The drawing as SVG text, with the same exporter as the command line.
+    /// The drawing as SVG text, with the same exporter as the command line:
+    /// the whole canvas, frames included.
     #[must_use]
     pub fn svg(&self, with_state: bool) -> String {
-        let (scene, theme) = self.export_scene(with_state);
+        let (scene, _, theme) = self.export_scene(with_state);
         circuit_export::svg(&scene, theme)
     }
 
     /// The drawing as a PDF document, with the same exporter as the command
-    /// line.
+    /// line: one page per sheet when the project has sheets, otherwise one
+    /// page sized to the drawing.
     #[must_use]
     pub fn pdf(&self, with_state: bool) -> Vec<u8> {
-        let (scene, theme) = self.export_scene(with_state);
-        circuit_export::pdf(&scene, theme)
+        let (scene, pages, theme) = self.export_scene(with_state);
+        if pages.is_empty() {
+            circuit_export::pdf(&scene, theme)
+        } else {
+            circuit_export::pdf_pages(&pages, theme)
+        }
     }
 
     /// Write the drawing to `path`, atomically, as PDF when the path ends in

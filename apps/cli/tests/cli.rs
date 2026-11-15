@@ -251,7 +251,7 @@ fn every_committed_scenario_passes() {
     let output = opencircuit(&["test", "examples", "tests/fixtures"]);
 
     assert_eq!(code(&output), 0, "{}", stdout(&output));
-    assert!(stdout(&output).ends_with("23 scenario(s), 0 failed\n"));
+    assert!(stdout(&output).ends_with("24 scenario(s), 0 failed\n"));
 }
 
 #[test]
@@ -467,6 +467,99 @@ fn export_writes_the_same_pdf_as_the_committed_drawing() {
         fs::read(&output).expect("written"),
         fs::read(root().join("examples/star-delta/star-delta.pdf")).expect("golden")
     );
+}
+
+const SHEETS: &str = "examples/sheets/starter-sheets.ocircuit";
+
+fn export_to(directory: &Path, name: &str, extra: &[&str]) -> (Output, PathBuf) {
+    let output = directory.join(name);
+    let mut args = vec![
+        "export",
+        SHEETS,
+        "--output",
+        output.to_str().expect("UTF-8 path"),
+    ];
+    args.extend_from_slice(extra);
+    (opencircuit(&args), output)
+}
+
+fn pdf_text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+#[test]
+fn a_pdf_of_a_project_with_sheets_has_one_page_per_sheet_and_matches_the_committed_one() {
+    let directory = scratch("export-sheets-pdf");
+
+    let (run, output) = export_to(&directory, "all.pdf", &[]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let bytes = fs::read(&output).expect("written");
+    let text = pdf_text(&bytes);
+    assert!(text.contains("/Count 2"));
+    assert_eq!(text.matches("/MediaBox [0 0 840 590]").count(), 2);
+    assert_eq!(
+        bytes,
+        fs::read(root().join("examples/sheets/starter-sheets.pdf")).expect("golden")
+    );
+    // `all` says the same.
+    let (run, again) = export_to(&directory, "again.pdf", &["--sheet", "all"]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert_eq!(fs::read(&again).expect("written"), bytes);
+}
+
+#[test]
+fn one_sheet_is_exported_as_a_page_of_paper_in_pdf_or_svg() {
+    let directory = scratch("export-one-sheet");
+
+    let (run, pdf) = export_to(&directory, "two.pdf", &["--sheet", "2"]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let text = pdf_text(&fs::read(&pdf).expect("written"));
+    assert!(text.contains("/Count 1") && text.contains("/MediaBox [0 0 840 590]"));
+
+    let (run, svg) = export_to(&directory, "two.svg", &["--sheet", "2"]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let svg = fs::read_to_string(&svg).expect("written");
+    assert!(
+        svg.contains("viewBox=\"1060 -80 840 590\""),
+        "{}",
+        &svg[..300]
+    );
+    assert!(svg.contains("Sheet 2/2") && !svg.contains("Sheet 1/2"));
+    assert!(svg.contains("for\u{e7}a"));
+}
+
+#[test]
+fn export_sheet_refuses_what_it_cannot_do() {
+    let directory = scratch("export-sheet-errors");
+
+    let (missing, written) = export_to(&directory, "x.pdf", &["--sheet", "9"]);
+    assert_eq!(code(&missing), 1);
+    assert!(
+        stderr(&missing).contains("no sheet number 9"),
+        "{}",
+        stderr(&missing)
+    );
+    assert!(!written.exists());
+
+    let (svg_all, _) = export_to(&directory, "x.svg", &["--sheet", "all"]);
+    assert_eq!(code(&svg_all), 2);
+    assert!(stderr(&svg_all).contains("an SVG holds one page"));
+
+    for bad in ["0", "-1", "two"] {
+        let (run, _) = export_to(&directory, "y.pdf", &["--sheet", bad]);
+        assert_eq!(code(&run), 2, "{bad}");
+    }
+    // A project without sheets has none to choose.
+    let none = opencircuit(&[
+        "export",
+        "examples/direct-starter/starter.ocircuit",
+        "--output",
+        directory.join("z.pdf").to_str().expect("UTF-8 path"),
+        "--sheet",
+        "1",
+    ]);
+    assert_eq!(code(&none), 1);
 }
 
 const ACME_LAMP: &str = "examples/library/acme-lamp.ocircuit";

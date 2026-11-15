@@ -149,6 +149,16 @@ no electrical meaning; wires connect across them as everywhere else.
 - A document without sheets is drawn and exported as one page sized to its
   content, as in version 1.
 
+Drawing (the renderer, not the file): the frame is two rectangles, 12
+subunits apart, with zone ticks across the band between them and the zone
+numbers (top and bottom) and letters (left and right) centred in it. The title
+block is 30 by 6.4 grid units in the bottom right corner inside the border,
+when the sheet is large enough, with four rows: the sheet title; the project
+name and the company; the author and the date; the revision and `Sheet n/N`.
+Texts are cut to the width of their cell. The page of a sheet in a PDF or SVG
+is exactly its frame; what lies outside is not drawn, and what crosses the
+edge is cut.
+
 Validation: a number that is 0 or used twice is `OC-STR-015`
 (`DuplicateSheetNumber`); a frame with 0 or more than 26 zone columns or
 rows, a side of 0 or more than 1 000 grid units, a frame beyond the
