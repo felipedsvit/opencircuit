@@ -51,12 +51,13 @@ usage:
   opencircuit simulate <project.ocircuit> --scenario <scenario.json>
                        [--tick-us N] [--fault-policy halt|report]
                        [--trace <file>] [--snapshot-json <file>]
-                       [--library <file.oclib|dir>]
-  opencircuit test <path>... [--update-golden]
+                       [--format text|json] [--library <file.oclib|dir>]
+  opencircuit test <path>... [--update-golden] [--format text|json]
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
                      [--theme print|live] [--sheet <number>|all]
-                     [--library <file.oclib|dir>]
-  opencircuit serve <project.ocircuit> [--listen <address:port>] [--print-map]
+                     [--format text|json] [--library <file.oclib|dir>]
+  opencircuit serve <project.ocircuit> [--listen <address:port>]
+                    [--print-map [--format text|json]]
                     [--library <file.oclib|dir>] [--duration-ms N]
 
 A directory given to --library stands for its *.oclib files. Scenarios name
@@ -65,6 +66,10 @@ their libraries in `libraries` (scenario schema version 2).
 serve answers Modbus TCP on 127.0.0.1:5020 unless --listen names another
 address. Modbus has no authentication. OpenCircuit is a simulator, not a
 controller: never connect it to a real plant.
+
+With --format json a command writes one JSON document on stdout, with
+format 1, the command and ok; a failure with exit code 1 is a document with
+ok false and an error, and an exit code 2 still writes on stderr.
 
 exit codes: 0 success, 1 validation or test failure, 2 usage or I/O error
 ";

@@ -48,6 +48,7 @@ pub(crate) fn execute(
             fault_policy,
             trace,
             snapshot_json,
+            report,
         } => {
             let overrides = Overrides {
                 tick_us: *tick_us,
@@ -61,6 +62,7 @@ pub(crate) fn execute(
                     library: library.as_deref(),
                     trace: trace.as_deref(),
                     snapshot_json: snapshot_json.as_deref(),
+                    report: *report,
                 },
                 out,
                 err,
@@ -69,6 +71,7 @@ pub(crate) fn execute(
         Command::Test {
             paths,
             update_golden,
+            report,
         } => {
             if *update_golden && env.ci {
                 return Err(CliError::Usage(
@@ -76,7 +79,7 @@ pub(crate) fn execute(
                         .to_owned(),
                 ));
             }
-            test(paths, *update_golden, out)
+            test(paths, *update_golden, *report, out)
         }
         Command::Export {
             project,
@@ -85,12 +88,14 @@ pub(crate) fn execute(
             theme,
             sheet,
             library,
+            report,
         } => {
             let catalog = load_catalog(library.as_slice())?;
             let drawing = Drawing {
                 format: *format,
                 theme: *theme,
                 sheet: *sheet,
+                report: *report,
             };
             export(project, output, drawing, &catalog, out, err)
         }
@@ -100,6 +105,7 @@ pub(crate) fn execute(
             library,
             print_map,
             duration_ms,
+            report,
         } => {
             let catalog = load_catalog(library.as_slice())?;
             let text = read_text(project, MAX_PROJECT_BYTES)?;
@@ -111,7 +117,19 @@ pub(crate) fn execute(
                 }
             };
             if *print_map {
-                out.write_all(circuit_io::IoMap::new(&doc, &catalog).describe().as_bytes())?;
+                let map = circuit_io::IoMap::new(&doc, &catalog);
+                match report {
+                    OutputFormat::Text => out.write_all(map.describe().as_bytes())?,
+                    OutputFormat::Json => emit(
+                        out,
+                        &MapReport {
+                            format: JSON_FORMAT,
+                            command: "serve",
+                            ok: true,
+                            map: map.entries().iter().map(MapLine::from).collect(),
+                        },
+                    )?,
+                }
                 return Ok(EXIT_OK);
             }
             crate::serve::serve(
@@ -128,12 +146,111 @@ pub(crate) fn execute(
     }
 }
 
+/// Version of the JSON documents the commands write; the `format` field of
+/// each. A field is added without a new version, and one is changed or
+/// removed with a new one.
+const JSON_FORMAT: u32 = 1;
+
+/// Write a value as one pretty-printed JSON document.
+fn emit<T: Serialize>(out: &mut dyn Write, value: &T) -> Result<(), CliError> {
+    let text = serde_json::to_string_pretty(value).map_err(io::Error::from)?;
+    writeln!(out, "{text}")?;
+    Ok(())
+}
+
+/// What a command in `--format json` writes when it fails with exit code 1:
+/// a project that does not load or compile, a golden that differs.
+#[derive(Serialize)]
+struct Failure<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    error: &'a str,
+    diagnostics: &'a [Diagnostic],
+}
+
+/// The failure in the requested format: a line on `err` for a person, a JSON
+/// document on `out` for a program.
+fn fail(
+    report: OutputFormat,
+    command: &'static str,
+    message: &str,
+    diagnostics: &[Diagnostic],
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<u8, CliError> {
+    match report {
+        OutputFormat::Text => {
+            writeln!(err, "error: {message}")?;
+            for diagnostic in diagnostics {
+                writeln!(err, "{diagnostic}")?;
+            }
+        }
+        OutputFormat::Json => emit(
+            out,
+            &Failure {
+                format: JSON_FORMAT,
+                command,
+                ok: false,
+                error: message,
+                diagnostics,
+            },
+        )?,
+    }
+    Ok(EXIT_FAILED)
+}
+
+#[derive(Serialize)]
+struct MapReport {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    map: Vec<MapLine>,
+}
+
+/// One address of the Modbus map.
+#[derive(Serialize)]
+struct MapLine {
+    table: &'static str,
+    address: u16,
+    words: u16,
+    name: String,
+    meaning: &'static str,
+}
+
+impl From<&circuit_io::MapEntry> for MapLine {
+    fn from(entry: &circuit_io::MapEntry) -> Self {
+        Self {
+            table: match entry.table {
+                circuit_io::Table::Coil => "coil",
+                circuit_io::Table::DiscreteInput => "discrete_input",
+                circuit_io::Table::InputRegister => "input_register",
+            },
+            address: entry.address,
+            words: entry.words,
+            name: entry.name.clone(),
+            meaning: entry.meaning,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ExportReport<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    file: String,
+    kind: &'a str,
+    pages: usize,
+}
+
 /// What `export` draws and how.
 #[derive(Clone, Copy)]
 struct Drawing {
     format: ExportFormat,
     theme: circuit_export::Theme,
     sheet: SheetChoice,
+    report: OutputFormat,
 }
 
 /// Draw a project at rest and write it. A project that loads is drawn even
@@ -150,13 +267,14 @@ fn export(
         format,
         theme,
         sheet,
+        report,
     } = drawing;
     let text = read_text(project, MAX_PROJECT_BYTES)?;
     let doc = match circuit_project::from_str(&text) {
         Ok(doc) => doc,
         Err(error) => {
-            writeln!(err, "error: {}: {error}", project.display())?;
-            return Ok(EXIT_FAILED);
+            let message = format!("{}: {error}", project.display());
+            return fail(report, "export", &message, &[], out, err);
         }
     };
     let options = circuit_renderer::SceneOptions::default();
@@ -168,42 +286,59 @@ fn export(
                 .iter()
                 .find(|candidate| candidate.number == number)
             else {
-                writeln!(
-                    err,
-                    "error: {}: no sheet number {number}; the project has {} sheet(s)",
+                let message = format!(
+                    "{}: no sheet number {number}; the project has {} sheet(s)",
                     project.display(),
                     doc.sheets.len()
-                )?;
-                return Ok(EXIT_FAILED);
+                );
+                return fail(report, "export", &message, &[], out, err);
             };
             circuit_renderer::build_sheet_scene(&doc, catalog, None, &options, found.id)
         }
         SheetChoice::Default | SheetChoice::All => None,
     };
-    let bytes = match (format, one) {
-        (ExportFormat::Svg, Some(page)) => circuit_export::svg(&page, theme).into_bytes(),
-        (ExportFormat::Pdf, Some(page)) => circuit_export::pdf(&page, theme),
+    let (bytes, pages) = match (format, one) {
+        (ExportFormat::Svg, Some(page)) => (circuit_export::svg(&page, theme).into_bytes(), 1),
+        (ExportFormat::Pdf, Some(page)) => (circuit_export::pdf(&page, theme), 1),
         (ExportFormat::Svg, None) => {
             let scene = circuit_renderer::build_scene(&doc, catalog, None, &options);
-            circuit_export::svg(&scene, theme).into_bytes()
+            (circuit_export::svg(&scene, theme).into_bytes(), 1)
         }
         (ExportFormat::Pdf, None) => {
             let pages = circuit_renderer::sheet_scenes(&doc, catalog, None, &options);
             if pages.is_empty() {
                 let scene = circuit_renderer::build_scene(&doc, catalog, None, &options);
-                circuit_export::pdf(&scene, theme)
+                (circuit_export::pdf(&scene, theme), 1)
             } else {
-                circuit_export::pdf_pages(&pages, theme)
+                (circuit_export::pdf_pages(&pages, theme), pages.len())
             }
         }
     };
     write_atomic(output, &bytes)?;
-    writeln!(out, "wrote  {}", output.display())?;
+    match report {
+        OutputFormat::Text => writeln!(out, "wrote  {}", output.display())?,
+        OutputFormat::Json => emit(
+            out,
+            &ExportReport {
+                format: JSON_FORMAT,
+                command: "export",
+                ok: true,
+                file: output.display().to_string(),
+                kind: match format {
+                    ExportFormat::Svg => "svg",
+                    ExportFormat::Pdf => "pdf",
+                },
+                pages,
+            },
+        )?,
+    }
     Ok(EXIT_OK)
 }
 
 #[derive(Serialize)]
 struct ValidationReport<'a> {
+    format: u32,
+    command: &'static str,
     ok: bool,
     /// Why the project could not be loaded at all.
     error: Option<&'a str>,
@@ -248,6 +383,8 @@ fn validate(
         }
         OutputFormat::Json => {
             let report = ValidationReport {
+                format: JSON_FORMAT,
+                command: "validate",
                 ok,
                 error: load_error.as_deref(),
                 errors,
@@ -451,6 +588,22 @@ struct SimulateRequest<'a> {
     library: Option<&'a Path>,
     trace: Option<&'a Path>,
     snapshot_json: Option<&'a Path>,
+    report: OutputFormat,
+}
+
+#[derive(Serialize)]
+struct SimulationReport<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    /// The last solved tick, or `null` when the scenario ran no tick.
+    tick: Option<u64>,
+    faulted: bool,
+    diagnostics: &'a [Diagnostic],
+    /// The trace in its text form, or `null` when `--trace` wrote it to a
+    /// file.
+    trace: Option<&'a str>,
+    snapshot: &'a Option<SimSnapshot>,
 }
 
 fn simulate(
@@ -465,6 +618,7 @@ fn simulate(
         library,
         trace,
         snapshot_json,
+        report,
     } = *request;
     let text = read_text(project, MAX_PROJECT_BYTES)?;
     let scenario = read_scenario(scenario_path)?;
@@ -478,19 +632,41 @@ fn simulate(
     let doc = match circuit_project::from_str(&text) {
         Ok(doc) => doc,
         Err(error) => {
-            writeln!(err, "error: {}: {error}", project.display())?;
-            return Ok(EXIT_FAILED);
+            let message = format!("{}: {error}", project.display());
+            return fail(report, "simulate", &message, &[], out, err);
         }
     };
 
     match run_scenario(&doc, &scenario, overrides, &catalog) {
         Ok(run) => {
-            for diagnostic in &run.diagnostics {
-                writeln!(err, "{diagnostic}")?;
+            if let Some(path) = trace {
+                write_atomic(path, &run.trace)?;
             }
-            match trace {
-                Some(path) => write_atomic(path, &run.trace)?,
-                None => out.write_all(run.trace.as_bytes())?,
+            match report {
+                OutputFormat::Text => {
+                    for diagnostic in &run.diagnostics {
+                        writeln!(err, "{diagnostic}")?;
+                    }
+                    if trace.is_none() {
+                        out.write_all(run.trace.as_bytes())?;
+                    }
+                }
+                OutputFormat::Json => emit(
+                    out,
+                    &SimulationReport {
+                        format: JSON_FORMAT,
+                        command: "simulate",
+                        ok: true,
+                        tick: run.snapshot.as_ref().map(|snapshot| snapshot.tick),
+                        faulted: run
+                            .snapshot
+                            .as_ref()
+                            .is_some_and(|snapshot| snapshot.faulted),
+                        diagnostics: &run.diagnostics,
+                        trace: trace.is_none().then_some(run.trace.as_str()),
+                        snapshot: &run.snapshot,
+                    },
+                )?,
             }
             if let Some(path) = snapshot_json {
                 let mut json =
@@ -500,12 +676,14 @@ fn simulate(
             }
             Ok(EXIT_OK)
         }
-        Err(ScenarioFailure::Invalid(diagnostics)) => {
-            for diagnostic in &diagnostics {
-                writeln!(err, "{diagnostic}")?;
-            }
-            Ok(EXIT_FAILED)
-        }
+        Err(ScenarioFailure::Invalid(diagnostics)) => fail(
+            report,
+            "simulate",
+            "the circuit does not compile",
+            &diagnostics,
+            out,
+            err,
+        ),
         Err(ScenarioFailure::Scenario(message)) => Err(CliError::Usage(format!(
             "{}: {message}",
             scenario_path.display()
@@ -521,9 +699,29 @@ enum Verdict {
     Fail(Vec<String>),
 }
 
+#[derive(Serialize)]
+struct TestReport {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    total: usize,
+    failed: usize,
+    scenarios: Vec<ScenarioResult>,
+}
+
+/// What became of one scenario: `pass`, `updated` (its golden trace was
+/// written) or `fail`, with the reasons.
+#[derive(Serialize)]
+struct ScenarioResult {
+    path: String,
+    status: &'static str,
+    reasons: Vec<String>,
+}
+
 fn test(
     paths: &[std::path::PathBuf],
     update_golden: bool,
+    report: OutputFormat,
     out: &mut dyn Write,
 ) -> Result<u8, CliError> {
     let scenarios = find_scenarios(paths)?;
@@ -533,20 +731,51 @@ fn test(
         ));
     }
     let mut failed = 0_usize;
+    let mut results = Vec::with_capacity(scenarios.len());
     for path in &scenarios {
-        match check_scenario(path, update_golden)? {
-            Verdict::Pass => writeln!(out, "ok     {}", path.display())?,
-            Verdict::Updated => writeln!(out, "wrote  {}", path.display())?,
+        let shown = path.display().to_string();
+        let (status, reasons) = match check_scenario(path, update_golden)? {
+            Verdict::Pass => ("pass", Vec::new()),
+            Verdict::Updated => ("updated", Vec::new()),
             Verdict::Fail(reasons) => {
                 failed = failed.saturating_add(1);
-                writeln!(out, "FAIL   {}", path.display())?;
-                for reason in reasons {
-                    writeln!(out, "       {reason}")?;
+                ("fail", reasons)
+            }
+        };
+        if report == OutputFormat::Text {
+            match status {
+                "pass" => writeln!(out, "ok     {shown}")?,
+                "updated" => writeln!(out, "wrote  {shown}")?,
+                _ => {
+                    writeln!(out, "FAIL   {shown}")?;
+                    for reason in &reasons {
+                        writeln!(out, "       {reason}")?;
+                    }
                 }
             }
         }
+        results.push(ScenarioResult {
+            path: shown,
+            status,
+            reasons,
+        });
     }
-    writeln!(out, "{} scenario(s), {failed} failed", scenarios.len())?;
+    match report {
+        OutputFormat::Text => {
+            writeln!(out, "{} scenario(s), {failed} failed", scenarios.len())?;
+        }
+        OutputFormat::Json => emit(
+            out,
+            &TestReport {
+                format: JSON_FORMAT,
+                command: "test",
+                ok: failed == 0,
+                total: scenarios.len(),
+                failed,
+                scenarios: results,
+            },
+        )?,
+    }
     Ok(if failed == 0 { EXIT_OK } else { EXIT_FAILED })
 }
 
