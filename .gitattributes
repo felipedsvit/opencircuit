@@ -3,6 +3,7 @@
 * text=auto eol=lf
 *.ocircuit text eol=lf
 *.trace text eol=lf
+*.svg text eol=lf
 *.json text eol=lf
 *.rs text eol=lf
 *.md text eol=lf

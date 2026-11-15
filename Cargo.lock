@@ -272,6 +272,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-export"
+version = "0.0.1"
+dependencies = [
+ "circuit-model",
+ "circuit-renderer",
+ "proptest",
+]
+
+[[package]]
 name = "circuit-model"
 version = "0.0.1"
 dependencies = [
@@ -3144,6 +3153,7 @@ name = "xtask"
 version = "0.0.1"
 dependencies = [
  "circuit-commands",
+ "circuit-export",
  "circuit-model",
  "circuit-project",
  "circuit-renderer",

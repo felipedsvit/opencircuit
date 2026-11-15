@@ -102,23 +102,24 @@ fn generate_examples(check_only: bool) -> Result<String, Vec<String>> {
 
     let mut problems = Vec::new();
     let mut written = 0_usize;
-    for example in examples::EXAMPLES {
-        let text = match example.render() {
-            Ok(text) => text,
+    let outputs = examples::outputs();
+    let total = outputs.len();
+    for output in outputs {
+        let (relative, text) = match output {
+            Ok(output) => output,
             Err(error) => {
                 problems.push(error);
                 continue;
             }
         };
-        let path = root.join(example.path);
+        let path = root.join(&relative);
         let current = std::fs::read_to_string(&path).ok();
         if current.as_deref() == Some(text.as_str()) {
             continue;
         }
         if check_only {
             problems.push(format!(
-                "{} is stale; run `cargo run -p xtask -- generate-examples`",
-                example.path
+                "{relative} is stale; run `cargo run -p xtask -- generate-examples`"
             ));
             continue;
         }
@@ -128,15 +129,12 @@ fn generate_examples(check_only: bool) -> Result<String, Vec<String>> {
             .and_then(|()| std::fs::write(&path, &text));
         match result {
             Ok(()) => written = written.saturating_add(1),
-            Err(error) => problems.push(format!("{}: {error}", example.path)),
+            Err(error) => problems.push(format!("{relative}: {error}")),
         }
     }
 
     if problems.is_empty() {
-        Ok(format!(
-            "{} project files, {written} written",
-            examples::EXAMPLES.len()
-        ))
+        Ok(format!("{total} files, {written} written"))
     } else {
         Err(problems)
     }
