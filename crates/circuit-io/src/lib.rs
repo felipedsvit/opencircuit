@@ -27,4 +27,4 @@
 mod map;
 pub mod modbus;
 
-pub use map::{IoMap, Observable};
+pub use map::{IoMap, MapEntry, Observable, Table};

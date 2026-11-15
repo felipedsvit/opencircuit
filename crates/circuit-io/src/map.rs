@@ -29,6 +29,33 @@ struct Entry<T> {
     kind: T,
 }
 
+/// The Modbus table an address belongs to.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Table {
+    /// Coils: inputs of the circuit, which a client reads and writes.
+    Coil,
+    /// Discrete inputs: states of the circuit, which a client reads.
+    DiscreteInput,
+    /// Input registers: the tick, the fault latch and the motors.
+    InputRegister,
+}
+
+/// One line of the I/O map: what a client finds at an address.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MapEntry {
+    /// The table.
+    pub table: Table,
+    /// The first address.
+    pub address: u16,
+    /// How many consecutive addresses it takes: 4 for the tick, 1 for the
+    /// rest.
+    pub words: u16,
+    /// What it is: a reference designator, `tick` or `fault latch`.
+    pub name: String,
+    /// What a value means.
+    pub meaning: &'static str,
+}
+
 /// Modbus addresses of the inputs and outputs of a project.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct IoMap {
@@ -92,36 +119,84 @@ impl IoMap {
     #[must_use]
     pub fn describe(&self) -> String {
         let mut text = String::new();
-        for (address, entry) in self.coils.iter().enumerate() {
-            let what = match entry.kind {
+        for entry in self.entries() {
+            let range = if entry.words > 1 {
+                format!(
+                    "{}-{}",
+                    entry.address,
+                    entry.address.saturating_add(entry.words).saturating_sub(1)
+                )
+            } else {
+                entry.address.to_string()
+            };
+            let table = match (entry.table, entry.words > 1) {
+                (Table::Coil, _) => "coil",
+                (Table::DiscreteInput, _) => "discrete input",
+                (Table::InputRegister, true) => "input registers",
+                (Table::InputRegister, false) => "input register",
+            };
+            let _ = writeln!(text, "{table} {range} {} ({})", entry.name, entry.meaning);
+        }
+        text
+    }
+
+    /// Every address of the map, in table and address order: the coils, the
+    /// discrete inputs, then the input registers.
+    #[must_use]
+    pub fn entries(&self) -> Vec<MapEntry> {
+        let mut entries = Vec::new();
+        for (address, entry) in (0_u16..).zip(&self.coils) {
+            let meaning = match entry.kind {
                 Control::Hold => "1 = pressed",
                 Control::Toggle => "1 = closed",
                 Control::Trip => "1 = tripped",
             };
-            let _ = writeln!(text, "coil {address} {} ({what})", entry.reference);
+            entries.push(MapEntry {
+                table: Table::Coil,
+                address,
+                words: 1,
+                name: entry.reference.clone(),
+                meaning,
+            });
         }
-        for (address, entry) in self.discrete.iter().enumerate() {
-            let what = match entry.kind {
+        for (address, entry) in (0_u16..).zip(&self.discrete) {
+            let meaning = match entry.kind {
                 Observable::Active => "1 = active",
                 Observable::Energized => "1 = energized",
             };
-            let _ = writeln!(
-                text,
-                "discrete input {address} {} ({what})",
-                entry.reference
-            );
+            entries.push(MapEntry {
+                table: Table::DiscreteInput,
+                address,
+                words: 1,
+                name: entry.reference.clone(),
+                meaning,
+            });
         }
-        let _ = writeln!(text, "input registers 0-3 tick (highest word first)");
-        let _ = writeln!(text, "input register 4 fault latch (1 = latched)");
-        for (index, entry) in self.motors.iter().enumerate() {
-            let _ = writeln!(
-                text,
-                "input register {} {} (0 stopped, 1 forward, 2 reverse)",
-                index.saturating_add(FIXED_REGISTERS),
-                entry.reference
-            );
+        entries.push(MapEntry {
+            table: Table::InputRegister,
+            address: 0,
+            words: 4,
+            name: "tick".to_owned(),
+            meaning: "highest word first",
+        });
+        entries.push(MapEntry {
+            table: Table::InputRegister,
+            address: 4,
+            words: 1,
+            name: "fault latch".to_owned(),
+            meaning: "1 = latched",
+        });
+        let first_motor = u16::try_from(FIXED_REGISTERS).unwrap_or(u16::MAX);
+        for (index, entry) in (0_u16..).zip(&self.motors) {
+            entries.push(MapEntry {
+                table: Table::InputRegister,
+                address: first_motor.saturating_add(index),
+                words: 1,
+                name: entry.reference.clone(),
+                meaning: "0 stopped, 1 forward, 2 reverse",
+            });
         }
-        text
+        entries
     }
 
     /// Answer a request against the last solved snapshot (`None` before the
