@@ -1460,7 +1460,7 @@ cargo deny check
 cargo xtask check-architecture
 cargo check --locked --target wasm32-unknown-unknown \
       -p circuit-model -p circuit-sim -p circuit-project -p circuit-renderer \
-      -p circuit-commands -p circuit-editor
+      -p circuit-commands -p circuit-editor -p circuit-export
 cargo +1.85 test --workspace --exclude opencircuit-desktop --locked   # MSRV do núcleo
 ```
 
