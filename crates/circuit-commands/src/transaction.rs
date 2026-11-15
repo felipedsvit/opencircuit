@@ -7,21 +7,12 @@ use circuit_model::{DiagnosticCode, Schematic, Subject};
 use crate::edit::Edit;
 use crate::error::CommandError;
 
-/// Structural errors an edit must never add: a document with one of them
-/// cannot be compiled, saved meaningfully or edited safely.
-const INTEGRITY: [DiagnosticCode; 5] = [
-    DiagnosticCode::UnsupportedSchemaVersion,
-    DiagnosticCode::IdOutOfRange,
-    DiagnosticCode::DuplicateId,
-    DiagnosticCode::DanglingReference,
-    DiagnosticCode::SelfLoopWire,
-];
-
-/// The integrity errors of a document, as `(code, subject)` pairs.
+/// The structural errors an edit must never add (see
+/// [`Schematic::integrity_errors`]): a document with one of them cannot be
+/// compiled, saved meaningfully or edited safely. As `(code, subject)` pairs.
 fn integrity_errors(doc: &Schematic) -> BTreeSet<(DiagnosticCode, Subject)> {
-    doc.validate()
+    doc.integrity_errors()
         .into_iter()
-        .filter(|diagnostic| INTEGRITY.contains(&diagnostic.code()))
         .map(|diagnostic| (diagnostic.code(), diagnostic.subject().clone()))
         .collect()
 }

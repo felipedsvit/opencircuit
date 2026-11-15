@@ -277,6 +277,19 @@ impl Schematic {
     pub fn validate(&self) -> Vec<Diagnostic> {
         validate::validate(self)
     }
+
+    /// The diagnostics of [`validate`](Self::validate) that make a document
+    /// unsafe to edit: an unsupported schema version, IDs out of range or
+    /// used twice, references to something that does not exist, and a wire
+    /// that starts and ends at the same point.
+    ///
+    /// It returns exactly those diagnostics, in the same order, without the
+    /// work of the other checks (junction degrees, designators and supply
+    /// profiles), so an editor can ask it for every transaction.
+    #[must_use]
+    pub fn integrity_errors(&self) -> Vec<Diagnostic> {
+        validate::integrity(self)
+    }
 }
 
 #[cfg(test)]
