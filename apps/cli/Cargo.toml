@@ -12,6 +12,7 @@ name = "opencircuit"
 path = "src/main.rs"
 
 [dependencies]
+circuit-commands = { workspace = true }
 circuit-export = { workspace = true }
 circuit-io = { workspace = true }
 circuit-model = { workspace = true }
@@ -20,3 +21,6 @@ circuit-renderer = { workspace = true }
 circuit-sim = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

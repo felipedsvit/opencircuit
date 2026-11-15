@@ -118,6 +118,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
     PackageRule {
         name: "opencircuit-cli",
         workspace: &[
+            "circuit-commands",
             "circuit-export",
             "circuit-io",
             "circuit-model",
@@ -126,7 +127,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-sim",
         ],
         external: &["serde", "serde_json"],
-        dev: &[],
+        dev: &["proptest"],
         core: false,
     },
     PackageRule {

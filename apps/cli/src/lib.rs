@@ -25,6 +25,7 @@
 
 mod args;
 mod commands;
+pub mod edit;
 mod fsio;
 pub mod scenario;
 mod serve;
@@ -53,6 +54,11 @@ usage:
                        [--trace <file>] [--snapshot-json <file>]
                        [--format text|json] [--library <file.oclib|dir>]
   opencircuit test <path>... [--update-golden] [--format text|json]
+  opencircuit new <project.ocircuit> [--name <text>] [--force]
+                  [--format text|json]
+  opencircuit edit <project.ocircuit> --apply <edit.json> [--output <file>]
+                   [--dry-run] [--format text|json]
+                   [--library <file.oclib|dir>]
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
                      [--theme print|live] [--sheet <number>|all]
                      [--format text|json] [--library <file.oclib|dir>]
