@@ -5,6 +5,7 @@ members = [
     "crates/circuit-commands",
     "crates/circuit-editor",
     "crates/circuit-export",
+    "crates/circuit-io",
     "crates/circuit-model",
     "crates/circuit-project",
     "crates/circuit-renderer",
@@ -23,6 +24,7 @@ rust-version = "1.85"
 circuit-commands = { path = "crates/circuit-commands", version = "0.0.1" }
 circuit-editor = { path = "crates/circuit-editor", version = "0.0.1" }
 circuit-export = { path = "crates/circuit-export", version = "0.0.1" }
+circuit-io = { path = "crates/circuit-io", version = "0.0.1" }
 circuit-model = { path = "crates/circuit-model", version = "0.0.1" }
 circuit-project = { path = "crates/circuit-project", version = "0.0.1" }
 circuit-renderer = { path = "crates/circuit-renderer", version = "0.0.1" }
