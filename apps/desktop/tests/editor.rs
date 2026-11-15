@@ -125,6 +125,76 @@ fn two_pins_are_wired_with_the_wire_tool() {
     assert!(is_orthogonal(&path));
 }
 
+/// Press and release the primary button at a fraction of a grid unit to the
+/// right of a grid point.
+fn click_beside(harness: &mut Harness<'_, DesktopApp>, x: i32, y: i32, fraction: f32) {
+    let [sx, sy] = harness
+        .state()
+        .grid_to_screen(GridPoint::new(x, y))
+        .unwrap();
+    let [nx, _] = harness
+        .state()
+        .grid_to_screen(GridPoint::new(x + 1, y))
+        .unwrap();
+    let pos = Pos2::new(sx + fraction * (nx - sx), sy);
+    harness.hover_at(pos);
+    harness.run();
+    for pressed in [true, false] {
+        harness.event(Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+        harness.run();
+    }
+}
+
+#[test]
+fn the_wire_tool_snaps_to_a_pin_clicked_beside_it() {
+    let mut harness = edit_mode(&project(|b| {
+        let first = b.device("S1", "pushbutton_no", &[]).unwrap();
+        b.symbol(first, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+        let second = b.device("S2", "pushbutton_no", &[]).unwrap();
+        b.symbol(second, "contact", None, GridPoint::new(6, 8))
+            .unwrap();
+    }));
+
+    // Zoom out until a grid unit is at most 20 points wide: the snapping
+    // reach of 12 points is then more than half a grid unit.
+    let grid_width = |harness: &Harness<'_, DesktopApp>| {
+        let state = harness.state();
+        let [a, _] = state.grid_to_screen(GridPoint::new(0, 0)).unwrap();
+        let [b, _] = state.grid_to_screen(GridPoint::new(1, 0)).unwrap();
+        b - a
+    };
+    let [cx, cy] = harness
+        .state()
+        .grid_to_screen(GridPoint::new(3, 4))
+        .unwrap();
+    for _ in 0..20 {
+        if grid_width(&harness) <= 20.0 {
+            break;
+        }
+        harness.hover_at(Pos2::new(cx, cy));
+        harness.event(Event::Zoom(0.8));
+        harness.run();
+    }
+    let width = grid_width(&harness);
+    assert!((5.0..=20.0).contains(&width), "grid unit is {width} points");
+
+    click_label(&mut harness, "Wire");
+    // 0.55 of a grid unit to the right rounds to the next grid point, where
+    // nothing is: only snapping reaches the pin.
+    click_beside(&mut harness, 0, 2, 0.55);
+    click_beside(&mut harness, 6, 6, -0.55);
+
+    let doc = document(&harness);
+    assert_eq!(doc.wires.len(), 1);
+    assert!(doc.junctions.is_empty());
+}
+
 #[test]
 fn inspector_refuses_an_invalid_designator_and_keeps_the_document() {
     let mut harness = edit_mode(&project(|b| {

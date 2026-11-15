@@ -76,6 +76,20 @@ impl Camera {
         ))
     }
 
+    /// A screen length in subunits, rounded; `None` when it is not a finite
+    /// length of the scene.
+    #[must_use]
+    pub fn to_scene_length(&self, length: f32) -> Option<i64> {
+        let scene = (length / self.zoom).round();
+        // Same guard as `to_scene`: only a finite value well inside the i64
+        // range is cast.
+        if scene.is_finite() && scene.abs() <= SCENE_LIMIT {
+            Some(scene as i64)
+        } else {
+            None
+        }
+    }
+
     /// The grid point nearest to a screen point; `None` when it is outside
     /// the document coordinate range.
     #[must_use]
@@ -221,6 +235,16 @@ mod tests {
         };
 
         assert_eq!(camera.to_grid([1.0e12, 0.0]), None);
+    }
+
+    #[test]
+    fn screen_length_converts_to_subunits_at_the_current_zoom() {
+        let mut camera = Camera::default();
+        assert_eq!(camera.to_scene_length(12.0), Some(6));
+        camera.zoom = 0.5;
+        assert_eq!(camera.to_scene_length(12.0), Some(24));
+        assert_eq!(camera.to_scene_length(f32::NAN), None);
+        assert_eq!(camera.to_scene_length(f32::INFINITY), None);
     }
 
     #[test]

@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Tool};
+use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
     CatalogError, ComponentCatalog, Control, DeviceId, GridPoint, InputAction, LayoutIndex, Subject,
@@ -26,6 +26,12 @@ use crate::session::{SaveError, Session};
 
 /// Radius of the ring marking the pin under the pointer, in subunits.
 const PIN_RING: i64 = SUBUNITS_PER_GRID / 2;
+/// How far from the pointer the wire tool looks for a pin, a junction or a
+/// wire, in screen points: the same reach at every zoom.
+const SNAP_POINTS: f32 = 12.0;
+/// The largest snapping radius in subunits, so that a zoomed-out view does
+/// not jump across several grid units.
+const SNAP_MAX: i64 = 2 * SUBUNITS_PER_GRID;
 
 /// An action that would drop unsaved changes, waiting for the user to save,
 /// discard or cancel.
@@ -58,6 +64,8 @@ pub struct DesktopApp {
     mode: Mode,
     /// Tool, selection and gesture; the selection is shared by both modes.
     editor: Editor,
+    /// Where the pointer snapped with the wire tool, as of the last frame.
+    snapped: Option<Snap>,
     inspector: InspectorState,
     /// Text of the path field.
     path_input: String,
@@ -963,7 +971,12 @@ impl DesktopApp {
                 )),
             );
         }
-        if let Some(Hit::Pin(pin)) = self.editor.hover() {
+        let wiring = matches!(self.editor.tool(), Tool::Wire);
+        if let Some(found) = self.snapped.as_ref().filter(|_| wiring) {
+            for shape in snap_marker(found) {
+                overlay(&mut scene, shape);
+            }
+        } else if let Some(Hit::Pin(pin)) = self.editor.hover() {
             let layout = LayoutIndex::new(session.document(), session.catalog());
             if let Some(at) = layout.pin_position(pin) {
                 overlay(
@@ -1014,13 +1027,39 @@ impl DesktopApp {
             shift: ui.input(|input| input.modifiers.shift),
         };
         let mut outcomes = Vec::new();
-        if let Some(at) = events.hover.and_then(|p| self.camera.to_grid(p)) {
-            self.editor.pointer_move(doc, catalog, at);
+        // The wire tool snaps to what a wire can end on; the other tools work
+        // on the nearest grid point, so a drag never jumps to a pin.
+        let wiring = matches!(self.editor.tool(), Tool::Wire);
+        let radius = self
+            .camera
+            .to_scene_length(SNAP_POINTS)
+            .map_or(0, |radius| radius.clamp(0, SNAP_MAX));
+        let camera = &self.camera;
+        let locate = |screen: [f32; 2]| -> Option<Snap> {
+            if wiring {
+                let at = camera.to_scene(screen)?;
+                let pointer = Pointer {
+                    x: at.x,
+                    y: at.y,
+                    per_grid: SUBUNITS_PER_GRID,
+                };
+                snap(doc, catalog, pointer, radius)
+            } else {
+                camera.to_grid(screen).map(|point| Snap {
+                    point,
+                    target: SnapTarget::Grid,
+                })
+            }
+        };
+        let hovered = events.hover.and_then(locate);
+        if let Some(found) = &hovered {
+            self.editor.pointer_move(doc, catalog, found.point);
         }
-        if let Some(at) = events.pressed.and_then(|p| self.camera.to_grid(p)) {
+        self.snapped = hovered.filter(|_| wiring);
+        if let Some(at) = events.pressed.and_then(locate).map(|found| found.point) {
             outcomes.push(self.editor.pointer_down(doc, catalog, at, modifiers));
         }
-        if let Some(at) = events.released_at.and_then(|p| self.camera.to_grid(p)) {
+        if let Some(at) = events.released_at.and_then(locate).map(|found| found.point) {
             // A press and its release in one frame: the release applies to the
             // document as it is after the press.
             let pressed_commit = outcomes.iter().any(|o: &Outcome| o.commit.is_some());
@@ -1145,5 +1184,30 @@ fn simulation_controls(ui: &mut Ui, session: &mut Session) {
 impl eframe::App for DesktopApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         self.show(ui);
+    }
+}
+
+/// The marker of a snap: a ring on a pin, a square on a junction and a cross
+/// on a wire. Nothing marks a plain grid point.
+fn snap_marker(found: &Snap) -> Vec<Shape> {
+    let center = ScenePoint::from_grid(found.point);
+    let r = PIN_RING;
+    let at = |dx: i64, dy: i64| {
+        ScenePoint::new(center.x.saturating_add(dx), center.y.saturating_add(dy))
+    };
+    match found.target {
+        SnapTarget::Pin(_) => vec![Shape::Circle { center, radius: r }],
+        SnapTarget::Junction(_) => vec![Shape::Rect(SceneRect::from_corners(at(-r, -r), at(r, r)))],
+        SnapTarget::Wire(_) => vec![
+            Shape::Line {
+                from: at(-r, -r),
+                to: at(r, r),
+            },
+            Shape::Line {
+                from: at(-r, r),
+                to: at(r, -r),
+            },
+        ],
+        SnapTarget::Grid => Vec::new(),
     }
 }
