@@ -1710,7 +1710,7 @@ Questões que são decisão de contrato, pois definem arquivo e testes, estão f
 |---|---|---|---|
 | 1 | Menor modelo de rede e fontes para o MVP | **Decidido**: máscara de condutores por grupo, um perfil por condutor. Validar nos goldens da partida direta e do reversor | §9 |
 | 2 | Propriedades do motor simplificado | **Decidido**: `Stopped`/`Forward`/`Reverse` e `PhaseLoss`; sem grandezas físicas | §9.4 |
-| 3 | Tick fixo | Padrão de 1 ms. Primeira medição (M2a, [`benchmarks.md`](benchmarks.md)): com 2.000 componentes, ~10 µs por tick em regime e ~2,7 ms para a cena, folga ampla no frame de 16,6 ms; reavaliar com circuitos que comutam a cada tick | §10.1, §14.5 |
+| 3 | Tick fixo | **Decidido**: padrão de 1 ms. Medição M3 ([`benchmarks.md`](benchmarks.md)): com 2.000 componentes, ~2,6 ms de cena e ~0,25 ms por tick num circuito que comuta a cada tick (~4 ms por frame em tempo real); 5.000 ainda cabem ao visualizar e simular; 10.000 excedem o frame (cena 13–15 ms, comutação constante ~23 ms por frame, arraste ~55 ms). Otimizações (cache de integridade, culling, buffers do solver) só quando um documento real precisar | §10.1, §14.5 |
 | 4 | Roteamento automático do editor | **[a validar]**: primeira versão com traçado ortogonal e waypoints manuais; roteador automático depois | §6.6, M2 |
 | 5 | Persistência e migração do catálogo | **Decidido**: recusa de campos e schema desconhecidos; `ModelRef` com versão e `ModelMigration` | §7, §15 |
 | 6 | WASM | **[a validar]**: núcleo verificado em CI; dependências e recursos de UI da aplicação ainda a avaliar | §17.6, M4 |
