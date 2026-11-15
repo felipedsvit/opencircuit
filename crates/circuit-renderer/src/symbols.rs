@@ -217,6 +217,40 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
             actuator(0, operator, look.actuated, &mut out);
         }
         SymbolKind::Changeover => changeover(look.closed, &mut out),
+        SymbolKind::TransformerPrimary | SymbolKind::TransformerSecondary => {
+            // A winding: three small loops between the leads; the secondary
+            // has the core drawn beside it.
+            leads(0, &mut out);
+            let (style, core) = if kind == SymbolKind::TransformerPrimary {
+                let style = if look.energized {
+                    StyleKey::Energized
+                } else {
+                    StyleKey::Symbol
+                };
+                (style, false)
+            } else {
+                let style = if look.active {
+                    StyleKey::Active
+                } else {
+                    StyleKey::Symbol
+                };
+                (style, true)
+            };
+            for y in [-5, 0, 5] {
+                out.push((
+                    Shape::Circle {
+                        center: point(0, y),
+                        radius: 3,
+                    },
+                    style,
+                ));
+            }
+            if core {
+                for x in [-7, -9] {
+                    out.push((line((x, body_top), (x, BODY)), StyleKey::Symbol));
+                }
+            }
+        }
         SymbolKind::InterlockLink => {
             // A dashed bar with two triangles meeting in the middle: the two
             // contactors push against one another.
@@ -434,6 +468,8 @@ mod tests {
             SymbolKind::ContactNc,
             SymbolKind::Changeover,
             SymbolKind::InterlockLink,
+            SymbolKind::TransformerPrimary,
+            SymbolKind::TransformerSecondary,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
             SymbolKind::MotorSixTerminal,

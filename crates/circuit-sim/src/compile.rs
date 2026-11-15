@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_model::catalog::{
     PARAM_CONDUCTOR, PARAM_CONNECTION, PARAM_FIRST, PARAM_INITIAL_CLOSED, PARAM_PRESET_MS,
-    PARAM_RATED_VOLTAGE_MV, PARAM_SECOND, PARAM_SUPPLY,
+    PARAM_RATED_VOLTAGE_MV, PARAM_SECOND, PARAM_SECONDARY, PARAM_SUPPLY,
 };
 use circuit_model::{
     ComponentCatalog, ComponentModel, Conductor, Connection, Device, DeviceClass, DeviceId,
@@ -163,6 +163,7 @@ fn resolve<'a>(
         devices.push(ResolvedDevice { device, model });
     }
     check_interlocks(&devices, out);
+    check_transformers(&devices, &supplies, out);
 
     let mut sorted_symbols: Vec<&SymbolInstance> = doc.symbols.iter().collect();
     sorted_symbols.sort_by_key(|symbol| symbol.id);
@@ -418,6 +419,75 @@ fn check_interlocks(devices: &[ResolvedDevice<'_>], out: &mut Vec<Diagnostic>) {
     }
 }
 
+fn secondary_param(device: &Device, model: &ComponentModel) -> Option<SupplyId> {
+    let raw = model.int_param(&device.params, PARAM_SECONDARY)?;
+    u64::try_from(raw).ok().map(SupplyId)
+}
+
+/// The secondary profile of every transformer must exist, be single-phase,
+/// belong to that transformer only, and not be tapped by a supply terminal
+/// (ADR-0007): a section has one origin.
+fn check_transformers(
+    devices: &[ResolvedDevice<'_>],
+    supplies: &BTreeMap<SupplyId, &SupplyProfile>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let tapped: BTreeSet<SupplyId> = devices
+        .iter()
+        .filter(|resolved| resolved.model.class() == DeviceClass::PowerSupply)
+        .filter_map(|resolved| supply_param(resolved.device, resolved.model))
+        .collect();
+    let mut owner_of: BTreeMap<SupplyId, DeviceId> = BTreeMap::new();
+    for ResolvedDevice { device, model } in devices {
+        if model.class() != DeviceClass::Transformer {
+            continue;
+        }
+        // A missing or ill-typed parameter was reported as InvalidParameter.
+        let Some(secondary) = secondary_param(device, model) else {
+            continue;
+        };
+        let problem = match supplies.get(&secondary) {
+            None => {
+                out.push(
+                    Diagnostic::new(
+                        DiagnosticCode::DanglingReference,
+                        Subject::Device(device.id),
+                        format!("supply {secondary} does not exist"),
+                    )
+                    .with_related(vec![Subject::Supply(secondary)]),
+                );
+                continue;
+            }
+            Some(profile) if profile.kind != SupplyKind::SinglePhase => {
+                Some("the secondary supply of a transformer must be single-phase".to_owned())
+            }
+            Some(_) if tapped.contains(&secondary) => Some(
+                "the secondary supply of a transformer is also tapped by a supply terminal"
+                    .to_owned(),
+            ),
+            Some(_) => match owner_of.get(&secondary) {
+                Some(other) => Some(format!(
+                    "supply {secondary} is already the secondary of transformer {other}"
+                )),
+                None => {
+                    owner_of.insert(secondary, device.id);
+                    None
+                }
+            },
+        };
+        if let Some(message) = problem {
+            out.push(
+                Diagnostic::new(
+                    DiagnosticCode::InvalidTransformer,
+                    Subject::Device(device.id),
+                    message,
+                )
+                .with_related(vec![Subject::Supply(secondary)]),
+            );
+        }
+    }
+}
+
 fn supply_param(device: &Device, model: &ComponentModel) -> Option<SupplyId> {
     let raw = model.int_param(&device.params, PARAM_SUPPLY)?;
     u64::try_from(raw).ok().map(SupplyId)
@@ -448,6 +518,7 @@ const fn signal_kind(class: DeviceClass) -> Option<SignalKind> {
         DeviceClass::Timer(_) => Some(SignalKind::TimerOut),
         DeviceClass::Pushbutton | DeviceClass::LatchingSwitch => Some(SignalKind::Actuated),
         DeviceClass::ThermalOverload => Some(SignalKind::Tripped),
+        DeviceClass::Transformer => Some(SignalKind::Powered),
         DeviceClass::Fuse
         | DeviceClass::Motor
         | DeviceClass::Lamp
@@ -644,7 +715,10 @@ fn build(
         let id = symbol.instance.id;
 
         match symbol.definition.kind() {
-            kind @ (SymbolKind::Coil | SymbolKind::Lamp | SymbolKind::Buzzer) => {
+            kind @ (SymbolKind::Coil
+            | SymbolKind::TransformerPrimary
+            | SymbolKind::Lamp
+            | SymbolKind::Buzzer) => {
                 let (Some(a), Some(b), Some(connection), Some(rated_voltage_mv)) = (
                     terminal_net(0),
                     terminal_net(1),
@@ -664,7 +738,7 @@ fn build(
                     },
                     nets: vec![a, b],
                 });
-                if kind == SymbolKind::Coil {
+                if matches!(kind, SymbolKind::Coil | SymbolKind::TransformerPrimary) {
                     if let Some(device) = devices.get_mut(symbol.device) {
                         device.coil = Some(load);
                     }
@@ -806,7 +880,28 @@ fn build(
                     supply,
                     owner: owner.device.id,
                     symbol: id,
+                    enabled_by: None,
                 });
+            }
+            SymbolKind::TransformerSecondary => {
+                // `x1` provides `l1` and `x2` provides `n` of the secondary
+                // section, while the transformer is powered.
+                let Some(supply) = secondary_param(owner.device, owner.model) else {
+                    continue;
+                };
+                for (terminal, conductor) in [(0, Conductor::L1), (1, Conductor::N)] {
+                    let Some(net) = terminal_net(terminal) else {
+                        continue;
+                    };
+                    sources.push(CompiledSource {
+                        net,
+                        conductor,
+                        supply,
+                        owner: owner.device.id,
+                        symbol: id,
+                        enabled_by: signal,
+                    });
+                }
             }
         }
     }
@@ -1173,6 +1268,7 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             SignalKind::Tripped => 2,
             SignalKind::CoilActive => 3,
             SignalKind::TimerOut => 4,
+            SignalKind::Powered => 5,
         });
     }
 
@@ -1194,6 +1290,7 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             DeviceClass::Buzzer => 11,
             DeviceClass::PowerSupply => 12,
             DeviceClass::MechanicalInterlock => 13,
+            DeviceClass::Transformer => 14,
         });
         hash.u32(device.signal.map_or(u32::MAX, |sig| sig.0));
         hash.u32(device.coil.map_or(u32::MAX, |load| load.0));
@@ -1232,6 +1329,20 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
     // Sections added after the first encoding are written only when they
     // are not empty, so a circuit that does not use them keeps the
     // fingerprint recorded in its goldens.
+    let conditional: Vec<(usize, SigIx)> = circuit
+        .sources
+        .iter()
+        .enumerate()
+        .filter_map(|(index, source)| source.enabled_by.map(|sig| (index, sig)))
+        .collect();
+    if !conditional.is_empty() {
+        hash.str("conditional sources");
+        hash.u64(conditional.len() as u64);
+        for (index, sig) in conditional {
+            hash.u64(index as u64);
+            hash.u32(sig.0);
+        }
+    }
     if !circuit.interlocks.is_empty() {
         hash.str("interlocks");
         hash.u64(circuit.interlocks.len() as u64);

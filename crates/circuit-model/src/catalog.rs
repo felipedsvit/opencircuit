@@ -29,6 +29,8 @@ pub const PARAM_CONNECTION: &str = "connection";
 pub const PARAM_PRESET_MS: &str = "preset_ms";
 /// Parameter key: whether a latching switch starts closed.
 pub const PARAM_INITIAL_CLOSED: &str = "initial_closed";
+/// Parameter key: supply profile a control transformer provides.
+pub const PARAM_SECONDARY: &str = "secondary";
 /// Parameter key: first contactor of a mechanical interlock.
 pub const PARAM_FIRST: &str = "first";
 /// Parameter key: second contactor of a mechanical interlock.
@@ -76,6 +78,9 @@ pub enum DeviceClass {
     /// Mechanical interlock between two contactors: at most one of them is
     /// picked up at any time.
     MechanicalInterlock,
+    /// Control transformer: a primary load and a secondary that provides a
+    /// separate single-phase section while the primary is powered.
+    Transformer,
 }
 
 /// What a symbol does in the solver and in the logic.
@@ -115,6 +120,11 @@ pub enum SymbolKind {
     SupplyTerminal,
     /// Mark of a mechanical interlock; it has no terminals.
     InterlockLink,
+    /// Primary winding of a transformer: a two-terminal load.
+    TransformerPrimary,
+    /// Secondary winding of a transformer: provides `l1` on `x1` and `n` on
+    /// `x2` while the transformer is powered.
+    TransformerSecondary,
 }
 
 /// Vertical offset of the terminals above the origin of a symbol, in grid
@@ -165,7 +175,8 @@ impl SymbolKind {
             ]
         };
         match self {
-            Self::Coil => pair("a1", "a2", true),
+            Self::Coil | Self::TransformerPrimary => pair("a1", "a2", true),
+            Self::TransformerSecondary => pair("x1", "x2", false),
             Self::ContactNo | Self::ContactNc | Self::FuseLink => pair("p1", "p2", false),
             Self::Changeover => vec![
                 TerminalDefinition::new("com", false, GridPoint::new(0, BELOW)),
@@ -224,7 +235,9 @@ impl SymbolKind {
             | Self::Changeover
             | Self::FuseLink
             | Self::Lamp
-            | Self::Buzzer => corners(-2, ABOVE, 2, BELOW),
+            | Self::Buzzer
+            | Self::TransformerPrimary
+            | Self::TransformerSecondary => corners(-2, ABOVE, 2, BELOW),
             Self::PowerContacts { poles } | Self::ThermalElement { poles } => {
                 let outer = pole_x(poles, poles).saturating_add(2);
                 corners(outer.saturating_neg(), ABOVE, outer, BELOW)
@@ -884,6 +897,10 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
         DeviceClass::Buzzer => matches!(kind, SymbolKind::Buzzer),
         DeviceClass::PowerSupply => matches!(kind, SymbolKind::SupplyTerminal),
         DeviceClass::MechanicalInterlock => matches!(kind, SymbolKind::InterlockLink),
+        DeviceClass::Transformer => matches!(
+            kind,
+            SymbolKind::TransformerPrimary | SymbolKind::TransformerSecondary
+        ),
     }
 }
 
@@ -944,6 +961,11 @@ const fn class_params(class: DeviceClass) -> &'static [(&'static str, ExpectedPa
         DeviceClass::MechanicalInterlock => &[
             (PARAM_FIRST, ExpectedParam::DeviceRef),
             (PARAM_SECOND, ExpectedParam::DeviceRef),
+        ],
+        DeviceClass::Transformer => &[
+            (PARAM_RATED_VOLTAGE_MV, ExpectedParam::PositiveU32),
+            (PARAM_CONNECTION, ExpectedParam::ConnectionKey),
+            (PARAM_SECONDARY, ExpectedParam::SupplyRef),
         ],
         DeviceClass::ThermalOverload | DeviceClass::Pushbutton | DeviceClass::Fuse => &[],
     }
@@ -1236,6 +1258,23 @@ fn builtin_models() -> Vec<ComponentModel> {
             )],
         ),
         model(
+            "transformer.control",
+            DeviceClass::Transformer,
+            vec![
+                rated_voltage(),
+                connection(),
+                ParamDefinition {
+                    key: PARAM_SECONDARY.to_owned(),
+                    ty: ParamType::SupplyRef,
+                    default: None,
+                },
+            ],
+            vec![
+                SymbolDefinition::new("primary", SymbolKind::TransformerPrimary, 1, 1, false),
+                SymbolDefinition::new("secondary", SymbolKind::TransformerSecondary, 1, 1, false),
+            ],
+        ),
+        model(
             "lamp.generic",
             DeviceClass::Lamp,
             vec![rated_voltage(), connection()],
@@ -1295,6 +1334,8 @@ mod tests {
             SymbolKind::Buzzer,
             SymbolKind::SupplyTerminal,
             SymbolKind::InterlockLink,
+            SymbolKind::TransformerPrimary,
+            SymbolKind::TransformerSecondary,
         ];
         for poles in 1..=MAX_POLES {
             kinds.push(SymbolKind::PowerContacts { poles });
@@ -1372,6 +1413,29 @@ mod tests {
     }
 
     #[test]
+    fn transformer_has_a_required_primary_and_a_secondary_of_two_terminals() {
+        assert_eq!(terminal_keys(SymbolKind::TransformerPrimary), ["a1", "a2"]);
+        assert!(
+            SymbolKind::TransformerPrimary
+                .terminals()
+                .iter()
+                .all(|t| t.required)
+        );
+        assert_eq!(
+            terminal_keys(SymbolKind::TransformerSecondary),
+            ["x1", "x2"]
+        );
+        let transformer = builtin_model("transformer.control");
+        assert_eq!(transformer.class(), DeviceClass::Transformer);
+        assert!(
+            transformer
+                .params()
+                .iter()
+                .any(|p| p.key == PARAM_SECONDARY && p.ty == ParamType::SupplyRef)
+        );
+    }
+
+    #[test]
     fn supply_terminal_is_its_own_origin() {
         assert_eq!(offsets(SymbolKind::SupplyTerminal), [(0, 0)]);
     }
@@ -1417,6 +1481,7 @@ mod tests {
                 "timer_off.generic@2",
                 "timer_on.generic@1",
                 "timer_on.generic@2",
+                "transformer.control@1",
             ]
         );
     }
@@ -1428,7 +1493,7 @@ mod tests {
             .map(|model| format!("{}@{}", model.id(), model.version()))
             .collect();
 
-        assert_eq!(latest.len(), 17);
+        assert_eq!(latest.len(), 18);
         assert!(latest.contains(&"relay.generic@2".to_owned()));
         assert!(latest.contains(&"timer_on.generic@2".to_owned()));
         assert!(latest.contains(&"timer_off.generic@2".to_owned()));

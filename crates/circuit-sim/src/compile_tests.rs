@@ -4,8 +4,9 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::testkit::{
-    Interlocks, Rig, codes, command_circuit, compile_doc, compile_ok, dc_load,
-    direct_online_circuit, load, out, reversing_circuit, reversing_with, two_sections,
+    Interlocks, Rig, Secondary, codes, command_circuit, compile_doc, compile_ok, dc_load,
+    direct_online_circuit, load, out, reversing_circuit, reversing_with, transformer_circuit,
+    two_sections,
 };
 
 fn net_of(circuit: &CompiledCircuit, symbol: SymbolId, terminal: &str) -> NetIx {
@@ -941,6 +942,37 @@ fn interlocks_change_the_fingerprint_and_circuits_without_them_keep_theirs() {
     assert_ne!(plain.fingerprint(), linked.fingerprint());
 }
 
+#[test]
+fn transformer_secondary_must_be_a_single_phase_section_of_its_own() {
+    for secondary in [Secondary::ThreePhase, Secondary::Tapped, Secondary::Shared] {
+        let output = compile_doc(&transformer_circuit(secondary));
+
+        assert!(codes(&output).contains(&DiagnosticCode::InvalidTransformer));
+        assert_eq!(output.circuit, None);
+    }
+}
+
+#[test]
+fn transformer_secondary_compiles_into_sources_enabled_by_powered() {
+    let circuit = compile_ok(&transformer_circuit(Secondary::Own));
+    let conditional: Vec<(Conductor, Option<SigIx>)> = circuit
+        .sources()
+        .iter()
+        .filter(|source| source.enabled_by.is_some())
+        .map(|source| (source.conductor, source.enabled_by))
+        .collect();
+    let powered = circuit
+        .signals()
+        .iter()
+        .position(|signal| signal.kind == SignalKind::Powered)
+        .map(|index| SigIx(u32::try_from(index).unwrap()));
+
+    assert_eq!(
+        conditional,
+        [(Conductor::L1, powered), (Conductor::N, powered)]
+    );
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -956,6 +988,13 @@ proptest! {
         doc in shuffled(two_sections("l1"))
     ) {
         prop_assert_eq!(compile_doc(&doc), compile_doc(&two_sections("l1")));
+    }
+
+    #[test]
+    fn any_permutation_of_a_transformer_document_compiles_identically(
+        doc in shuffled(transformer_circuit(Secondary::Own))
+    ) {
+        prop_assert_eq!(compile_doc(&doc), compile_doc(&transformer_circuit(Secondary::Own)));
     }
 
     #[test]

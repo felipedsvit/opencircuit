@@ -463,3 +463,54 @@ pub(crate) fn two_sections(bridge: &str) -> Schematic {
     rig.wire(pin(selector, "p2"), out(target));
     rig.finish()
 }
+
+/// How the secondary of the transformer test circuit is set up.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Secondary {
+    /// A single-phase profile of its own: valid.
+    Own,
+    /// A three-phase profile: invalid.
+    ThreePhase,
+    /// A single-phase profile also tapped by a supply terminal: invalid.
+    Tapped,
+    /// A single-phase profile that a second transformer `T2` also names:
+    /// invalid.
+    Shared,
+}
+
+/// `L1 -> S1 (maintained) -> T1 primary -> L2` on a 400 V supply; the
+/// secondary of `T1`, a separate 230 V section, lights `H1`.
+pub(crate) fn transformer_circuit(secondary: Secondary) -> Schematic {
+    let mut rig = Rig::new();
+    let [l1, l2, _] = rig.three_phase();
+    let section = match secondary {
+        Secondary::ThreePhase => rig.three_phase_supply(PhaseSequence::L1L2L3),
+        Secondary::Own | Secondary::Tapped | Secondary::Shared => rig.single_phase_supply(230_000),
+    };
+    if secondary == Secondary::Tapped {
+        rig.tap("LS", "l1", section);
+    }
+    let switch = rig.part("S1", "selector.latching", "contact", &[]);
+    let mut params = load(400_000, "line_line");
+    params.push((
+        "secondary",
+        ParamValue::Int(i64::try_from(section.0).unwrap()),
+    ));
+    let t1 = rig.device("T1", "transformer.control", &params);
+    let primary = rig.symbol(t1, "primary", None);
+    let secondary_winding = rig.symbol(t1, "secondary", None);
+    let lamp = rig.part("H1", "lamp.generic", "lamp", &load(230_000, "line_neutral"));
+    rig.wire(out(l1), pin(switch, "p1"));
+    rig.wire(pin(switch, "p2"), pin(primary, "a1"));
+    rig.wire(pin(primary, "a2"), out(l2));
+    rig.wire(pin(secondary_winding, "x1"), pin(lamp, "x1"));
+    rig.wire(pin(lamp, "x2"), pin(secondary_winding, "x2"));
+    if secondary == Secondary::Shared {
+        let t2 = rig.device("T2", "transformer.control", &params);
+        let primary = rig.symbol(t2, "primary", None);
+        rig.symbol(t2, "secondary", None);
+        rig.wire(pin(switch, "p2"), pin(primary, "a1"));
+        rig.wire(pin(primary, "a2"), out(l2));
+    }
+    rig.finish()
+}

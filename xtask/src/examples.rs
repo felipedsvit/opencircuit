@@ -102,6 +102,10 @@ pub(crate) const EXAMPLES: &[Example] = &[
         build: multi_section,
     },
     Example {
+        path: "examples/control-transformer/control-transformer.ocircuit",
+        build: control_transformer,
+    },
+    Example {
         path: "tests/fixtures/sections-bridged/sections-bridged.ocircuit",
         build: sections_bridged,
     },
@@ -807,6 +811,116 @@ fn multi_section() -> Built<Schematic> {
 /// short circuit once it is closed.
 fn sections_bridged() -> Built<Schematic> {
     sections_with(true, "Fixture - supply sections bridged")
+}
+
+/// Direct-online starter whose 230 V control circuit is fed by a control
+/// transformer (ADR-0007): T1's primary sits between L1 and L2 after the
+/// main switch Q1, and its secondary is a separate single-phase section.
+/// Opening Q1 stops the motor at once and the control circuit one tick
+/// later, when the secondary dies.
+fn control_transformer() -> Built<Schematic> {
+    let mut sheet = Sheet::new("Starter with a control transformer");
+    let phases = sheet.power_supply(30, 0)?;
+    let control = sheet.0.supply(
+        circuit_model::SupplyKind::SinglePhase,
+        230_000,
+        None,
+        Some(50_000),
+        None,
+    )?;
+    let control = i64::try_from(control.0).map_err(|_| IdExhausted)?;
+    let control_load = [
+        ("rated_voltage_mv", ParamValue::Int(230_000)),
+        ("connection", ParamValue::Text("line_neutral".to_owned())),
+    ];
+
+    let q1 = sheet.part(
+        "Q1",
+        "main_switch.3p",
+        "main",
+        &[("initial_closed", ParamValue::Bool(true))],
+        (34, 5),
+    )?;
+    let f1 = sheet.device("F1", "thermal_overload.generic", &[])?;
+    let f1_element = sheet.symbol(f1, "element", None, (34, 11))?;
+    let f1_contact = sheet.symbol(f1, "aux_nc", None, (4, 6))?;
+    let t1 = sheet.device(
+        "T1",
+        "transformer.control",
+        &[
+            ("rated_voltage_mv", ParamValue::Int(400_000)),
+            ("connection", ParamValue::Text("line_line".to_owned())),
+            ("secondary", ParamValue::Int(control)),
+        ],
+    )?;
+    let primary = sheet.symbol(t1, "primary", None, (22, 12))?;
+    let secondary = sheet.symbol(t1, "secondary", None, (16, 12))?;
+    let stop = sheet.part("S2", "pushbutton_nc", "contact", &[], (4, 12))?;
+    let start = sheet.part("S1", "pushbutton_no", "contact", &[], (0, 21))?;
+    let k1 = sheet.device("K1", "contactor.generic", &control_load)?;
+    let k1_coil = sheet.symbol(k1, "coil", None, (4, 29))?;
+    let k1_main = sheet.symbol(k1, "main", None, (34, 17))?;
+    let k1_seal = sheet.symbol(k1, "aux_no", Some(1), (8, 21))?;
+    let k1_lamp = sheet.symbol(k1, "aux_no", Some(2), (12, 21))?;
+    let lamp = sheet.part("H1", "lamp.generic", "lamp", &control_load, (12, 27))?;
+    let motor = sheet.part("M1", "motor.3ph", "motor", &motor_400v(), (34, 24))?;
+
+    // Power: Q1, F1 and K1 straight down to the motor. The primary of T1
+    // takes L1 after Q1 and L2 after F1.
+    let l1_after_q1 = sheet.junction((30, 8))?;
+    let l2_after_f1 = sheet.junction((34, 14))?;
+    for (phase, (input, _)) in phases.into_iter().zip(POLES) {
+        sheet.wire(out(phase), pin(q1, input))?;
+    }
+    for ((input, output), terminal) in POLES.into_iter().zip(MOTOR_TERMINALS) {
+        match input {
+            "pole1.in" => {
+                sheet.wire(pin(q1, output), l1_after_q1)?;
+                sheet.wire(l1_after_q1, pin(f1_element, input))?;
+                sheet.wire(pin(f1_element, output), pin(k1_main, input))?;
+            }
+            "pole2.in" => {
+                sheet.wire(pin(q1, output), pin(f1_element, input))?;
+                sheet.wire(pin(f1_element, output), l2_after_f1)?;
+                sheet.wire(l2_after_f1, pin(k1_main, input))?;
+            }
+            _ => {
+                sheet.wire(pin(q1, output), pin(f1_element, input))?;
+                sheet.wire(pin(f1_element, output), pin(k1_main, input))?;
+            }
+        }
+        sheet.wire(pin(k1_main, output), pin(motor, terminal))?;
+    }
+    sheet.route(l1_after_q1, pin(primary, "a1"), &[(22, 8)])?;
+    sheet.wire(l2_after_f1, pin(primary, "a2"))?;
+
+    // Control, from the secondary: F1 95/96, stop, start beside the seal-in
+    // of K1, then K1; an auxiliary of K1 lights H1.
+    let feed = sheet.junction((4, 17))?;
+    let to_seal = sheet.junction((8, 17))?;
+    let node = sheet.junction((4, 25))?;
+    let rail = sheet.junction((4, 34))?;
+    let rail_lamp = sheet.junction((12, 34))?;
+    sheet.route(
+        pin(secondary, "x1"),
+        pin(f1_contact, "p1"),
+        &[(16, 2), (4, 2)],
+    )?;
+    sheet.wire(pin(f1_contact, "p2"), pin(stop, "p1"))?;
+    sheet.wire(pin(stop, "p2"), feed)?;
+    sheet.route(feed, pin(start, "p1"), &[(0, 17)])?;
+    sheet.wire(feed, to_seal)?;
+    sheet.wire(to_seal, pin(k1_seal, "p1"))?;
+    sheet.route(to_seal, pin(k1_lamp, "p1"), &[(12, 17)])?;
+    sheet.route(pin(start, "p2"), node, &[(0, 25)])?;
+    sheet.route(pin(k1_seal, "p2"), node, &[(8, 25)])?;
+    sheet.wire(node, pin(k1_coil, "a1"))?;
+    sheet.wire(pin(k1_coil, "a2"), rail)?;
+    sheet.wire(pin(k1_lamp, "p2"), pin(lamp, "x1"))?;
+    sheet.wire(pin(lamp, "x2"), rail_lamp)?;
+    sheet.wire(rail, rail_lamp)?;
+    sheet.route(rail_lamp, pin(secondary, "x2"), &[(16, 34)])?;
+    Ok(sheet.finish())
 }
 
 /// A lamp across the supply with the two poles also wired together: a

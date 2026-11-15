@@ -117,6 +117,10 @@ pub struct CompiledSource {
     pub owner: DeviceId,
     /// The symbol instance of the tap.
     pub symbol: SymbolId,
+    /// The signal that must be high for the source to provide its
+    /// conductor, for the secondary of a transformer; `None` for a supply
+    /// terminal, which always provides it.
+    pub enabled_by: Option<SigIx>,
 }
 
 /// Rule that decides whether a load is energized.
@@ -170,6 +174,9 @@ pub enum SignalKind {
     CoilActive,
     /// Timer output. Written by the logic at commit.
     TimerOut,
+    /// Transformer powered: its secondary provides its section. Written by
+    /// the logic at commit, with the actuation delays of coils.
+    Powered,
 }
 
 impl SignalKind {

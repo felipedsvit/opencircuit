@@ -397,6 +397,13 @@ impl Simulator {
             };
             self.mask.set_index(index, closed);
         }
+        // A transformer secondary provides its section while the
+        // transformer is powered in this tick.
+        for (index, source) in self.circuit.sources().iter().enumerate() {
+            if let Some(sig) = source.enabled_by {
+                self.mask.set_source(index, self.effective.get(sig.index()));
+            }
+        }
 
         // 3. Solve.
         let solution = self.solver.solve(&self.circuit, &self.mask);
@@ -414,7 +421,7 @@ impl Simulator {
             let energized = solution.load(coil).is_energized();
             let effective = self.effective.get(signal.index());
             let next = match device.class {
-                DeviceClass::Contactor | DeviceClass::Relay => {
+                DeviceClass::Contactor | DeviceClass::Relay | DeviceClass::Transformer => {
                     let Some(actuator) = self.state.actuators.get_mut(index) else {
                         continue;
                     };
@@ -726,7 +733,11 @@ impl Simulator {
                 .tick
                 .saturating_mul(u64::from(self.config.tick_us)),
             energized_devices,
-            active_devices: with_signal(&[SignalKind::CoilActive, SignalKind::TimerOut]),
+            active_devices: with_signal(&[
+                SignalKind::CoilActive,
+                SignalKind::TimerOut,
+                SignalKind::Powered,
+            ]),
             actuated_devices: with_signal(&[SignalKind::Actuated]),
             tripped_devices: with_signal(&[SignalKind::Tripped]),
             closed_symbols,

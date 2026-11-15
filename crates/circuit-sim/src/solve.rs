@@ -23,44 +23,68 @@ use crate::compiled::{
 };
 use crate::union_find::UnionFind;
 
-/// Which switches are closed, indexed by [`SwitchIx`].
+/// Which switches are closed, indexed by [`SwitchIx`], and which
+/// conditional sources (transformer secondaries) are enabled, indexed by
+/// source position. A source without an enabling signal always provides its
+/// conductor, whatever the mask says.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SwitchMask(BitSet);
+pub struct SwitchMask {
+    switches: BitSet,
+    sources: BitSet,
+}
 
 impl SwitchMask {
-    /// A mask for `switch_count` switches, all open.
+    /// A mask for `switch_count` switches, all open, and no conditional
+    /// source enabled.
     #[must_use]
     pub fn new(switch_count: usize) -> Self {
-        Self(BitSet::new(switch_count))
+        Self {
+            switches: BitSet::new(switch_count),
+            sources: BitSet::new(0),
+        }
     }
 
-    /// A mask sized for a circuit, all switches open.
+    /// A mask sized for a circuit, all switches open and every conditional
+    /// source disabled.
     #[must_use]
     pub fn for_circuit(circuit: &CompiledCircuit) -> Self {
-        Self::new(circuit.switches().len())
+        Self {
+            switches: BitSet::new(circuit.switches().len()),
+            sources: BitSet::new(circuit.sources().len()),
+        }
     }
 
     /// Open or close a switch.
     pub fn set(&mut self, switch: SwitchIx, closed: bool) {
-        self.0.set(switch.index(), closed);
+        self.switches.set(switch.index(), closed);
     }
 
     /// Whether a switch is closed.
     #[must_use]
     pub fn is_closed(&self, switch: SwitchIx) -> bool {
-        self.0.get(switch.index())
+        self.switches.get(switch.index())
     }
 
     pub(crate) fn set_index(&mut self, index: usize, closed: bool) {
-        self.0.set(index, closed);
+        self.switches.set(index, closed);
     }
 
     pub(crate) fn closed_index(&self, index: usize) -> bool {
-        self.0.get(index)
+        self.switches.get(index)
+    }
+
+    /// Enable or disable the conditional source at `index`.
+    pub(crate) fn set_source(&mut self, index: usize, enabled: bool) {
+        self.sources.set(index, enabled);
+    }
+
+    pub(crate) fn source_enabled(&self, index: usize) -> bool {
+        self.sources.get(index)
     }
 
     pub(crate) fn copy_from(&mut self, other: &Self) {
-        self.0.copy_from(&other.0);
+        self.switches.copy_from(&other.switches);
+        self.sources.copy_from(&other.sources);
     }
 }
 
@@ -247,7 +271,10 @@ impl Solver {
         self.solution.conductors_of_group.fill(ConductorSet::EMPTY);
         self.sections.fill(None);
         let mut feeds: BTreeMap<u32, (GroupFeed, Vec<DeviceId>)> = BTreeMap::new();
-        for source in circuit.sources() {
+        for (index, source) in circuit.sources().iter().enumerate() {
+            if source.enabled_by.is_some() && !closed.source_enabled(index) {
+                continue;
+            }
             let group = self.groups.find(source.net.raw());
             let feed = feeds.entry(group).or_default();
             feed.0.add(source.conductor, source.supply);

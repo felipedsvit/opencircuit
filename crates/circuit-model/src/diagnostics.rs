@@ -156,6 +156,9 @@ diagnostic_codes! {
     /// A mechanical interlock that does not name two distinct contactors, or
     /// a contactor named by more than one interlock.
     InvalidInterlock = "OC-SEM-009", Semantic, Error, latches = false;
+    /// A transformer whose secondary supply profile is not single-phase, is
+    /// named by another transformer, or is also tapped by a supply terminal.
+    InvalidTransformer = "OC-SEM-010", Semantic, Error, latches = false;
     /// Incompatible conductors meet in one group, including any AC/DC mix.
     ShortCircuit = "OC-ELEC-001", Electrical, Error, latches = true;
     /// Protective earth meets a live conductor.
@@ -398,6 +401,7 @@ mod tests {
         ("OC-SEM-007", "NoSupply", "warning", false),
         ("OC-SEM-008", "UnusedSupply", "info", false),
         ("OC-SEM-009", "InvalidInterlock", "error", false),
+        ("OC-SEM-010", "InvalidTransformer", "error", false),
         ("OC-ELEC-001", "ShortCircuit", "error", true),
         ("OC-ELEC-002", "ProtectiveEarthFault", "error", true),
         ("OC-ELEC-003", "NeutralEarthBond", "warning", false),

@@ -244,6 +244,7 @@ fn signal_name(circuit: &CompiledCircuit, device: DeviceId, kind: SignalKind) ->
         SignalKind::Tripped => "tripped",
         SignalKind::CoilActive => "active",
         SignalKind::TimerOut => "out",
+        SignalKind::Powered => "powered",
     }
 }
 
