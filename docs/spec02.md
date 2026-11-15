@@ -531,7 +531,7 @@ Uma fonte entra no circuito por um dispositivo da classe `PowerSupply`, com os p
 
 Regras **[decididas]** para o MVP:
 
-- **Um perfil por condutor:** cada `Conductor` é fornecido por no máximo um `SupplyId` no documento. Violação gera `ConflictingSupplies`. Isso permite que o solver carregue apenas bits de condutor sem perder a origem da tensão; múltiplos sistemas simultâneos ficam **[adiados]**.
+- **Seções de alimentação (M3, [ADR-0005](adr/0005-m3-circuit-semantics.md)):** cada `SupplyProfile` é uma seção galvanicamente separada, e um condutor presente num grupo é identificado por `(SupplyId, Conductor)`. Várias fontes podem fornecer o mesmo condutor; `ConflictingSupplies` (`OC-SEM-004`) deixou de ser emitido e o código fica reservado. Condutores vivos de seções diferentes no mesmo grupo são curto (`OC-ELEC-001`); `PE` é comum a todas as seções. No M1/M2 valia um perfil por condutor. O transformador de comando, que ligaria uma seção a outra, fica **[adiado]** (M4).
 - Os campos de tensão e frequência são **rótulos**. Servem para verificar a compatibilidade de cada carga com a alimentação que a energiza (§9.4); não entram em nenhum cálculo de tensão ou corrente.
 
 ### 6.8 Documento
@@ -603,7 +603,7 @@ Modelos iniciais:
 | `selector.latching` | `LatchingSwitch` | `contact` (1) | `initial_closed` |
 | `main_switch.3p` | `LatchingSwitch` | `main` (1, três polos) | `initial_closed` |
 | `contactor.generic` | `Contactor` | `coil` (1), `main` (0..1), `aux_no` (0..8), `aux_nc` (0..8) | `rated_voltage_mv`, `connection` |
-| `relay.generic` | `Relay` | `coil` (1), `aux_no`, `aux_nc` (0..8); `changeover` entra no M3 | `rated_voltage_mv`, `connection` |
+| `relay.generic` | `Relay` | `coil` (1), `aux_no`, `aux_nc` (0..8); `changeover` (0..8) na versão 2 (M3, ADR-0005) | `rated_voltage_mv`, `connection` |
 | `thermal_overload.generic` | `ThermalOverload` | `element` (0..1), `aux_nc` (95/96), `aux_no` (97/98) | — |
 | `timer_on.generic` / `timer_off.generic` | `Timer` | `coil` (1), `delayed_no`, `delayed_nc` (0..4) | `preset_ms`, `rated_voltage_mv`, `connection` |
 | `fuse.generic` | `Fuse` | `link` (1) | — |
@@ -793,7 +793,7 @@ Pares válidos para cargas de dois terminais:
 
 **Compatibilidade de tensão (rótulos):** a tensão esperada vem do `SupplyProfile` que fornece os condutores do par: `dc` → `nominal_voltage_mv`; `line_neutral` → `phase_voltage_mv` em trifásica, `nominal_voltage_mv` em monofásica; `line_line` → `nominal_voltage_mv` da trifásica. A comparação é de igualdade inteira com `rated_voltage_mv`. Rótulo ausente, perfis diferentes entre os dois condutores ou valores distintos: a carga fica `Off` e o simulador emite `LoadSupplyMismatch` (aviso). Tolerância percentual fica **[a validar]**.
 
-**Motor:** com as três fases presentes, o sentido é `Forward` se a ordem `(u1, v1, w1)` → fases acompanha o `phase_sequence` do perfil, e `Reverse` caso contrário. Duas fases presentes geram `PhaseLoss` e o motor fica `Off`. Isso **não** equivale a calcular torque, corrente ou velocidade; a interface mostra apenas parado, avante ou reverso. Motor de seis terminais (estrela-triângulo) é **[adiado]** para o M3.
+**Motor:** com as três fases presentes, o sentido é `Forward` se a ordem `(u1, v1, w1)` → fases acompanha o `phase_sequence` do perfil, e `Reverse` caso contrário. Duas fases presentes geram `PhaseLoss` e o motor fica `Off`. Isso **não** equivale a calcular torque, corrente ou velocidade; a interface mostra apenas parado, avante ou reverso. Motor de seis terminais (estrela-triângulo): **[decidido]** no M3 como uma única carga avaliada sobre os seis grupos, com padrões de estrela e de triângulo, enrolamentos abertos e ligação não suportada (`OC-MOD-004`); regra completa no [ADR-0005](adr/0005-m3-circuit-semantics.md).
 
 ### 9.5 Topologias não suportadas
 
@@ -1646,6 +1646,7 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-002](adr/0002-tick-and-commit.md) | Semântica do tick e do commit: entradas efetivas no mesmo tick, atraso mínimo de 1 tick, snapshot pré-commit, trace como log de mudanças, replay e checkpoint |
 | [ADR-003](adr/0003-conductor-model.md) | Modelo de condutores (máscara de bits, um perfil por condutor), regras de conflito e limites do solver discreto |
 | [ADR-004](adr/0004-canonical-json-format.md) | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
+| [ADR-005](adr/0005-m3-circuit-semantics.md) | M3: seções de alimentação, contatos comutadores e versões de modelo, intertravamento mecânico e enrolamentos do motor de seis terminais |
 
 ---
 
@@ -1719,6 +1720,9 @@ Questões que são decisão de contrato, pois definem arquivo e testes, estão f
 | 14 | Intervalo de checkpoints | **[a validar]** | §17.4 |
 | 15 | Política de falha padrão | **Decidido**: `Halt` (fail-closed); `Report` é opt-in | §10.6 |
 | 16 | Esquema de códigos de diagnóstico | **Decidido**: `OC-<CAT>-NNN`, com severidade e coluna de trava | §13.2 |
+| 17 | Seções de alimentação | **Decidido** (M3): condutor identificado por seção; ligar seções é curto; `PE` comum ([ADR-0005](adr/0005-m3-circuit-semantics.md)) | §6.7, §9.3 |
+| 18 | Transformador de comando | **[adiado]** (M4): exigiria fonte condicional no solver | §6.7 |
+| 19 | Intertravamento mecânico | **Decidido** (M3): quebra antes de fechar; subida simultânea → nenhum sobe, aviso `OC-ELEC-007` ([ADR-0005](adr/0005-m3-circuit-semantics.md)) | §10 |
 
 Respostas ainda abertas devem ser registradas em ADR ou neste documento.
 

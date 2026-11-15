@@ -1,6 +1,8 @@
 # ADR-0003: Conductor model, conflict rules and solver limits
 
-Status: Accepted (2026-11-14). Spec reference: `docs/spec02.md` §8, §9.
+Status: Accepted (2026-11-14); the rule "one supply profile per conductor" is
+superseded by [ADR-0005](0005-m3-circuit-semantics.md) (supply sections).
+Spec reference: `docs/spec02.md` §8, §9.
 Normative text: [`SIMULATION.md`](../../SIMULATION.md).
 
 ## Context
