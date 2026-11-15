@@ -8,7 +8,8 @@ use proptest::prelude::*;
 use super::*;
 use crate::testkit::{
     Interlocks, Rig, action, codes, command_circuit, compile_doc, compile_ok, dc_load,
-    direct_online_circuit, out, reversing_circuit, reversing_with, run, simulator,
+    direct_online_circuit, load, out, reversing_circuit, reversing_with, run, simulator,
+    two_sections,
 };
 use crate::trace::format_trace;
 
@@ -1302,6 +1303,66 @@ fn star_point_joined_to_the_lines_is_a_short_circuit() {
     let output = compile_doc(&doc);
 
     assert!(codes(&output).contains(&DiagnosticCode::ShortCircuit));
+}
+
+#[test]
+fn separate_sections_energize_their_own_loads() {
+    let doc = two_sections("l1");
+    assert_eq!(compile_doc(&doc).diagnostics, []);
+    let mut sim = default_sim(&doc);
+
+    run(&mut sim, 1, &[]);
+    let snapshot = sim.snapshot().unwrap();
+
+    assert_eq!(snapshot.energized_devices, [id(&sim, "H1"), id(&sim, "H2")]);
+    assert!(snapshot.faults.is_empty());
+}
+
+#[test]
+fn bridging_two_sections_is_a_latched_short_circuit() {
+    for bridge in ["l1", "n"] {
+        let mut sim = default_sim(&two_sections(bridge));
+
+        let trace = run(&mut sim, 6, &[(2, "close S1")]);
+
+        assert!(
+            trace
+                .iter()
+                .any(|line| line.starts_with("t=2 fault OC-ELEC-001 started")),
+            "{bridge}: {trace:?}"
+        );
+        assert!(
+            trace.contains(&"t=2 runtime latched".to_owned()),
+            "{bridge}: {trace:?}"
+        );
+    }
+}
+
+#[test]
+fn load_across_two_sections_stays_off() {
+    // H3 between the l1 of A and the n of B: two systems, no label applies.
+    let mut rig = Rig::new();
+    let a = rig.single_phase_supply(230_000);
+    let b = rig.single_phase_supply(230_000);
+    let a_line = rig.tap("LA", "l1", a);
+    let b_neutral = rig.tap("NB", "n", b);
+    let lamp = rig.part("H3", "lamp.generic", "lamp", &load(230_000, "line_neutral"));
+    rig.wire(out(a_line), pin(lamp, "x1"));
+    rig.wire(pin(lamp, "x2"), out(b_neutral));
+    let mut sim = default_sim(&rig.finish());
+
+    run(&mut sim, 0, &[]);
+    let snapshot = sim.snapshot().unwrap();
+
+    assert_eq!(snapshot.energized_devices, []);
+    assert_eq!(
+        snapshot
+            .faults
+            .iter()
+            .map(Diagnostic::code)
+            .collect::<Vec<_>>(),
+        [DiagnosticCode::LoadSupplyMismatch]
+    );
 }
 
 fn trace_text(sim: &mut Simulator) -> String {

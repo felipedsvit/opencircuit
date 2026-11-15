@@ -141,7 +141,9 @@ diagnostic_codes! {
     InvalidReference = "OC-SEM-002", Semantic, Error, latches = false;
     /// A terminal that must be connected has no wire.
     MissingRequiredTerminal = "OC-SEM-003", Semantic, Error, latches = false;
-    /// The same conductor is provided by more than one supply.
+    /// The same conductor is provided by more than one supply. Retired: no
+    /// longer emitted since every supply is its own section (ADR-0005); the
+    /// code is kept so that it is never reused.
     ConflictingSupplies = "OC-SEM-004", Semantic, Error, latches = false;
     /// A device without any symbol.
     DeviceWithoutSymbols = "OC-SEM-005", Semantic, Warning, latches = false;

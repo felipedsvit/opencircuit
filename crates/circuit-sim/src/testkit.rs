@@ -436,3 +436,30 @@ pub(crate) fn reversing_with(interlocks: Interlocks) -> Schematic {
     }
     rig.finish()
 }
+
+/// Two separate 230 V single-phase sections, each with a lamp between its
+/// `l1` and `n`; selector `S1` joins the `l1` of A to `bridge` of B.
+pub(crate) fn two_sections(bridge: &str) -> Schematic {
+    let mut rig = Rig::new();
+    let a = rig.single_phase_supply(230_000);
+    let b = rig.single_phase_supply(230_000);
+    let a_line = rig.tap("LA", "l1", a);
+    let a_neutral = rig.tap("NA", "n", a);
+    let b_line = rig.tap("LB", "l1", b);
+    let b_neutral = rig.tap("NB", "n", b);
+    for (line, neutral, reference) in [(a_line, a_neutral, "H1"), (b_line, b_neutral, "H2")] {
+        let lamp = rig.part(
+            reference,
+            "lamp.generic",
+            "lamp",
+            &load(230_000, "line_neutral"),
+        );
+        rig.wire(out(line), pin(lamp, "x1"));
+        rig.wire(pin(lamp, "x2"), out(neutral));
+    }
+    let selector = rig.part("S1", "selector.latching", "contact", &[]);
+    rig.wire(out(a_line), pin(selector, "p1"));
+    let target = if bridge == "n" { b_neutral } else { b_line };
+    rig.wire(pin(selector, "p2"), out(target));
+    rig.finish()
+}

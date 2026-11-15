@@ -5,7 +5,7 @@ use proptest::prelude::*;
 use super::*;
 use crate::testkit::{
     Interlocks, Rig, codes, command_circuit, compile_doc, compile_ok, dc_load,
-    direct_online_circuit, load, out, reversing_circuit, reversing_with,
+    direct_online_circuit, load, out, reversing_circuit, reversing_with, two_sections,
 };
 
 fn net_of(circuit: &CompiledCircuit, symbol: SymbolId, terminal: &str) -> NetIx {
@@ -340,16 +340,40 @@ fn unwired_contact_terminal_is_allowed() {
 }
 
 #[test]
-fn one_conductor_from_two_supplies_is_rejected() {
+fn one_conductor_from_two_supplies_is_allowed_in_separate_sections() {
+    // OC-SEM-004 is retired (ADR-0005): each supply is its own section.
     let mut rig = Rig::new();
     let first = rig.dc_supply(24_000);
     let second = rig.dc_supply(12_000);
-    rig.tap("P24", "dc_pos", first);
-    rig.tap("P12", "dc_pos", second);
+    let p24 = rig.tap("P24", "dc_pos", first);
+    let n24 = rig.tap("N24", "dc_neg", first);
+    let p12 = rig.tap("P12", "dc_pos", second);
+    let n12 = rig.tap("N12", "dc_neg", second);
+    for (pos, neg, reference, voltage) in [(p24, n24, "H1", 24_000), (p12, n12, "H2", 12_000)] {
+        let lamp = rig.part(reference, "lamp.generic", "lamp", &load(voltage, "dc"));
+        rig.wire(out(pos), pin(lamp, "x1"));
+        rig.wire(pin(lamp, "x2"), out(neg));
+    }
 
     let output = compile_doc(&rig.finish());
 
-    assert!(codes(&output).contains(&DiagnosticCode::ConflictingSupplies));
+    assert_eq!(output.diagnostics, []);
+    assert!(output.circuit.is_some());
+}
+
+#[test]
+fn sections_wired_together_permanently_are_a_static_short() {
+    let mut rig = Rig::new();
+    let first = rig.dc_supply(24_000);
+    let second = rig.dc_supply(24_000);
+    let a = rig.tap("P24", "dc_pos", first);
+    let b = rig.tap("Q24", "dc_pos", second);
+    rig.wire(out(a), out(b));
+
+    let output = compile_doc(&rig.finish());
+
+    assert!(codes(&output).contains(&DiagnosticCode::ShortCircuit));
+    assert!(!codes(&output).contains(&DiagnosticCode::ConflictingSupplies));
     assert_eq!(output.circuit, None);
 }
 
@@ -925,6 +949,13 @@ proptest! {
         doc in shuffled(reversing_circuit())
     ) {
         prop_assert_eq!(compile_doc(&doc), compile_doc(&reversing_circuit()));
+    }
+
+    #[test]
+    fn any_permutation_of_a_multi_section_document_compiles_identically(
+        doc in shuffled(two_sections("l1"))
+    ) {
+        prop_assert_eq!(compile_doc(&doc), compile_doc(&two_sections("l1")));
     }
 
     #[test]

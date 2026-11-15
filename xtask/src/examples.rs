@@ -52,6 +52,14 @@ pub(crate) const EXAMPLES: &[Example] = &[
         build: star_delta_overlap,
     },
     Example {
+        path: "examples/multi-section/multi-section.ocircuit",
+        build: multi_section,
+    },
+    Example {
+        path: "tests/fixtures/sections-bridged/sections-bridged.ocircuit",
+        build: sections_bridged,
+    },
+    Example {
         path: "tests/fixtures/static-short/static-short.ocircuit",
         build: static_short,
     },
@@ -684,6 +692,75 @@ fn star_delta() -> Built<Schematic> {
 /// the star point and the phases meet there.
 fn star_delta_overlap() -> Built<Schematic> {
     star_delta_with(false, "Fixture - star-delta without interlocks")
+}
+
+/// Three galvanically separate supply sections (ADR-0005 §1): 24 V DC
+/// control, a 230 V single-phase lighting section and a 400 V three-phase
+/// power section. Holding S1 picks up K1, whose main contacts run the motor
+/// and whose auxiliary contact lights H1 from the lighting section. With
+/// `bridged`, selector S2 joins the line of the lighting section to L1 of
+/// the power section.
+fn sections_with(bridged: bool, name: &str) -> Built<Schematic> {
+    let mut sheet = Sheet::new(name);
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 15))?;
+    let lighting = sheet.0.supply(
+        circuit_model::SupplyKind::SinglePhase,
+        230_000,
+        None,
+        Some(50_000),
+        None,
+    )?;
+    let la = sheet.tap("LA", "l1", lighting, (10, 0))?;
+    let na = sheet.tap("NA", "n", lighting, (10, 15))?;
+    let phases = sheet.power_supply(20, 0)?;
+
+    let start = sheet.part("S1", "pushbutton_no", "contact", &[], (0, 4))?;
+    let k1 = sheet.device("K1", "contactor.generic", &dc_load())?;
+    let coil = sheet.symbol(k1, "coil", None, (0, 10))?;
+    let lamp_contact = sheet.symbol(k1, "aux_no", Some(1), (10, 4))?;
+    let main = sheet.symbol(k1, "main", None, (24, 5))?;
+    let lamp = sheet.part(
+        "H1",
+        "lamp.generic",
+        "lamp",
+        &[
+            ("rated_voltage_mv", ParamValue::Int(230_000)),
+            ("connection", ParamValue::Text("line_neutral".to_owned())),
+        ],
+        (10, 10),
+    )?;
+    let motor = sheet.part("M1", "motor.3ph", "motor", &motor_400v(), (24, 12))?;
+
+    sheet.wire(out(p24), pin(start, "p1"))?;
+    sheet.wire(pin(start, "p2"), pin(coil, "a1"))?;
+    sheet.wire(pin(coil, "a2"), out(p0))?;
+    sheet.wire(out(la), pin(lamp_contact, "p1"))?;
+    sheet.wire(pin(lamp_contact, "p2"), pin(lamp, "x1"))?;
+    sheet.wire(pin(lamp, "x2"), out(na))?;
+    for ((phase, (input, output)), terminal) in phases.into_iter().zip(POLES).zip(MOTOR_TERMINALS) {
+        sheet.wire(out(phase), pin(main, input))?;
+        sheet.wire(pin(main, output), pin(motor, terminal))?;
+    }
+    if bridged {
+        let selector = sheet.part("S2", "selector.latching", "contact", &[], (16, 4))?;
+        sheet.route(out(la), pin(selector, "p1"), &[(16, 0)])?;
+        sheet.route(
+            pin(selector, "p2"),
+            pin(main, "pole1.in"),
+            &[(18, 6), (18, 3)],
+        )?;
+    }
+    Ok(sheet.finish())
+}
+
+fn multi_section() -> Built<Schematic> {
+    sections_with(false, "Separate supply sections")
+}
+
+/// The multi-section example with a selector that joins two sections: a
+/// short circuit once it is closed.
+fn sections_bridged() -> Built<Schematic> {
+    sections_with(true, "Fixture - supply sections bridged")
 }
 
 /// A lamp across the supply with the two poles also wired together: a

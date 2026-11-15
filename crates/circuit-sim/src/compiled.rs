@@ -364,11 +364,50 @@ impl CompiledCircuit {
 ///
 /// Shared by the static check at compile time and by the solver at run time
 /// so both report the same thing for the same condition.
-pub(crate) fn conflict_diagnostic(
-    conductors: ConductorSet,
-    sources: &[DeviceId],
-) -> Option<Diagnostic> {
-    let (code, text) = match conductors.conflict() {
+/// What the sources reaching one group provide: their conductors, the
+/// supply section of the live ones, and whether live conductors of two
+/// sections meet (ADR-0005 §1). Protective earth is common to every section
+/// and never sets or mixes one.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct GroupFeed {
+    /// Conductors present.
+    pub(crate) conductors: ConductorSet,
+    /// The section of the first live conductor added.
+    pub(crate) section: Option<SupplyId>,
+    /// Whether live conductors of two sections were added.
+    pub(crate) bridged: bool,
+}
+
+impl GroupFeed {
+    /// Add a conductor provided by `supply`.
+    pub(crate) fn add(&mut self, conductor: Conductor, supply: SupplyId) {
+        self.conductors.insert(conductor);
+        if conductor == Conductor::Pe {
+            return;
+        }
+        match self.section {
+            None => self.section = Some(supply),
+            Some(section) if section != supply => self.bridged = true,
+            Some(_) => {}
+        }
+    }
+
+    /// The conflict of the group: bridged sections are a short circuit;
+    /// within one section the conductor table applies.
+    pub(crate) fn conflict(&self) -> ConductorConflict {
+        if self.bridged {
+            ConductorConflict::ShortCircuit
+        } else {
+            self.conductors.conflict()
+        }
+    }
+}
+
+/// The diagnostic for a group's conflict, naming the smallest source device
+/// as subject and the others as related elements.
+pub(crate) fn conflict_diagnostic(feed: GroupFeed, sources: &[DeviceId]) -> Option<Diagnostic> {
+    let conductors = feed.conductors;
+    let (code, text) = match feed.conflict() {
         ConductorConflict::None => return None,
         ConductorConflict::NeutralEarthBond => (
             DiagnosticCode::NeutralEarthBond,
@@ -377,6 +416,10 @@ pub(crate) fn conflict_diagnostic(
         ConductorConflict::ProtectiveEarthFault => (
             DiagnosticCode::ProtectiveEarthFault,
             "protective earth is connected to a live conductor",
+        ),
+        ConductorConflict::ShortCircuit if feed.bridged => (
+            DiagnosticCode::ShortCircuit,
+            "conductors of separate supply sections are connected together",
         ),
         ConductorConflict::ShortCircuit => (
             DiagnosticCode::ShortCircuit,
@@ -398,14 +441,19 @@ pub(crate) fn conflict_diagnostic(
 mod tests {
     use super::*;
 
-    fn conductors(list: &[Conductor]) -> ConductorSet {
-        list.iter().copied().collect()
+    /// A group fed by one section with these conductors.
+    fn conductors(list: &[Conductor]) -> GroupFeed {
+        let mut feed = GroupFeed::default();
+        for conductor in list {
+            feed.add(*conductor, SupplyId(1));
+        }
+        feed
     }
 
     #[test]
     fn single_conductor_group_produces_no_conflict_diagnostic() {
         assert_eq!(
-            conflict_diagnostic(ConductorSet::of(Conductor::L1), &[DeviceId(4)]),
+            conflict_diagnostic(conductors(&[Conductor::L1]), &[DeviceId(4)]),
             None
         );
     }
@@ -442,5 +490,32 @@ mod tests {
 
         assert_eq!(fault.code(), DiagnosticCode::ProtectiveEarthFault);
         assert_eq!(bond.code(), DiagnosticCode::NeutralEarthBond);
+    }
+
+    #[test]
+    fn same_conductor_from_two_sections_is_a_short_circuit() {
+        let mut feed = GroupFeed::default();
+        feed.add(Conductor::L1, SupplyId(1));
+        feed.add(Conductor::L1, SupplyId(2));
+
+        let diagnostic = conflict_diagnostic(feed, &[DeviceId(1), DeviceId(2)]).unwrap();
+
+        assert_eq!(diagnostic.code(), DiagnosticCode::ShortCircuit);
+        assert_eq!(
+            diagnostic.message(),
+            "conductors of separate supply sections are connected together (l1)"
+        );
+    }
+
+    #[test]
+    fn protective_earth_is_common_to_every_section() {
+        let mut feed = GroupFeed::default();
+        feed.add(Conductor::Pe, SupplyId(1));
+        feed.add(Conductor::Pe, SupplyId(2));
+        feed.add(Conductor::N, SupplyId(2));
+
+        assert!(!feed.bridged);
+        assert_eq!(feed.section, Some(SupplyId(2)));
+        assert_eq!(feed.conflict(), ConductorConflict::NeutralEarthBond);
     }
 }
