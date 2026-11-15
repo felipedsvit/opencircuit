@@ -213,6 +213,8 @@ pub enum StyleKey {
     Selected,
     /// A designator or another text.
     Label,
+    /// The frame of a sheet: border, zone marks and title block.
+    Frame,
     /// A symbol whose device, model or symbol key does not resolve against
     /// the catalog.
     Unknown,
@@ -237,6 +239,10 @@ pub struct Scene {
     pub items: Vec<SceneItem>,
     /// The area covered by the items, or `None` for an empty scene.
     pub bounds: Option<SceneRect>,
+    /// The exact area of one printed page, when the scene is one sheet:
+    /// exporters write a page of this size instead of one of the bounds plus
+    /// a margin.
+    pub page: Option<SceneRect>,
 }
 
 impl Scene {

@@ -4,7 +4,8 @@
 //! (integer logical coordinates and semantic styles), never GUI structures,
 //! so a file written by the command line and one written by the desktop
 //! application are the same. [`svg`] writes SVG text directly; [`pdf`]
-//! writes a one-page PDF with `pdf-writer` (ADR-0006).
+//! writes a PDF with `pdf-writer` (ADR-0006), one page for a scene or one
+//! page per sheet through [`pdf_pages`].
 //!
 //! Output is deterministic: the same scene and theme give the same bytes on
 //! every platform. Coordinates are written as integers in scene subunits,
@@ -32,7 +33,7 @@ mod sfnt;
 mod svg;
 mod theme;
 
-pub use pdf::pdf;
+pub use pdf::{pdf, pdf_pages};
 pub use svg::{MARGIN, svg};
 pub use theme::{Look, Rgb, Theme};
 

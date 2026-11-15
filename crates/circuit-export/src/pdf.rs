@@ -2,14 +2,14 @@
 
 use std::collections::BTreeSet;
 
-use circuit_renderer::{Anchor, Scene, ScenePoint, SceneRect, Shape};
+use circuit_renderer::{Anchor, Scene, ScenePoint, Shape};
 use pdf_writer::types::{
     CidFontType, FontFlags, LineCapStyle, LineJoinStyle, SystemInfo, UnicodeCmap,
 };
 use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref, Str};
 
 use crate::font::Subset;
-use crate::svg::MARGIN;
+use crate::svg::page_of;
 use crate::theme::{Look, Rgb, Theme};
 
 /// Height of a text, in points (one point per scene subunit).
@@ -30,48 +30,34 @@ const KAPPA: f32 = 0.552_284_8;
 /// Write a scene as a one-page PDF document.
 ///
 /// The page is the area of the scene plus the SVG margin, one point per
-/// scene subunit, so the PDF and the SVG of a scene have the same size.
-/// Texts use Liberation Mono, embedded as a subset with only the glyphs of
-/// the scene, so any character the font has is drawn as itself and can be
-/// searched and copied; one it lacks is drawn as the font's empty box. The
-/// document has no date and no identifier, so the same scene gives the same
-/// bytes.
+/// scene subunit, so the PDF and the SVG of a scene have the same size; a
+/// scene that is one sheet has exactly the paper of the sheet. See
+/// [`pdf_pages`] for the text and the determinism.
 #[must_use]
 pub fn pdf(scene: &Scene, theme: Theme) -> Vec<u8> {
-    let area = scene.bounds.unwrap_or(SceneRect::from_corners(
-        ScenePoint::new(0, 0),
-        ScenePoint::new(0, 0),
-    ));
-    let page = Page {
-        left: area.min.x.saturating_sub(MARGIN),
-        top: area.min.y.saturating_sub(MARGIN),
-        width: area
-            .max
-            .x
-            .saturating_sub(area.min.x)
-            .saturating_add(MARGIN.saturating_mul(2)),
-        height: area
-            .max
-            .y
-            .saturating_sub(area.min.y)
-            .saturating_add(MARGIN.saturating_mul(2)),
+    pdf_pages(std::slice::from_ref(scene), theme)
+}
+
+/// Write scenes as a PDF document with one page each, in order.
+///
+/// Texts use Liberation Mono, embedded as one subset with only the glyphs of
+/// all the pages, so any character the font has is drawn as itself and can
+/// be searched and copied; one it lacks is drawn as the font's empty box.
+/// The document has no date and no identifier, so the same scenes give the
+/// same bytes. No scene gives a document with one empty page: a PDF needs
+/// at least one.
+#[must_use]
+pub fn pdf_pages(scenes: &[Scene], theme: Theme) -> Vec<u8> {
+    let empty = Scene::default();
+    let scenes = if scenes.is_empty() {
+        std::slice::from_ref(&empty)
+    } else {
+        scenes
     };
 
-    let catalog = Ref::new(1);
-    let tree = Ref::new(2);
-    let page_ref = Ref::new(3);
-    let content_ref = Ref::new(4);
-    let fonts = FontRefs {
-        type0: Ref::new(5),
-        cid: Ref::new(6),
-        descriptor: Ref::new(7),
-        file: Ref::new(8),
-        unicode: Ref::new(9),
-    };
-
-    let chars: BTreeSet<char> = scene
-        .items
+    let chars: BTreeSet<char> = scenes
         .iter()
+        .flat_map(|scene| &scene.items)
         .filter_map(|item| match &item.shape {
             Shape::Text { text, .. } => Some(text.chars()),
             _ => None,
@@ -84,34 +70,64 @@ pub fn pdf(scene: &Scene, theme: Theme) -> Vec<u8> {
         Subset::new(&chars)
     };
 
-    let mut content = Content::new();
-    content.set_line_cap(LineCapStyle::RoundCap);
-    content.set_line_join(LineJoinStyle::RoundJoin);
-    for item in &scene.items {
-        draw(
-            &mut content,
-            &page,
-            subset.as_ref(),
-            &item.shape,
-            theme.look(item.style),
-        );
-    }
-    let content = content.finish();
+    // Object numbers: the catalog, the page tree, then a page and its
+    // content stream for each scene, then the font.
+    let catalog = Ref::new(1);
+    let tree = Ref::new(2);
+    let mut next = 3_i32;
+    let mut take = || {
+        let id = Ref::new(next);
+        next = next.saturating_add(1);
+        id
+    };
+    let numbered: Vec<(Ref, Ref)> = scenes.iter().map(|_| (take(), take())).collect();
+    let fonts = FontRefs {
+        type0: take(),
+        cid: take(),
+        descriptor: take(),
+        file: take(),
+        unicode: take(),
+    };
 
     let mut pdf = Pdf::new();
     pdf.catalog(catalog).pages(tree);
-    pdf.pages(tree).kids([page_ref]).count(1);
-    let mut page_writer = pdf.page(page_ref);
-    page_writer.media_box(Rect::new(0.0, 0.0, real(page.width), real(page.height)));
-    page_writer.parent(tree);
-    page_writer.contents(content_ref);
-    let mut resources = page_writer.resources();
-    if subset.is_some() {
-        resources.fonts().pair(Name(b"F1"), fonts.type0);
+    pdf.pages(tree)
+        .kids(numbered.iter().map(|(page, _)| *page))
+        .count(i32::try_from(numbered.len()).unwrap_or(i32::MAX));
+    for (scene, (page_ref, content_ref)) in scenes.iter().zip(&numbered) {
+        let (left, top, width, height) = page_of(scene);
+        let page = Page {
+            left,
+            top,
+            width,
+            height,
+        };
+        let mut content = Content::new();
+        content.set_line_cap(LineCapStyle::RoundCap);
+        content.set_line_join(LineJoinStyle::RoundJoin);
+        for item in &scene.items {
+            draw(
+                &mut content,
+                &page,
+                subset.as_ref(),
+                &item.shape,
+                theme.look(item.style),
+            );
+        }
+        let content = content.finish();
+
+        let mut page_writer = pdf.page(*page_ref);
+        page_writer.media_box(Rect::new(0.0, 0.0, real(page.width), real(page.height)));
+        page_writer.parent(tree);
+        page_writer.contents(*content_ref);
+        let mut resources = page_writer.resources();
+        if subset.is_some() {
+            resources.fonts().pair(Name(b"F1"), fonts.type0);
+        }
+        resources.finish();
+        page_writer.finish();
+        pdf.stream(*content_ref, &content);
     }
-    resources.finish();
-    page_writer.finish();
-    pdf.stream(content_ref, &content);
     if let Some(subset) = &subset {
         write_font(&mut pdf, &fonts, subset);
     }
@@ -316,7 +332,7 @@ fn draw(content: &mut Content, page: &Page, subset: Option<&Subset>, shape: &Sha
 #[cfg(test)]
 mod tests {
     use circuit_model::Subject;
-    use circuit_renderer::{SceneItem, StyleKey};
+    use circuit_renderer::{SceneItem, SceneRect, StyleKey};
 
     use super::*;
 
@@ -327,6 +343,7 @@ mod tests {
             anchor: Anchor::Center,
         };
         Scene {
+            page: None,
             bounds: shape.bounds(),
             items: vec![SceneItem {
                 shape,
@@ -349,6 +366,62 @@ mod tests {
         assert!(text.trim_end().ends_with("%%EOF"));
         assert!(text.contains("/MediaBox [0 0 40 40]"), "{text}");
         assert!(text.contains("/Count 1"));
+    }
+
+    fn paper(x: i64, y: i64, text: &str) -> Scene {
+        let mut scene = text_scene(text);
+        scene.page = Some(SceneRect::from_corners(
+            ScenePoint::new(x, y),
+            ScenePoint::new(x + 840, y + 590),
+        ));
+        scene
+    }
+
+    #[test]
+    fn one_page_per_scene_each_of_the_paper_size_and_one_font_for_all() {
+        let pages = [paper(0, 0, "Sheet 1/2"), paper(1000, -50, "Fo\u{e7}a")];
+
+        let text = as_text(&pdf_pages(&pages, Theme::Print));
+
+        assert!(text.contains("/Count 2"), "{text}");
+        assert_eq!(text.matches("/MediaBox [0 0 840 590]").count(), 2);
+        assert_eq!(text.matches("/FontFile2").count(), 1);
+        assert_eq!(text.matches("/Type0").count(), 1);
+        // The ToUnicode map has the characters of both pages.
+        assert!(text.contains("<00E7>"));
+    }
+
+    #[test]
+    fn no_scenes_still_make_a_document_with_one_empty_page() {
+        let text = as_text(&pdf_pages(&[], Theme::Print));
+
+        assert!(text.contains("/Count 1") && text.contains("/MediaBox [0 0 40 40]"));
+        assert_eq!(
+            pdf_pages(&[], Theme::Print),
+            pdf(&Scene::default(), Theme::Print)
+        );
+    }
+
+    #[test]
+    fn a_single_scene_is_the_same_document_through_either_entry_point() {
+        let scene = paper(5, 5, "K1");
+
+        assert_eq!(pdf(&scene, Theme::Live), pdf_pages(&[scene], Theme::Live));
+    }
+
+    #[test]
+    fn pages_are_deterministic_and_depend_on_their_order() {
+        let a = paper(0, 0, "A");
+        let b = paper(0, 0, "B");
+
+        assert_eq!(
+            pdf_pages(&[a.clone(), b.clone()], Theme::Print),
+            pdf_pages(&[a.clone(), b.clone()], Theme::Print)
+        );
+        assert_ne!(
+            pdf_pages(&[a.clone(), b.clone()], Theme::Print),
+            pdf_pages(&[b, a], Theme::Print)
+        );
     }
 
     #[test]

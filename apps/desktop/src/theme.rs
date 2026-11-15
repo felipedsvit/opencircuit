@@ -78,6 +78,7 @@ pub fn look(style: StyleKey, dark_mode: bool) -> Look {
         StyleKey::Junction { conductors } => (live_color(conductors, foreground, dim), 1.0),
         StyleKey::Symbol | StyleKey::Label => (foreground, 1.5),
         StyleKey::Linkage => (dim, 1.0),
+        StyleKey::Frame => (dim, 1.0),
         StyleKey::Energized | StyleKey::Actuated => (ENERGIZED, 2.0),
         StyleKey::Active | StyleKey::ContactClosed => (ACTIVE, 2.0),
         StyleKey::Tripped => (FAULT, 2.0),

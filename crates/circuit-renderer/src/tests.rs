@@ -10,7 +10,7 @@ use circuit_model::{
 };
 use proptest::prelude::*;
 
-use crate::{SceneOptions, ScenePoint, Shape, StyleKey, build_scene};
+use crate::{Scene, SceneOptions, ScenePoint, Shape, StyleKey, build_scene};
 
 /// Symbols and wires of the control circuit of a direct-online starter.
 struct Starter {
@@ -835,5 +835,234 @@ proptest! {
             build_scene(&reversed, &catalog, None, &SceneOptions::default()),
             build_scene(&doc, &catalog, None, &SceneOptions::default())
         );
+    }
+}
+
+// Sheets: frames over the canvas (ADR-0011).
+
+fn a4(id: u64, number: u32, title: &str, origin: GridPoint) -> circuit_model::Sheet {
+    circuit_model::Sheet {
+        id: circuit_model::SheetId(id),
+        number,
+        title: title.to_owned(),
+        origin,
+        size: circuit_model::SheetSize::A4,
+        orientation: circuit_model::Orientation::Landscape,
+        zones: circuit_model::Zones {
+            columns: 8,
+            rows: 6,
+        },
+    }
+}
+
+/// The starter with two sheets side by side, the second one far to the
+/// right of everything the starter draws.
+fn two_sheets() -> Schematic {
+    let mut doc = starter().doc;
+    doc.project.author = Some("Ana".to_owned());
+    doc.project.revision = Some("B".to_owned());
+    let first = doc.next_id;
+    doc.sheets = vec![
+        a4(first, 1, "Comando", GridPoint::new(-20, -10)),
+        a4(first + 1, 2, "For\u{e7}a", GridPoint::new(200, -10)),
+    ];
+    doc.next_id = first + 2;
+    doc
+}
+
+fn texts(scene: &Scene, style: StyleKey) -> Vec<&str> {
+    scene
+        .items
+        .iter()
+        .filter(|item| item.style == style)
+        .filter_map(|item| match &item.shape {
+            Shape::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_document_without_sheets_draws_no_frame() {
+    let catalog = ComponentCatalog::builtin();
+
+    let scene = build_scene(&starter().doc, &catalog, None, &SceneOptions::default());
+
+    assert!(scene.items.iter().all(|item| item.style != StyleKey::Frame));
+    assert_eq!(scene.page, None);
+    assert!(
+        crate::sheet_scenes(&starter().doc, &catalog, None, &SceneOptions::default()).is_empty()
+    );
+}
+
+#[test]
+fn a_sheet_draws_its_border_zone_marks_and_title_block() {
+    let catalog = ComponentCatalog::builtin();
+    let doc = two_sheets();
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    let marks = texts(&scene, StyleKey::Frame);
+    for expected in [
+        "1",
+        "8",
+        "A",
+        "F",
+        "Comando",
+        "For\u{e7}a",
+        "Ana",
+        "Sheet 1/2",
+        "Sheet 2/2",
+    ] {
+        assert!(
+            marks.iter().any(|text| text.contains(expected)),
+            "{expected} in {marks:?}"
+        );
+    }
+    assert!(marks.contains(&"Rev B"));
+    assert!(marks.contains(&"Author Ana"));
+    // Every frame item belongs to one of the two sheets.
+    assert!(
+        scene
+            .items
+            .iter()
+            .filter(|item| item.style == StyleKey::Frame)
+            .all(|item| matches!(item.subject, Some(Subject::Sheet(_))))
+    );
+    // The frame of the first sheet is the paper: 84 by 59 grid units.
+    let outer = scene
+        .items
+        .iter()
+        .find_map(|item| match &item.shape {
+            Shape::Rect(rect) if item.style == StyleKey::Frame => Some(*rect),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!((outer.min.x, outer.min.y), (-200, -100));
+    assert_eq!((outer.max.x, outer.max.y), (640, 490));
+}
+
+#[test]
+fn the_scene_of_a_sheet_is_its_paper_with_what_lies_inside() {
+    let catalog = ComponentCatalog::builtin();
+    let doc = two_sheets();
+    let ids: Vec<circuit_model::SheetId> = doc.sheets.iter().map(|s| s.id).collect();
+
+    let first =
+        crate::build_sheet_scene(&doc, &catalog, None, &SceneOptions::default(), ids[0]).unwrap();
+    let second =
+        crate::build_sheet_scene(&doc, &catalog, None, &SceneOptions::default(), ids[1]).unwrap();
+
+    assert_eq!(first.page, first.bounds);
+    assert_eq!(
+        first.page.map(|p| (p.max.x - p.min.x, p.max.y - p.min.y)),
+        Some((840, 590))
+    );
+    // The starter lies on the first sheet only.
+    assert!(texts(&first, StyleKey::Label).contains(&"K1"));
+    assert!(texts(&second, StyleKey::Label).is_empty());
+    // Each page keeps its own frame and no other.
+    for (scene, own) in [(&first, ids[0]), (&second, ids[1])] {
+        assert!(
+            scene
+                .items
+                .iter()
+                .filter(|item| item.style == StyleKey::Frame)
+                .all(|item| item.subject == Some(Subject::Sheet(own)))
+        );
+    }
+    assert_eq!(
+        texts(&second, StyleKey::Frame)
+            .iter()
+            .filter(|t| t.starts_with("Sheet"))
+            .count(),
+        1
+    );
+    // A sheet the document does not have gives nothing.
+    assert!(
+        crate::build_sheet_scene(
+            &doc,
+            &catalog,
+            None,
+            &SceneOptions::default(),
+            circuit_model::SheetId(999_999)
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn sheet_scenes_come_in_sheet_number_order_whatever_the_order_in_the_document() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = two_sheets();
+    doc.sheets.reverse();
+
+    let pages = crate::sheet_scenes(&doc, &catalog, None, &SceneOptions::default());
+
+    assert_eq!(pages.len(), 2);
+    assert!(texts(&pages[0], StyleKey::Frame).contains(&"Comando"));
+    assert!(texts(&pages[1], StyleKey::Frame).contains(&"For\u{e7}a"));
+}
+
+#[test]
+fn title_block_texts_that_do_not_fit_are_cut_and_a_small_sheet_has_no_title_block() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = two_sheets();
+    doc.sheets[0].title = "x".repeat(200);
+    doc.sheets[1].size = circuit_model::SheetSize::Custom {
+        width: 20,
+        height: 20,
+    };
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    let marks = texts(&scene, StyleKey::Frame);
+    assert!(
+        marks
+            .iter()
+            .any(|t| t.chars().count() == 58 && t.ends_with('\u{2026}'))
+    );
+    // The small sheet has its border and marks but not its "Sheet 2/2".
+    assert!(!marks.contains(&"Sheet 2/2"));
+    assert!(marks.contains(&"Sheet 1/2"));
+}
+
+proptest! {
+    /// Sheets of any size and place never panic and keep the scene's bounds
+    /// around everything it holds.
+    #[test]
+    fn any_sheet_gives_a_scene_whose_bounds_hold_every_item(
+        x in -2_000_i32..2_000,
+        y in -2_000_i32..2_000,
+        width in 0_u32..1_200,
+        height in 0_u32..1_200,
+        columns in 0_u8..30,
+        rows in 0_u8..30,
+    ) {
+        let catalog = ComponentCatalog::builtin();
+        let mut doc = starter().doc;
+        let id = doc.next_id;
+        doc.next_id += 1;
+        doc.sheets.push(circuit_model::Sheet {
+            size: circuit_model::SheetSize::Custom { width, height },
+            zones: circuit_model::Zones { columns, rows },
+            ..a4(id, 1, "t", GridPoint::new(x, y))
+        });
+
+        let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+        let page = crate::build_sheet_scene(
+            &doc, &catalog, None, &SceneOptions::default(), circuit_model::SheetId(id),
+        );
+
+        if let Some(bounds) = scene.bounds {
+            for item in &scene.items {
+                if let Some(area) = item.shape.bounds() {
+                    prop_assert!(bounds.union(&area) == bounds);
+                }
+            }
+        }
+        if let Some(page) = page {
+            prop_assert_eq!(page.page, page.bounds);
+        }
     }
 }
