@@ -696,6 +696,49 @@ fn moving_both_ends_shifts_the_route_with_them() {
 }
 
 #[test]
+fn moving_one_end_keeps_the_bends_the_user_drew() {
+    let (mut doc, mut history, [a, b, _]) = three_parts();
+    let catalog = ComponentCatalog::builtin();
+    // From a.p2 at (0, 2) down, across, up and back left to b.p1 at (6, 1).
+    run(&mut doc, &mut history, |doc| {
+        ops::connect(
+            doc,
+            &catalog,
+            &Anchor::Endpoint(pin(a, "p2")),
+            &Anchor::Endpoint(pin(b, "p1")),
+            &[point(0, 4), point(10, 4), point(10, 1)],
+        )
+    });
+    assert_eq!(doc.wires[0].route.len(), 3);
+
+    run(&mut doc, &mut history, |doc| {
+        ops::move_by(
+            doc,
+            &catalog,
+            &BTreeSet::from([Subject::Symbol(a)]),
+            point(2, 0),
+        )
+    });
+
+    assert_eq!(
+        doc.wires[0].route,
+        [point(2, 4), point(10, 4), point(10, 1)]
+    );
+    assert!(wire_paths_are_orthogonal(&doc, &catalog));
+
+    // A move the bends cannot follow is routed again, orthogonally.
+    run(&mut doc, &mut history, |doc| {
+        ops::move_by(
+            doc,
+            &catalog,
+            &BTreeSet::from([Subject::Symbol(b)]),
+            point(0, 9),
+        )
+    });
+    assert!(wire_paths_are_orthogonal(&doc, &catalog));
+}
+
+#[test]
 fn move_beyond_the_coordinate_range_is_refused_and_changes_nothing() {
     let (doc, _, [a, _, _]) = three_parts();
     let catalog = ComponentCatalog::builtin();
@@ -1669,5 +1712,31 @@ proptest! {
         prop_assert_eq!(doc.symbols, before.symbols);
         prop_assert_eq!(doc.wires, before.wires);
         prop_assert_eq!(doc.junctions, before.junctions);
+    }
+}
+
+proptest! {
+    /// Whatever the moves, a stretched route is orthogonal with its new ends,
+    /// and a route whose ends did not move keeps its bends.
+    #[test]
+    fn a_stretched_route_is_orthogonal(
+        ax in -20_i32..20, ay in -20_i32..20,
+        bend_y in -20_i32..20, bx in -20_i32..20, by in -20_i32..20,
+        dx0 in -5_i32..5, dy0 in -5_i32..5, dx1 in -5_i32..5, dy1 in -5_i32..5,
+    ) {
+        let route = [point(ax, bend_y), point(bx, bend_y)];
+        let old = (point(ax, ay), point(bx, by));
+        let new = (point(ax + dx0, ay + dy0), point(bx + dx1, by + dy1));
+        if let Some(stretched) = circuit_model::stretch_route(&route, old, new) {
+            let path: Vec<GridPoint> = std::iter::once(new.0)
+                .chain(stretched.iter().copied())
+                .chain(std::iter::once(new.1))
+                .collect();
+            prop_assert!(is_orthogonal(&path));
+        }
+        let unmoved = circuit_model::stretch_route(&route, old, old);
+        if let Some(unmoved) = unmoved {
+            prop_assert!(unmoved.iter().all(|p| route.contains(p)));
+        }
     }
 }
