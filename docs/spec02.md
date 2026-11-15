@@ -104,7 +104,7 @@ A compatibilidade WASM é requisito de portabilidade do **núcleo** (`circuit-mo
 - Simulação analógica geral; cálculo de tensão, corrente, impedância e transitórios.
 - Pneumática e hidráulica.
 - PLC real e execução de programas Ladder completos.
-- Modbus, OPC UA e MQTT (M4: servidor Modbus TCP, [ADR-0009](adr/0009-industrial-io.md); OPC UA e MQTT avaliados).
+- Modbus, OPC UA e MQTT (M4: servidor Modbus TCP, [ADR-0009](adr/0009-industrial-io.md); OPC UA e MQTT avaliados, [ADR-0010](adr/0010-opcua-mqtt-evaluation.md)).
 - Plugins com código (WASM) e catálogos externos (M4: bibliotecas só de dados, [ADR-0008](adr/0008-extension-libraries.md); plugins com código fora do escopo).
 - Colaboração em tempo real.
 - Importação de arquivos proprietários do CADe SIMU.
@@ -1655,6 +1655,7 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-007](adr/0007-control-transformer.md) | M4: transformador de comando, secundário vivo no tick seguinte (`Powered`), `OC-SEM-010` |
 | [ADR-008](adr/0008-extension-libraries.md) | M4: bibliotecas de extensão só de dados (namespace, proveniência, desenho próprio) |
 | [ADR-009](adr/0009-industrial-io.md) | M4: E/S industrial como servidor Modbus TCP; codec no núcleo, socket na CLI; limites de segurança |
+| [ADR-010](adr/0010-opcua-mqtt-evaluation.md) | M4: avaliação de OPC UA (não implementado: só há implementações MPL-2.0) e MQTT (viável, adiado, desenho registrado) |
 
 ---
 
