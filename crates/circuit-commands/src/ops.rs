@@ -127,7 +127,7 @@ pub(crate) fn fits(
 
 /// Check that a symbol of the document still fits once placed at `at` with
 /// `rotation`. A symbol whose model is unknown has no known area and passes.
-fn still_fits(
+pub(crate) fn still_fits(
     layout: &LayoutIndex<'_>,
     symbol: SymbolId,
     at: GridPoint,
@@ -596,7 +596,7 @@ pub(crate) fn movable(
 /// bends next to the moved ends slide with them ([`stretch_route`]), and a
 /// wire that cannot keep its bends that way is routed again. `moved` is the
 /// document after the move.
-fn reroute(
+pub(crate) fn reroute(
     before: &Schematic,
     moved: &Schematic,
     catalog: &ComponentCatalog,

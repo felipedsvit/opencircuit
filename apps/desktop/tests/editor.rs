@@ -395,6 +395,45 @@ fn parameter_typed_in_the_inspector_is_set_on_the_device() {
 }
 
 #[test]
+fn several_selected_devices_are_aligned_and_share_a_parameter_field() {
+    let mut harness = edit_mode(&project(|b| {
+        let first = b.device("K1", "contactor.generic", &[]).unwrap();
+        b.symbol(first, "coil", None, GridPoint::new(0, 0)).unwrap();
+        let second = b.device("K2", "contactor.generic", &[]).unwrap();
+        b.symbol(second, "coil", None, GridPoint::new(8, 4))
+            .unwrap();
+    }));
+    harness.key_press_modifiers(Modifiers::COMMAND, egui::Key::A);
+    harness.run();
+
+    click_label(&mut harness, "Top");
+    let doc = document(&harness);
+    assert!(doc.symbols.iter().all(|symbol| symbol.position.y == 0));
+
+    let field = harness.get_by_label("rated_voltage_mv");
+    field.focus();
+    field.type_text("24000");
+    harness.run();
+    harness.key_press(egui::Key::Enter);
+    harness.run();
+    let doc = document(&harness);
+    assert!(
+        doc.devices
+            .iter()
+            .all(|device| device.params.get("rated_voltage_mv") == Some(&ParamValue::Int(24_000)))
+    );
+
+    // One undo per action: the parameter, then the alignment.
+    click_label(&mut harness, "Undo");
+    assert!(
+        document(&harness)
+            .devices
+            .iter()
+            .all(|device| device.params.is_empty())
+    );
+}
+
+#[test]
 fn delete_key_removes_the_selected_symbol_and_its_wires() {
     let mut harness = edit_mode(&project(|b| {
         let first = b.device("S1", "pushbutton_no", &[]).unwrap();

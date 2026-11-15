@@ -1740,3 +1740,153 @@ proptest! {
         }
     }
 }
+
+// Several elements at once.
+
+#[test]
+fn one_parameter_is_set_on_several_devices_in_one_step() {
+    let (mut doc, mut history, [k1, k2, _]) = interlocked_pair();
+    let catalog = ComponentCatalog::builtin();
+    let devices = BTreeSet::from([k1, k2]);
+
+    run(&mut doc, &mut history, |doc| {
+        crate::arrange::set_param_many(
+            doc,
+            &catalog,
+            &devices,
+            "rated_voltage_mv",
+            Some(ParamValue::Int(230_000)),
+        )
+    });
+
+    for id in [k1, k2] {
+        let device = doc.devices.iter().find(|d| d.id == id).unwrap();
+        assert_eq!(
+            device.params.get("rated_voltage_mv"),
+            Some(&ParamValue::Int(230_000))
+        );
+    }
+    assert_eq!(
+        history.undo_label(),
+        Some("Set rated_voltage_mv of 2 devices")
+    );
+    history.undo(&mut doc).unwrap();
+    assert!(
+        doc.devices
+            .iter()
+            .all(|d| !d.params.contains_key("rated_voltage_mv"))
+    );
+
+    // A value one device refuses changes none of them.
+    assert!(
+        crate::arrange::set_param_many(
+            &doc,
+            &catalog,
+            &devices,
+            "rated_voltage_mv",
+            Some(ParamValue::Text("high".to_owned())),
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn align_lines_up_symbols_on_an_edge_and_their_wires_follow() {
+    let (mut doc, mut history, [a, b, coil]) = three_parts();
+    let catalog = ComponentCatalog::builtin();
+    run(&mut doc, &mut history, |doc| {
+        ops::connect(
+            doc,
+            &catalog,
+            &Anchor::Endpoint(pin(a, "p2")),
+            &Anchor::Endpoint(pin(b, "p1")),
+            &[],
+        )
+    });
+    let selection: BTreeSet<Subject> = [a, b, coil].map(Subject::Symbol).into();
+    let position =
+        |doc: &Schematic, id: SymbolId| doc.symbols.iter().find(|s| s.id == id).unwrap().position;
+
+    run(&mut doc, &mut history, |doc| {
+        crate::arrange::align(doc, &catalog, &selection, crate::arrange::Align::Right)
+    });
+    assert_eq!(position(&doc, a), point(6, 0));
+    assert_eq!(position(&doc, b), point(6, 3));
+    assert_eq!(position(&doc, coil), point(6, 12));
+    assert!(wire_paths_are_orthogonal(&doc, &catalog));
+
+    run(&mut doc, &mut history, |doc| {
+        crate::arrange::align(doc, &catalog, &selection, crate::arrange::Align::Top)
+    });
+    assert!([a, b, coil].iter().all(|id| position(&doc, *id).y == 0));
+    assert_eq!(integrity(&doc), []);
+}
+
+#[test]
+fn distribute_spaces_elements_evenly_between_the_first_and_the_last() {
+    let (mut doc, mut history, [a, b, coil]) = three_parts();
+    let catalog = ComponentCatalog::builtin();
+    let selection: BTreeSet<Subject> = [a, b, coil].map(Subject::Symbol).into();
+    let y =
+        |doc: &Schematic, id: SymbolId| doc.symbols.iter().find(|s| s.id == id).unwrap().position.y;
+
+    run(&mut doc, &mut history, |doc| {
+        crate::arrange::distribute(doc, &catalog, &selection, crate::arrange::Axis::Vertical)
+    });
+
+    // 0, 3, 12 become 0, 6, 12.
+    assert_eq!([y(&doc, a), y(&doc, b), y(&doc, coil)], [0, 6, 12]);
+    // Two elements: nothing to space.
+    let two: BTreeSet<Subject> = [a, b].map(Subject::Symbol).into();
+    assert!(
+        crate::arrange::distribute(&doc, &catalog, &two, crate::arrange::Axis::Vertical)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+proptest! {
+    /// Aligning and distributing any selection of a wired circuit keeps the
+    /// document intact, the wires orthogonal, and undoes in one step.
+    #[test]
+    fn arranging_any_selection_is_consistent_and_undoable(
+        mask in 1_u8..8,
+        operation in 0_u8..6,
+    ) {
+        let (mut doc, mut history, parts) = three_parts();
+        let catalog = ComponentCatalog::builtin();
+        run(&mut doc, &mut history, |doc| {
+            ops::connect(
+                doc,
+                &catalog,
+                &Anchor::Endpoint(pin(parts[0], "p2")),
+                &Anchor::Endpoint(pin(parts[1], "p1")),
+                &[],
+            )
+        });
+        let selection: BTreeSet<Subject> = parts
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| mask & (1 << index) != 0)
+            .map(|(_, id)| Subject::Symbol(*id))
+            .collect();
+        use crate::arrange::{Align, Axis, align, distribute};
+        let tx = match operation {
+            0 => align(&doc, &catalog, &selection, Align::Left),
+            1 => align(&doc, &catalog, &selection, Align::Right),
+            2 => align(&doc, &catalog, &selection, Align::Top),
+            3 => align(&doc, &catalog, &selection, Align::Bottom),
+            4 => distribute(&doc, &catalog, &selection, Axis::Horizontal),
+            _ => distribute(&doc, &catalog, &selection, Axis::Vertical),
+        }
+        .unwrap();
+        prop_assume!(!tx.is_empty());
+        let before = doc.clone();
+        history.execute(&mut doc, tx).unwrap();
+
+        prop_assert_eq!(integrity(&doc), Vec::<DiagnosticCode>::new());
+        prop_assert!(wire_paths_are_orthogonal(&doc, &catalog));
+        history.undo(&mut doc).unwrap();
+        prop_assert_eq!(doc, before);
+    }
+}

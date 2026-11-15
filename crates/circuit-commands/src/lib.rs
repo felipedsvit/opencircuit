@@ -13,8 +13,8 @@
 //!
 //! The functions of [`ops`] turn the actions of an editor (place, connect,
 //! delete, move, rotate, rename, set a parameter, edit supplies) into
-//! transactions, and [`copy`] copies, pastes and duplicates part of a
-//! document. The crate depends on `circuit-model` only and does no I/O.
+//! transactions, [`copy`] copies, pastes and duplicates part of a
+//! document, and [`arrange`] edits several elements at once. The crate depends on `circuit-model` only and does no I/O.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -30,6 +30,7 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+pub mod arrange;
 pub mod copy;
 mod edit;
 mod error;

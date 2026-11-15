@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use circuit_commands::arrange::{self, Align, Axis};
 use circuit_commands::{CommandError, SupplyPreset, Transaction, ops};
 use circuit_model::{
     DeviceClass, DeviceId, GridPoint, LayoutIndex, ParamType, ParamValue, QuarterTurn, Subject,
@@ -97,7 +98,7 @@ pub fn show(
             ui.label("Select a symbol to edit its device.");
         }
         _ => {
-            ui.label(format!("{} elements selected.", selection.len()));
+            request = selection_section(ui, session, selection, state);
         }
     }
     ui.separator();
@@ -148,9 +149,10 @@ fn device_section(
     if !model.params().is_empty() {
         ui.strong("Parameters");
     }
+    let devices = BTreeSet::from([device.id]);
     for definition in model.params() {
         let current = device.params.get(&definition.key);
-        if let Some(change) = param_row(ui, session, device.id, definition, current, state) {
+        if let Some(change) = param_row(ui, session, &devices, definition, current, state) {
             request = Some(change);
         }
     }
@@ -212,10 +214,100 @@ fn device_section(
     request
 }
 
+/// The several elements of a selection: how many, buttons acting on all of
+/// them, and the parameters shared by their devices when every device has
+/// the same model.
+fn selection_section(
+    ui: &mut Ui,
+    session: &Session,
+    selection: &BTreeSet<Subject>,
+    state: &mut InspectorState,
+) -> Option<Request> {
+    let doc = session.document();
+    let catalog = session.catalog();
+    let mut request = None;
+    ui.label(format!("{} elements selected.", selection.len()));
+    let symbols: BTreeSet<circuit_model::SymbolId> = selection
+        .iter()
+        .filter_map(|subject| match subject {
+            Subject::Symbol(id) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    ui.horizontal(|ui| {
+        if !symbols.is_empty() && ui.button("Rotate all").clicked() {
+            request = Some(ops::rotate(doc, catalog, &symbols));
+        }
+        if ui.button("Delete all").clicked() {
+            request = Some(ops::delete(doc, catalog, selection));
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Align");
+        for (label, edge) in [
+            ("Left", Align::Left),
+            ("Right", Align::Right),
+            ("Top", Align::Top),
+            ("Bottom", Align::Bottom),
+        ] {
+            if ui.button(label).clicked() {
+                request = Some(arrange::align(doc, catalog, selection, edge));
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Distribute");
+        for (label, axis) in [("Across", Axis::Horizontal), ("Down", Axis::Vertical)] {
+            if ui.button(label).clicked() {
+                request = Some(arrange::distribute(doc, catalog, selection, axis));
+            }
+        }
+    });
+
+    // Parameters shared by devices of one model. A device reference names
+    // one other device, so it is not offered for several at once.
+    let devices: BTreeSet<DeviceId> = doc
+        .symbols
+        .iter()
+        .filter(|symbol| symbols.contains(&symbol.id))
+        .map(|symbol| symbol.device_id)
+        .collect();
+    let owners: Vec<&circuit_model::Device> = doc
+        .devices
+        .iter()
+        .filter(|device| devices.contains(&device.id))
+        .collect();
+    let first_model = owners.first().map(|device| &device.model);
+    let model = first_model
+        .filter(|model| owners.iter().all(|device| &device.model == *model))
+        .and_then(|model| catalog.model(model));
+    if let (Some(model), true) = (model, owners.len() >= 2) {
+        ui.strong(format!("Parameters of {} {}", owners.len(), model.id()));
+        for definition in model.params() {
+            if definition.ty == ParamType::DeviceRef {
+                continue;
+            }
+            let values: BTreeSet<Option<&ParamValue>> = owners
+                .iter()
+                .map(|device| device.params.get(&definition.key))
+                .collect();
+            let common = if values.len() == 1 {
+                values.into_iter().next().flatten()
+            } else {
+                None
+            };
+            if let Some(change) = param_row(ui, session, &devices, definition, common, state) {
+                request = Some(change);
+            }
+        }
+    }
+    request
+}
+
 fn param_row(
     ui: &mut Ui,
     session: &Session,
-    device: DeviceId,
+    devices: &BTreeSet<DeviceId>,
     definition: &circuit_model::ParamDefinition,
     current: Option<&ParamValue>,
     state: &mut InspectorState,
@@ -223,7 +315,17 @@ fn param_row(
     let doc = session.document();
     let catalog = session.catalog();
     let key = definition.key.as_str();
-    let set = |value: Option<ParamValue>| ops::set_param(doc, catalog, device, key, value);
+    let set = |value: Option<ParamValue>| match devices.first() {
+        Some(device) if devices.len() == 1 => ops::set_param(doc, catalog, *device, key, value),
+        _ => arrange::set_param_many(doc, catalog, devices, key, value),
+    };
+    // One field per set of devices, so that typing for one selection never
+    // shows up for another.
+    let device = devices
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
     let shown = current.or(definition.default.as_ref());
     let mut request = None;
     match &definition.ty {
@@ -309,7 +411,7 @@ fn param_row(
                 .devices
                 .iter()
                 .filter(|d| {
-                    d.id != device
+                    !devices.contains(&d.id)
                         && catalog
                             .model(&d.model)
                             .is_some_and(|m| m.class() == DeviceClass::Contactor)
