@@ -334,6 +334,25 @@ pub(crate) fn direct_online_circuit() -> Schematic {
 /// coil is interlocked by a normally closed contact of the other contactor.
 /// S1 starts forward, S3 starts reverse, S2 stops.
 pub(crate) fn reversing_circuit() -> Schematic {
+    reversing_with(Interlocks {
+        electrical: true,
+        mechanical: false,
+    })
+}
+
+/// Which interlocks a reversing starter has.
+#[derive(Clone, Copy)]
+pub(crate) struct Interlocks {
+    /// Each coil is fed through the NC auxiliary contact of the other.
+    pub(crate) electrical: bool,
+    /// A mechanical interlock `KX1` joins K1 and K2.
+    pub(crate) mechanical: bool,
+}
+
+/// The reversing starter of [`reversing_circuit`] with the chosen
+/// interlocks. Elements are created in the same order whatever the choice,
+/// so the default variant keeps its IDs.
+pub(crate) fn reversing_with(interlocks: Interlocks) -> Schematic {
     let mut rig = Rig::new();
     let (p24, p0) = rig.dc24();
     let [l1, l2, l3] = rig.three_phase();
@@ -345,12 +364,16 @@ pub(crate) fn reversing_circuit() -> Schematic {
     let k1_coil = rig.symbol(k1, "coil", None);
     let k1_main = rig.symbol(k1, "main", None);
     let k1_seal = rig.symbol(k1, "aux_no", Some(1));
-    let k1_lock = rig.symbol(k1, "aux_nc", Some(2));
+    let k1_lock = interlocks
+        .electrical
+        .then(|| rig.symbol(k1, "aux_nc", Some(2)));
     let k2 = rig.device("K2", "contactor.generic", &dc_load());
     let k2_coil = rig.symbol(k2, "coil", None);
     let k2_main = rig.symbol(k2, "main", None);
     let k2_seal = rig.symbol(k2, "aux_no", Some(1));
-    let k2_lock = rig.symbol(k2, "aux_nc", Some(2));
+    let k2_lock = interlocks
+        .electrical
+        .then(|| rig.symbol(k2, "aux_nc", Some(2)));
     let motor = rig.part(
         "M1",
         "motor.3ph",
@@ -373,8 +396,13 @@ pub(crate) fn reversing_circuit() -> Schematic {
         rig.wire(feed, pin(seal, "p1"));
         rig.wire(pin(start, "p2"), node);
         rig.wire(pin(seal, "p2"), node);
-        rig.wire(node, pin(lock, "p1"));
-        rig.wire(pin(lock, "p2"), pin(coil, "a1"));
+        match lock {
+            Some(lock) => {
+                rig.wire(node, pin(lock, "p1"));
+                rig.wire(pin(lock, "p2"), pin(coil, "a1"));
+            }
+            None => rig.wire(node, pin(coil, "a1")),
+        }
         rig.wire(pin(coil, "a2"), common);
     }
     rig.wire(common, out(p0));
@@ -394,6 +422,17 @@ pub(crate) fn reversing_circuit() -> Schematic {
         rig.wire(pin(k1_main, &format!("pole{key}.out")), motor_side[pole]);
         rig.wire(lines[2 - pole], pin(k2_main, &format!("pole{key}.in")));
         rig.wire(pin(k2_main, &format!("pole{key}.out")), motor_side[pole]);
+    }
+    if interlocks.mechanical {
+        let link = rig.device(
+            "KX1",
+            "interlock.mechanical",
+            &[
+                ("first", ParamValue::Int(i64::try_from(k1.0).unwrap())),
+                ("second", ParamValue::Int(i64::try_from(k2.0).unwrap())),
+            ],
+        );
+        rig.symbol(link, "link", None);
     }
     rig.finish()
 }

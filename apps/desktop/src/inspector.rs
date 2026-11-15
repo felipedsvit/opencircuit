@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_commands::{CommandError, SupplyPreset, Transaction, ops};
 use circuit_model::{
-    DeviceId, GridPoint, LayoutIndex, ParamType, ParamValue, QuarterTurn, Subject, SupplyKind,
-    SupplyProfile,
+    DeviceClass, DeviceId, GridPoint, LayoutIndex, ParamType, ParamValue, QuarterTurn, Subject,
+    SupplyKind, SupplyProfile,
 };
 use eframe::egui::{self, Ui};
 
@@ -204,6 +204,7 @@ fn device_section(
         if ui.button("Delete symbol").clicked() {
             request = Some(ops::delete(
                 doc,
+                catalog,
                 &BTreeSet::from([Subject::Symbol(symbol_id)]),
             ));
         }
@@ -293,6 +294,49 @@ fn param_row(
                             .selectable_label(
                                 shown == Some(&ParamValue::Int(raw)),
                                 supply_label(supply),
+                            )
+                            .clicked()
+                        {
+                            request = Some(set(Some(ParamValue::Int(raw))));
+                        }
+                    }
+                });
+        }
+        ParamType::DeviceRef => {
+            // Offer the contactors: the only devices an interlock may name.
+            // The compiler checks the choice again.
+            let contactors: Vec<&circuit_model::Device> = doc
+                .devices
+                .iter()
+                .filter(|d| {
+                    d.id != device
+                        && catalog
+                            .model(&d.model)
+                            .is_some_and(|m| m.class() == DeviceClass::Contactor)
+                })
+                .collect();
+            let chosen = match shown {
+                Some(ParamValue::Int(raw)) => doc
+                    .devices
+                    .iter()
+                    .find(|d| i64::try_from(d.id.0).ok() == Some(*raw))
+                    .map_or_else(
+                        || format!("missing device {raw}"),
+                        |d| d.reference.0.clone(),
+                    ),
+                _ => "(not set)".to_owned(),
+            };
+            egui::ComboBox::new(format!("param:{device}:{key}"), key)
+                .selected_text(chosen)
+                .show_ui(ui, |ui| {
+                    for target in contactors {
+                        let Ok(raw) = i64::try_from(target.id.0) else {
+                            continue;
+                        };
+                        if ui
+                            .selectable_label(
+                                shown == Some(&ParamValue::Int(raw)),
+                                &target.reference.0,
                             )
                             .clicked()
                         {

@@ -243,6 +243,93 @@ fn upgrading_a_model_without_a_newer_version_is_refused() {
     ));
 }
 
+/// Two contactors and a mechanical interlock between them.
+fn interlocked_pair() -> (Schematic, History, [DeviceId; 3]) {
+    let mut doc = Schematic::new("interlock");
+    let mut history = History::new();
+    let catalog = ComponentCatalog::builtin();
+    let k1 = place(
+        &mut doc,
+        &mut history,
+        "contactor.generic",
+        "coil",
+        point(0, 0),
+    );
+    let k2 = place(
+        &mut doc,
+        &mut history,
+        "contactor.generic",
+        "coil",
+        point(8, 0),
+    );
+    let link = place(
+        &mut doc,
+        &mut history,
+        "interlock.mechanical",
+        "link",
+        point(4, 6),
+    );
+    let [k1, k2, link] = [k1, k2, link].map(|symbol| device_of(&doc, symbol));
+    for (key, target) in [("first", k1), ("second", k2)] {
+        run(&mut doc, &mut history, |doc| {
+            ops::set_param(
+                doc,
+                &catalog,
+                link,
+                key,
+                Some(ParamValue::Int(i64::try_from(target.0).unwrap())),
+            )
+        });
+    }
+    (doc, history, [k1, k2, link])
+}
+
+#[test]
+fn interlock_gets_its_own_designator_and_names_two_contactors() {
+    let (doc, _, [k1, _, link]) = interlocked_pair();
+    let interlock = doc.devices.iter().find(|d| d.id == link).unwrap();
+
+    assert_eq!(interlock.reference.0, "KX1");
+    assert_eq!(
+        interlock.params.get("first"),
+        Some(&ParamValue::Int(i64::try_from(k1.0).unwrap()))
+    );
+}
+
+#[test]
+fn device_reference_must_name_another_device_of_the_document() {
+    let (doc, _, [_, _, link]) = interlocked_pair();
+    let catalog = ComponentCatalog::builtin();
+    let raw = |id: DeviceId| Some(ParamValue::Int(i64::try_from(id.0).unwrap()));
+
+    for value in [raw(DeviceId(999)), raw(link)] {
+        assert!(
+            matches!(
+                ops::set_param(&doc, &catalog, link, "first", value.clone()),
+                Err(CommandError::InvalidParameter(_))
+            ),
+            "{value:?}"
+        );
+    }
+}
+
+#[test]
+fn deleting_a_contactor_deletes_the_interlock_that_names_it() {
+    let (mut doc, mut history, [k1, k2, link]) = interlocked_pair();
+    let catalog = ComponentCatalog::builtin();
+
+    run(&mut doc, &mut history, |doc| {
+        ops::delete(doc, &catalog, &BTreeSet::from([Subject::Device(k1)]))
+    });
+
+    let left: Vec<DeviceId> = doc.devices.iter().map(|d| d.id).collect();
+    assert_eq!(left, [k2]);
+    assert!(doc.symbols.iter().all(|s| s.device_id == k2));
+    assert_eq!(integrity(&doc), []);
+    history.undo(&mut doc).unwrap();
+    assert!(doc.devices.iter().any(|d| d.id == link));
+}
+
 #[test]
 fn symbol_beyond_its_instance_limit_is_refused() {
     let mut doc = Schematic::new("limit");
@@ -464,7 +551,11 @@ fn deleting_a_symbol_removes_its_wires_its_orphan_junction_and_its_device() {
     let device = device_of(&doc, coil);
 
     run(&mut doc, &mut history, |doc| {
-        ops::delete(doc, &BTreeSet::from([Subject::Symbol(coil)]))
+        ops::delete(
+            doc,
+            &ComponentCatalog::builtin(),
+            &BTreeSet::from([Subject::Symbol(coil)]),
+        )
     });
 
     assert!(doc.devices.iter().all(|d| d.id != device));
@@ -500,7 +591,11 @@ fn deleting_a_device_removes_every_symbol_of_it() {
     });
 
     run(&mut doc, &mut history, |doc| {
-        ops::delete(doc, &BTreeSet::from([Subject::Device(device)]))
+        ops::delete(
+            doc,
+            &ComponentCatalog::builtin(),
+            &BTreeSet::from([Subject::Device(device)]),
+        )
     });
 
     assert_eq!((doc.devices.len(), doc.symbols.len()), (0, 0));
@@ -511,7 +606,11 @@ fn deleting_something_missing_is_refused() {
     let doc = Schematic::new("missing");
 
     assert!(matches!(
-        ops::delete(&doc, &BTreeSet::from([Subject::Symbol(SymbolId(9))])),
+        ops::delete(
+            &doc,
+            &ComponentCatalog::builtin(),
+            &BTreeSet::from([Subject::Symbol(SymbolId(9))])
+        ),
         Err(CommandError::Missing(_))
     ));
 }
@@ -1082,7 +1181,7 @@ fn transaction(
         Action::Delete(a, b) => {
             let all = subjects(doc);
             let chosen: BTreeSet<Subject> = [pick(&all, a)?, pick(&all, b)?].into_iter().collect();
-            ops::delete(doc, &chosen)
+            ops::delete(doc, &ComponentCatalog::builtin(), &chosen)
         }
         Action::Move(a, x, y) => {
             let all = subjects(doc);
@@ -1107,9 +1206,9 @@ fn transaction(
             let definition = (!model.params().is_empty()).then(|| p.get(model.params()))?;
             let value = match &definition.ty {
                 circuit_model::ParamType::Bool => ParamValue::Bool(value % 2 == 0),
-                circuit_model::ParamType::Int { .. } | circuit_model::ParamType::SupplyRef => {
-                    ParamValue::Int((*value).into())
-                }
+                circuit_model::ParamType::Int { .. }
+                | circuit_model::ParamType::SupplyRef
+                | circuit_model::ParamType::DeviceRef => ParamValue::Int((*value).into()),
                 circuit_model::ParamType::Enum(choices) => {
                     let index =
                         usize::try_from(value.unsigned_abs()).unwrap_or(0) % (choices.len() + 1);

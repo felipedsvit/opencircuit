@@ -40,6 +40,10 @@ pub(crate) const EXAMPLES: &[Example] = &[
         build: reversing,
     },
     Example {
+        path: "examples/forward-reverse/interlocked.ocircuit",
+        build: interlocked,
+    },
+    Example {
         path: "tests/fixtures/static-short/static-short.ocircuit",
         build: static_short,
     },
@@ -309,10 +313,23 @@ fn reversing() -> Built<Schematic> {
     }
     sheet.wire(common, out(p0))?;
 
-    // Power. K1 passes the phases straight down; K2 swaps L1 and L3. Its
-    // feeders leave the line junctions on separate rows above them, and its
-    // outputs return to the motor-side junctions on separate rows below K1,
-    // so different phases only cross and never run along each other.
+    reversing_power(&mut sheet, phases, k1_main, k2_main, motor)?;
+    Ok(sheet.finish())
+}
+
+/// Power circuit of a reversing starter: K1 passes the phases straight down
+/// to the motor, K2 swaps L1 and L3.
+fn reversing_power(
+    sheet: &mut Sheet,
+    phases: [SymbolId; 3],
+    k1_main: SymbolId,
+    k2_main: SymbolId,
+    motor: SymbolId,
+) -> Built<()> {
+    // The feeders of K2 leave the line junctions on separate rows above
+    // them, and its outputs return to the motor-side junctions on separate
+    // rows below K1, so different phases only cross and never run along
+    // each other.
     let lines = [
         sheet.junction((30, 4))?,
         sheet.junction((34, 4))?,
@@ -349,6 +366,90 @@ fn reversing() -> Built<Schematic> {
         sheet.route(crossed, pin(k2_main, input), &feeder)?;
         sheet.route(pin(k2_main, output), node, &back)?;
     }
+    Ok(())
+}
+
+/// Reversing starter with full interlocking: each start button is a
+/// combined pushbutton whose NC contact opens the other direction, each coil
+/// is fed through the NC auxiliary contact of the other contactor, and a
+/// mechanical interlock `KX1` keeps K1 and K2 from being picked up together.
+/// Pressing the other start button reverses without pressing stop.
+fn interlocked() -> Built<Schematic> {
+    let mut sheet = Sheet::new("Reversing starter with full interlocking");
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 39))?;
+    let phases = sheet.power_supply(30, 0)?;
+
+    let stop = sheet.part("S2", "pushbutton_nc", "contact", &[], (0, 3))?;
+    let s1 = sheet.device("S1", "pushbutton.combined", &[])?;
+    let s1_start = sheet.symbol(s1, "no", None, (-12, 11))?;
+    let s1_block = sheet.symbol(s1, "nc", None, (8, 19))?;
+    let s3 = sheet.device("S3", "pushbutton.combined", &[])?;
+    let s3_start = sheet.symbol(s3, "no", None, (12, 11))?;
+    let s3_block = sheet.symbol(s3, "nc", None, (-8, 19))?;
+    let k1 = sheet.device("K1", "contactor.generic", &dc_load())?;
+    let k1_coil = sheet.symbol(k1, "coil", None, (-8, 31))?;
+    let k1_main = sheet.symbol(k1, "main", None, (34, 10))?;
+    let k1_seal = sheet.symbol(k1, "aux_no", Some(1), (-4, 11))?;
+    let k1_lock = sheet.symbol(k1, "aux_nc", Some(2), (8, 25))?;
+    let k2 = sheet.device("K2", "contactor.generic", &dc_load())?;
+    let k2_coil = sheet.symbol(k2, "coil", None, (8, 31))?;
+    let k2_main = sheet.symbol(k2, "main", None, (50, 10))?;
+    let k2_seal = sheet.symbol(k2, "aux_no", Some(1), (4, 11))?;
+    let k2_lock = sheet.symbol(k2, "aux_nc", Some(2), (-8, 25))?;
+    let motor = sheet.part("M1", "motor.3ph", "motor", &motor_400v(), (34, 21))?;
+    let id = |device: DeviceId| i64::try_from(device.0).map_err(|_| IdExhausted);
+    sheet.part(
+        "KX1",
+        "interlock.mechanical",
+        "link",
+        &[
+            ("first", ParamValue::Int(id(k1)?)),
+            ("second", ParamValue::Int(id(k2)?)),
+        ],
+        (0, 31),
+    )?;
+
+    // Control. Each direction is a column under `feed`: its start button
+    // beside its seal-in contact, then the NC contact of the other button,
+    // the NC auxiliary contact of the other contactor and the coil.
+    let feed = sheet.junction((0, 7))?;
+    let forward = sheet.junction((-8, 15))?;
+    let reverse = sheet.junction((8, 15))?;
+    let common = sheet.junction((0, 36))?;
+    sheet.wire(out(p24), pin(stop, "p1"))?;
+    sheet.wire(pin(stop, "p2"), feed)?;
+    for (start, seal, node, block, lock, coil, (start_x, seal_x, x)) in [
+        (
+            s1_start,
+            k1_seal,
+            forward,
+            s3_block,
+            k2_lock,
+            k1_coil,
+            (-12, -4, -8),
+        ),
+        (
+            s3_start,
+            k2_seal,
+            reverse,
+            s1_block,
+            k1_lock,
+            k2_coil,
+            (12, 4, 8),
+        ),
+    ] {
+        sheet.route(feed, pin(start, "p1"), &[(start_x, 7)])?;
+        sheet.route(feed, pin(seal, "p1"), &[(seal_x, 7)])?;
+        sheet.route(pin(start, "p2"), node, &[(start_x, 15)])?;
+        sheet.route(pin(seal, "p2"), node, &[(seal_x, 15)])?;
+        sheet.wire(node, pin(block, "p1"))?;
+        sheet.wire(pin(block, "p2"), pin(lock, "p1"))?;
+        sheet.wire(pin(lock, "p2"), pin(coil, "a1"))?;
+        sheet.route(pin(coil, "a2"), common, &[(x, 36)])?;
+    }
+    sheet.wire(common, out(p0))?;
+
+    reversing_power(&mut sheet, phases, k1_main, k2_main, motor)?;
     Ok(sheet.finish())
 }
 

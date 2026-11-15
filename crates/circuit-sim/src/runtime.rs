@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 
 use circuit_model::{
     DeviceClass, DeviceId, Diagnostic, DiagnosticCode, InputAction, Live, MotorState, MotorView,
-    SimSnapshot, Subject, SymbolId, TimerView,
+    SimSnapshot, Subject, SymbolId, TimerView, sort_diagnostics,
 };
 
 use crate::bitset::BitSet;
@@ -240,6 +240,9 @@ pub struct Simulator {
     view: TickView,
     mask: SwitchMask,
     effective: BitSet,
+    /// Faults of the tick being executed when the logic adds to those of
+    /// the solution; reused between ticks.
+    tick_faults: Vec<Diagnostic>,
     trace: Vec<TraceEvent>,
     trace_limit: usize,
 }
@@ -304,6 +307,7 @@ impl Simulator {
             view,
             mask,
             effective,
+            tick_faults: Vec::new(),
             trace: Vec::new(),
             trace_limit: MAX_PENDING_TRACE_EVENTS,
         })
@@ -397,9 +401,62 @@ impl Simulator {
         // 3. Solve.
         let solution = self.solver.solve(&self.circuit, &self.mask);
 
-        // 5. Record what changed against the previous tick. (The logic of
-        // step 4 runs below, at commit, because it only affects the next
-        // tick.)
+        // 4. Device logic: the derived signals of the next tick, computed
+        // from this tick's solution. They only take effect in the next tick,
+        // so computing them before recording changes nothing that is
+        // recorded; it lets the interlock contention of this commit be
+        // reported in this tick.
+        self.state.signals.copy_from(&self.effective);
+        for (index, device) in self.circuit.devices().iter().enumerate() {
+            let (Some(signal), Some(coil)) = (device.signal, device.coil) else {
+                continue;
+            };
+            let energized = solution.load(coil).is_energized();
+            let effective = self.effective.get(signal.index());
+            let next = match device.class {
+                DeviceClass::Contactor | DeviceClass::Relay => {
+                    let Some(actuator) = self.state.actuators.get_mut(index) else {
+                        continue;
+                    };
+                    let (state, next) = step_actuator(
+                        *actuator,
+                        effective,
+                        energized,
+                        self.config.delays.pickup_ticks,
+                        self.config.delays.dropout_ticks,
+                    );
+                    *actuator = state;
+                    next
+                }
+                DeviceClass::Timer(mode) => {
+                    let (Some(timer), Some(preset)) =
+                        (self.state.timers.get_mut(index), self.presets.get(index))
+                    else {
+                        continue;
+                    };
+                    let (state, next) = step_timer(mode, *preset, *timer, energized, effective);
+                    *timer = state;
+                    next
+                }
+                _ => continue,
+            };
+            self.state.signals.set(signal.index(), next);
+        }
+        let contentions = apply_interlocks(&self.circuit, &self.effective, &mut self.state.signals);
+        let logic_faults = !contentions.is_empty();
+        if logic_faults {
+            self.tick_faults.clear();
+            self.tick_faults.extend_from_slice(solution.faults());
+            self.tick_faults.extend(contentions);
+            sort_diagnostics(&mut self.tick_faults);
+        }
+        let tick_faults: &[Diagnostic] = if logic_faults {
+            &self.tick_faults
+        } else {
+            solution.faults()
+        };
+
+        // 5. Record what changed against the previous tick.
         let record = self.config.record_trace;
         let mut changed = false;
         for inputs_pass in [true, false] {
@@ -449,15 +506,14 @@ impl Simulator {
         }
         let faults_changed = record_fault_changes(
             &self.view.faults,
-            solution.faults(),
+            tick_faults,
             tick,
             record.then_some(&mut self.trace),
         );
         changed |= faults_changed;
 
         let latches = self.config.fault_policy == FaultPolicy::Halt
-            && solution
-                .faults()
+            && tick_faults
                 .iter()
                 .any(|fault| fault.code().latches_runtime());
         if latches {
@@ -478,48 +534,10 @@ impl Simulator {
         self.view.loads.extend_from_slice(solution.loads());
         if faults_changed {
             self.view.faults.clear();
-            self.view.faults.extend_from_slice(solution.faults());
+            self.view.faults.extend_from_slice(tick_faults);
         }
         self.view.mask.copy_from(&self.mask);
 
-        // 4 and 7. Device logic, then commit: derived signals computed from
-        // this tick become effective in the next one.
-        self.state.signals.copy_from(&self.effective);
-        for (index, device) in self.circuit.devices().iter().enumerate() {
-            let (Some(signal), Some(coil)) = (device.signal, device.coil) else {
-                continue;
-            };
-            let energized = solution.load(coil).is_energized();
-            let effective = self.effective.get(signal.index());
-            let next = match device.class {
-                DeviceClass::Contactor | DeviceClass::Relay => {
-                    let Some(actuator) = self.state.actuators.get_mut(index) else {
-                        continue;
-                    };
-                    let (state, next) = step_actuator(
-                        *actuator,
-                        effective,
-                        energized,
-                        self.config.delays.pickup_ticks,
-                        self.config.delays.dropout_ticks,
-                    );
-                    *actuator = state;
-                    next
-                }
-                DeviceClass::Timer(mode) => {
-                    let (Some(timer), Some(preset)) =
-                        (self.state.timers.get_mut(index), self.presets.get(index))
-                    else {
-                        continue;
-                    };
-                    let (state, next) = step_timer(mode, *preset, *timer, energized, effective);
-                    *timer = state;
-                    next
-                }
-                _ => continue,
-            };
-            self.state.signals.set(signal.index(), next);
-        }
         self.view.timers.clone_from(&self.state.timers);
         self.state.faulted = latches;
         self.state.tick = next_tick;
@@ -843,6 +861,49 @@ const fn activity(state: LoadState) -> LoadActivity {
         LoadState::Rotating(Direction::Forward) => LoadActivity::Forward,
         LoadState::Rotating(Direction::Reverse) => LoadActivity::Reverse,
     }
+}
+
+/// Mechanical interlocks, break before make: a contactor of a pair whose
+/// signal would rise at this commit rises only if its partner is low in this
+/// tick and stays low at this commit. When both would rise together neither
+/// does, and the contention is returned as a warning of this tick.
+/// `effective` holds the signals of the tick, `next` those computed for the
+/// next one, which this function corrects.
+fn apply_interlocks(
+    circuit: &CompiledCircuit,
+    effective: &BitSet,
+    next: &mut BitSet,
+) -> Vec<Diagnostic> {
+    let mut contentions = Vec::new();
+    for (first, second) in circuit.interlocks() {
+        let (Some(a), Some(b)) = (circuit.device(*first), circuit.device(*second)) else {
+            continue;
+        };
+        let (Some(sig_a), Some(sig_b)) = (a.signal, b.signal) else {
+            continue;
+        };
+        let (now_a, now_b) = (effective.get(sig_a.index()), effective.get(sig_b.index()));
+        let (next_a, next_b) = (next.get(sig_a.index()), next.get(sig_b.index()));
+        let rises_a = !now_a && next_a;
+        let rises_b = !now_b && next_b;
+        if rises_a && rises_b {
+            next.set(sig_a.index(), false);
+            next.set(sig_b.index(), false);
+            contentions.push(
+                Diagnostic::new(
+                    DiagnosticCode::InterlockContention,
+                    Subject::Device(a.id),
+                    "both contactors of a mechanical interlock tried to pick up together; neither did",
+                )
+                .with_related(vec![Subject::Device(b.id)]),
+            );
+        } else if rises_a && (now_b || next_b) {
+            next.set(sig_a.index(), false);
+        } else if rises_b && (now_a || next_a) {
+            next.set(sig_b.index(), false);
+        }
+    }
+    contentions
 }
 
 /// Compare two canonically sorted fault lists and record which faults

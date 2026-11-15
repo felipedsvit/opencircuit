@@ -151,6 +151,9 @@ diagnostic_codes! {
     NoSupply = "OC-SEM-007", Semantic, Warning, latches = false;
     /// A supply that reaches no load.
     UnusedSupply = "OC-SEM-008", Semantic, Info, latches = false;
+    /// A mechanical interlock that does not name two distinct contactors, or
+    /// a contactor named by more than one interlock.
+    InvalidInterlock = "OC-SEM-009", Semantic, Error, latches = false;
     /// Incompatible conductors meet in one group, including any AC/DC mix.
     ShortCircuit = "OC-ELEC-001", Electrical, Error, latches = true;
     /// Protective earth meets a live conductor.
@@ -163,6 +166,9 @@ diagnostic_codes! {
     LoadTerminalsShorted = "OC-ELEC-005", Electrical, Warning, latches = false;
     /// A motor is fed by only part of its phases.
     PhaseLoss = "OC-ELEC-006", Electrical, Warning, latches = false;
+    /// Both contactors of a mechanical interlock tried to pick up at the same
+    /// commit; neither did.
+    InterlockContention = "OC-ELEC-007", Electrical, Warning, latches = false;
     /// Loads permanently wired in series; rejected at compile time.
     StaticSeriesLoads = "OC-MOD-001", ModelLimitation, Error, latches = false;
     /// Loads end up in series at run time; the affected loads stay off.
@@ -386,12 +392,14 @@ mod tests {
         ("OC-SEM-006", "FloatingNet", "warning", false),
         ("OC-SEM-007", "NoSupply", "warning", false),
         ("OC-SEM-008", "UnusedSupply", "info", false),
+        ("OC-SEM-009", "InvalidInterlock", "error", false),
         ("OC-ELEC-001", "ShortCircuit", "error", true),
         ("OC-ELEC-002", "ProtectiveEarthFault", "error", true),
         ("OC-ELEC-003", "NeutralEarthBond", "warning", false),
         ("OC-ELEC-004", "LoadSupplyMismatch", "warning", false),
         ("OC-ELEC-005", "LoadTerminalsShorted", "warning", false),
         ("OC-ELEC-006", "PhaseLoss", "warning", false),
+        ("OC-ELEC-007", "InterlockContention", "warning", false),
         ("OC-MOD-001", "StaticSeriesLoads", "error", false),
         ("OC-MOD-002", "DynamicUnsupportedTopology", "error", false),
         ("OC-MOD-003", "CircuitTooLarge", "error", false),

@@ -10,8 +10,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_model::catalog::{
-    PARAM_CONDUCTOR, PARAM_CONNECTION, PARAM_INITIAL_CLOSED, PARAM_PRESET_MS,
-    PARAM_RATED_VOLTAGE_MV, PARAM_SUPPLY,
+    PARAM_CONDUCTOR, PARAM_CONNECTION, PARAM_FIRST, PARAM_INITIAL_CLOSED, PARAM_PRESET_MS,
+    PARAM_RATED_VOLTAGE_MV, PARAM_SECOND, PARAM_SUPPLY,
 };
 use circuit_model::{
     ComponentCatalog, ComponentModel, Conductor, ConductorSet, Connection, Device, DeviceClass,
@@ -162,6 +162,7 @@ fn resolve<'a>(
         device_position.entry(device.id).or_insert(devices.len());
         devices.push(ResolvedDevice { device, model });
     }
+    check_interlocks(&devices, out);
 
     let mut sorted_symbols: Vec<&SymbolInstance> = doc.symbols.iter().collect();
     sorted_symbols.sort_by_key(|symbol| symbol.id);
@@ -345,6 +346,78 @@ const fn supply_kind_name(kind: SupplyKind) -> &'static str {
     }
 }
 
+/// The two contactors a mechanical interlock names, when both parameters
+/// are set.
+fn interlock_params(device: &Device, model: &ComponentModel) -> Option<(DeviceId, DeviceId)> {
+    let id = |key| {
+        let raw = model.int_param(&device.params, key)?;
+        u64::try_from(raw).ok().map(DeviceId)
+    };
+    Some((id(PARAM_FIRST)?, id(PARAM_SECOND)?))
+}
+
+/// Every mechanical interlock must name two distinct contactors of the
+/// document, and a contactor may belong to one interlock only.
+fn check_interlocks(devices: &[ResolvedDevice<'_>], out: &mut Vec<Diagnostic>) {
+    let class_of: BTreeMap<DeviceId, DeviceClass> = devices
+        .iter()
+        .map(|resolved| (resolved.device.id, resolved.model.class()))
+        .collect();
+    let mut owner_of: BTreeMap<DeviceId, DeviceId> = BTreeMap::new();
+    for ResolvedDevice { device, model } in devices {
+        if model.class() != DeviceClass::MechanicalInterlock {
+            continue;
+        }
+        // Missing or ill-typed parameters were reported as InvalidParameter.
+        let Some((first, second)) = interlock_params(device, model) else {
+            continue;
+        };
+        let report = |message: String, related: Vec<Subject>, out: &mut Vec<Diagnostic>| {
+            out.push(
+                Diagnostic::new(
+                    DiagnosticCode::InvalidInterlock,
+                    Subject::Device(device.id),
+                    message,
+                )
+                .with_related(related),
+            );
+        };
+        if first == second {
+            report(
+                format!("the interlock names device {first} twice"),
+                vec![Subject::Device(first)],
+                out,
+            );
+            continue;
+        }
+        let mut valid = true;
+        for target in [first, second] {
+            if class_of.get(&target) != Some(&DeviceClass::Contactor) {
+                valid = false;
+                report(
+                    format!("device {target} is not a contactor of the document"),
+                    vec![Subject::Device(target)],
+                    out,
+                );
+            }
+        }
+        if !valid {
+            continue;
+        }
+        for target in [first, second] {
+            if let Some(other) = owner_of.get(&target) {
+                report(
+                    format!("contactor {target} already belongs to interlock {other}"),
+                    vec![Subject::Device(target), Subject::Device(*other)],
+                    out,
+                );
+            } else {
+                owner_of.insert(target, device.id);
+            }
+        }
+    }
+}
+
 fn supply_param(device: &Device, model: &ComponentModel) -> Option<SupplyId> {
     let raw = model.int_param(&device.params, PARAM_SUPPLY)?;
     u64::try_from(raw).ok().map(SupplyId)
@@ -379,7 +452,8 @@ const fn signal_kind(class: DeviceClass) -> Option<SignalKind> {
         | DeviceClass::Motor
         | DeviceClass::Lamp
         | DeviceClass::Buzzer
-        | DeviceClass::PowerSupply => None,
+        | DeviceClass::PowerSupply
+        | DeviceClass::MechanicalInterlock => None,
     }
 }
 
@@ -527,6 +601,25 @@ fn build(
                 .unwrap_or(false),
         });
     }
+
+    // Mechanical interlocks, checked in the structural phase.
+    let mut interlocks: Vec<(DeviceIx, DeviceIx)> = Vec::new();
+    for ResolvedDevice { device, model } in &resolved.devices {
+        if model.class() != DeviceClass::MechanicalInterlock {
+            continue;
+        }
+        let Some((first, second)) = interlock_params(device, model) else {
+            continue;
+        };
+        let index = |id: DeviceId| {
+            let position = devices.binary_search_by_key(&id, |d| d.id).ok()?;
+            u32::try_from(position).ok().map(DeviceIx)
+        };
+        if let (Some(a), Some(b)) = (index(first), index(second)) {
+            interlocks.push((a.min(b), a.max(b)));
+        }
+    }
+    interlocks.sort_unstable();
 
     // Phase 5: switches, sources and loads, in symbol order.
     let mut switches: Vec<CompiledSwitch> = Vec::new();
@@ -682,6 +775,8 @@ fn build(
                     owner: id,
                 });
             }
+            // A mark on the drawing; the pair is compiled from the device.
+            SymbolKind::InterlockLink => {}
             SymbolKind::SupplyTerminal => {
                 let (Some(net), Some(conductor), Some(supply)) = (
                     terminal_net(0),
@@ -849,6 +944,7 @@ fn build(
         supplies,
         wires,
         junctions,
+        interlocks,
         fingerprint: Fingerprint(0),
     };
     circuit.fingerprint = fingerprint(&circuit);
@@ -1103,6 +1199,7 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             DeviceClass::Lamp => 10,
             DeviceClass::Buzzer => 11,
             DeviceClass::PowerSupply => 12,
+            DeviceClass::MechanicalInterlock => 13,
         });
         hash.u32(device.signal.map_or(u32::MAX, |sig| sig.0));
         hash.u32(device.coil.map_or(u32::MAX, |load| load.0));
@@ -1136,6 +1233,18 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
     for (junction, net) in &circuit.junctions {
         hash.u64(junction.0);
         hash.u32(net.0);
+    }
+
+    // Sections added after the first encoding are written only when they
+    // are not empty, so a circuit that does not use them keeps the
+    // fingerprint recorded in its goldens.
+    if !circuit.interlocks.is_empty() {
+        hash.str("interlocks");
+        hash.u64(circuit.interlocks.len() as u64);
+        for (first, second) in &circuit.interlocks {
+            hash.u32(first.0);
+            hash.u32(second.0);
+        }
     }
 
     hash.finish()
