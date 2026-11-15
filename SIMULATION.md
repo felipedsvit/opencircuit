@@ -274,6 +274,16 @@ closed in the solve; a changeover contact while its `no` side conducts),
 set), `motors` (with `winding`, `star` or `delta`, for a running six-terminal
 motor), `timers`, `faulted`, `faults`.
 
+Two fields differ in what they describe. `faults` lists the faults of the
+solved tick. `faulted` is the fault latch at the moment `snapshot()` is
+called, the same value as `is_faulted()`. They agree after a `halt` fault,
+where the tick that latched shows `faulted = true` and its fault. They differ
+under `report` (faults, no latch) and right after `reset_fault()`, which
+clears the latch without rewriting the solved tick: `faulted = false` with
+the faults of that tick, until the next tick replaces them. A front end that
+needs to know whether it may run reads `faulted`; one that lists diagnostics
+reads `faults`.
+
 `step` allocates no snapshot. A front end calls `step_n` for the ticks of a
 frame and `snapshot()` once. `step_n(n, inputs)` applies the inputs to the
 first tick only and stops early at a latch; it is equivalent to `n` calls of
