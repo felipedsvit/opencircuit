@@ -1,6 +1,6 @@
 //! Command-line parsing.
 //!
-//! Four commands with a handful of options do not justify a parser
+//! Five commands with a handful of options do not justify a parser
 //! dependency. Options may be written `--name value` or `--name=value`.
 
 use std::path::PathBuf;
@@ -45,7 +45,18 @@ pub(crate) enum Command {
         theme: Theme,
         library: Option<PathBuf>,
     },
+    Serve {
+        project: PathBuf,
+        listen: std::net::SocketAddr,
+        library: Option<PathBuf>,
+        print_map: bool,
+        duration_ms: Option<u64>,
+    },
 }
+
+/// Address `serve` listens on unless `--listen` says otherwise: loopback
+/// only (ADR-0009).
+pub(crate) const DEFAULT_LISTEN: &str = "127.0.0.1:5020";
 
 /// The file format of `export`, chosen by the extension of the output.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -239,6 +250,30 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 library: words.value("--library").map(PathBuf::from),
             })
         }
+        "serve" => {
+            let words = Words::split(
+                rest,
+                &["--listen", "--library", "--duration-ms"],
+                &["--print-map"],
+            )?;
+            let listen_text = words.value("--listen").unwrap_or(DEFAULT_LISTEN);
+            let listen = listen_text.parse().map_err(|_| {
+                format!("`--listen` must be an address and a port, found `{listen_text}`")
+            })?;
+            let duration_ms = match words.value("--duration-ms") {
+                None => None,
+                Some(text) => Some(text.parse::<u64>().map_err(|_| {
+                    format!("`--duration-ms` must be a whole number, found `{text}`")
+                })?),
+            };
+            Ok(Command::Serve {
+                project: words.single_positional("project file")?,
+                listen,
+                library: words.value("--library").map(PathBuf::from),
+                print_map: words.flag("--print-map"),
+                duration_ms,
+            })
+        }
         other => Err(format!("unknown command `{other}`")),
     }
 }
@@ -418,6 +453,40 @@ mod tests {
             ],
             &["export", "a.ocircuit"],
             &["export", "--output", "a.svg"],
+        ] {
+            assert!(parse_words(words).is_err(), "{words:?}");
+        }
+    }
+
+    #[test]
+    fn serve_listens_on_loopback_unless_told_otherwise() {
+        assert_eq!(
+            parse_words(&["serve", "a.ocircuit"]),
+            Ok(Command::Serve {
+                project: PathBuf::from("a.ocircuit"),
+                listen: DEFAULT_LISTEN.parse().unwrap(),
+                library: None,
+                print_map: false,
+                duration_ms: None,
+            })
+        );
+        assert!(matches!(
+            parse_words(&[
+                "serve",
+                "a.ocircuit",
+                "--listen",
+                "0.0.0.0:502",
+                "--print-map"
+            ]),
+            Ok(Command::Serve {
+                print_map: true,
+                ..
+            })
+        ));
+        for words in [
+            &["serve", "a.ocircuit", "--listen", "localhost"][..],
+            &["serve", "a.ocircuit", "--duration-ms", "-1"],
+            &["serve"],
         ] {
             assert!(parse_words(words).is_err(), "{words:?}");
         }

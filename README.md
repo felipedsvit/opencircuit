@@ -23,7 +23,7 @@ SVG and PDF export. M4 (ecosystem) is next. See [`ROADMAP.md`](ROADMAP.md).
 
 ```text
 apps/
-  cli/                 `opencircuit`: validate, simulate, test, export
+  cli/                 `opencircuit`: validate, simulate, test, export, serve
   desktop/             `opencircuit-desktop`: egui editor and viewer (draw, run, export)
 crates/
   circuit-model/       IDs, document, catalog and geometry, diagnostics, inputs, snapshot
@@ -33,6 +33,7 @@ crates/
   circuit-commands/    transactional edits with undo/redo
   circuit-editor/      selection, tools and hit-test, no GUI
   circuit-export/      deterministic SVG and PDF from the neutral scene
+  circuit-io/          Modbus TCP codec and I/O map, no sockets
 xtask/                 architecture checks and example generation
 examples/              reference projects with scenarios and golden traces
 tests/fixtures/        projects that must be rejected, with their scenarios
@@ -62,7 +63,12 @@ cargo run -p opencircuit-cli -- test examples tests/fixtures
 cargo run -p opencircuit-cli -- export examples/star-delta/star-delta.ocircuit \
     --output star-delta.pdf
 cargo run -p opencircuit-desktop -- examples/star-delta/star-delta.ocircuit
+cargo run -p opencircuit-cli -- serve examples/direct-starter/command.ocircuit --print-map
 ```
+
+`serve` (without `--print-map`) answers Modbus TCP on 127.0.0.1:5020 for a
+PLC program or an HMI under test. OpenCircuit is a simulator, not a
+controller: never connect it to a real plant.
 
 `simulate` prints the change-log trace. The simultaneous start of the
 reversing starter ends with `runtime latched` at the first short circuit;

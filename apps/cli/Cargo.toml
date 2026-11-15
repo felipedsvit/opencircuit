@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 circuit-export = { workspace = true }
+circuit-io = { workspace = true }
 circuit-model = { workspace = true }
 circuit-project = { workspace = true }
 circuit-renderer = { workspace = true }

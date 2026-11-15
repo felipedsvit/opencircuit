@@ -525,3 +525,184 @@ fn export_draws_library_artwork_with_the_library() {
         fs::read_to_string(root().join("examples/library/acme-lamp.svg")).expect("golden")
     );
 }
+
+mod serve {
+    use std::io::{BufRead as _, BufReader, Read as _, Write as _};
+    use std::net::TcpStream;
+    use std::process::{Child, Command, Stdio};
+    use std::time::Duration;
+
+    use super::{COMMAND, opencircuit, root, stdout};
+
+    /// A running server, killed when dropped.
+    struct Server {
+        child: Child,
+        address: String,
+    }
+
+    impl Drop for Server {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    fn start(project: &str) -> Server {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_opencircuit"))
+            .args([
+                "serve",
+                project,
+                "--listen",
+                "127.0.0.1:0",
+                "--duration-ms",
+                "20000",
+            ])
+            .current_dir(root())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the server starts");
+        let mut line = String::new();
+        BufReader::new(child.stdout.take().expect("stdout"))
+            .read_line(&mut line)
+            .expect("the server announces its address");
+        let address = line
+            .trim()
+            .strip_prefix("listening on ")
+            .unwrap_or_else(|| panic!("unexpected first line `{line}`"))
+            .to_owned();
+        Server { child, address }
+    }
+
+    fn connect(server: &Server) -> TcpStream {
+        let stream = TcpStream::connect(&server.address).expect("connects");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("timeout");
+        stream
+    }
+
+    /// Send one request PDU and return the answer PDU.
+    fn ask(stream: &mut TcpStream, transaction: u16, pdu: &[u8]) -> Vec<u8> {
+        let mut frame = transaction.to_be_bytes().to_vec();
+        frame.extend([0, 0]);
+        frame.extend(u16::try_from(pdu.len() + 1).unwrap().to_be_bytes());
+        frame.push(1);
+        frame.extend(pdu);
+        stream.write_all(&frame).expect("sent");
+        let mut header = [0_u8; 7];
+        stream.read_exact(&mut header).expect("header");
+        assert_eq!(&header[..2], &transaction.to_be_bytes());
+        let length = usize::from(u16::from_be_bytes([header[4], header[5]])) - 1;
+        let mut answer = vec![0_u8; length];
+        stream.read_exact(&mut answer).expect("answer");
+        answer
+    }
+
+    fn k1_active(stream: &mut TcpStream) -> bool {
+        let answer = ask(stream, 9, &[2, 0, 0, 0, 1]);
+        assert_eq!(&answer[..2], &[2, 1]);
+        answer[2] & 1 == 1
+    }
+
+    fn eventually(stream: &mut TcpStream, expected: bool) {
+        for _ in 0..200 {
+            if k1_active(stream) == expected {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("K1 never became {expected}");
+    }
+
+    #[test]
+    fn print_map_lists_the_addresses_without_listening() {
+        let run = opencircuit(&["serve", COMMAND, "--print-map"]);
+
+        assert_eq!(
+            stdout(&run),
+            "coil 0 S2 (1 = pressed)\n\
+             coil 1 S1 (1 = pressed)\n\
+             discrete input 0 K1 (1 = active)\n\
+             input registers 0-3 tick (highest word first)\n\
+             input register 4 fault latch (1 = latched)\n"
+        );
+    }
+
+    #[test]
+    fn a_client_starts_and_stops_the_direct_online_starter() {
+        let server = start(COMMAND);
+        let mut client = connect(&server);
+
+        // Press S1 (coil 1): K1 picks up and seals in.
+        assert_eq!(
+            ask(&mut client, 1, &[5, 0, 1, 0xFF, 0x00]),
+            [5, 0, 1, 0xFF, 0x00]
+        );
+        eventually(&mut client, true);
+        ask(&mut client, 2, &[5, 0, 1, 0x00, 0x00]);
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(k1_active(&mut client));
+
+        // Press S2 (coil 0), the stop button: K1 drops out.
+        ask(&mut client, 3, &[5, 0, 0, 0xFF, 0x00]);
+        eventually(&mut client, false);
+
+        // The tick advances with real time.
+        let registers = ask(&mut client, 4, &[4, 0, 0, 0, 5]);
+        assert_eq!(registers[..2], [4, 10]);
+        let tick = registers[2..10]
+            .iter()
+            .fold(0_u64, |tick, byte| (tick << 8) | u64::from(*byte));
+        assert!(tick > 0);
+    }
+
+    #[test]
+    fn requests_outside_the_map_or_the_supported_functions_get_exceptions() {
+        let server = start(COMMAND);
+        let mut client = connect(&server);
+
+        assert_eq!(ask(&mut client, 1, &[1, 0, 2, 0, 1]), [0x81, 2]);
+        assert_eq!(ask(&mut client, 2, &[3, 0, 0, 0, 1]), [0x83, 1]);
+        assert_eq!(ask(&mut client, 3, &[6, 0, 0, 0, 1]), [0x86, 1]);
+    }
+
+    #[test]
+    fn a_frame_that_is_not_modbus_closes_the_connection() {
+        let server = start(COMMAND);
+        let mut client = connect(&server);
+
+        client
+            .write_all(&[0, 1, 0x12, 0x34, 0, 6, 1, 1, 0, 0, 0, 1])
+            .expect("sent");
+        let mut byte = [0_u8; 1];
+
+        // Closed: end of stream, or a reset on some platforms; never a
+        // timeout with the connection still open.
+        match client.read(&mut byte) {
+            Ok(read) => assert_eq!(read, 0),
+            Err(error) => assert!(
+                !matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ),
+                "{error}"
+            ),
+        }
+    }
+
+    #[test]
+    fn the_fifth_client_is_refused() {
+        let server = start(COMMAND);
+        let mut kept: Vec<TcpStream> = (0..4).map(|_| connect(&server)).collect();
+        for (index, client) in kept.iter_mut().enumerate() {
+            let transaction = u16::try_from(index).unwrap();
+            assert_eq!(ask(client, transaction, &[2, 0, 0, 0, 1])[0], 2);
+        }
+
+        let mut fifth = connect(&server);
+        let mut byte = [0_u8; 1];
+
+        assert_eq!(fifth.read(&mut byte).unwrap_or(0), 0);
+    }
+}

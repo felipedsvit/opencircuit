@@ -27,6 +27,7 @@ mod args;
 mod commands;
 mod fsio;
 pub mod scenario;
+mod serve;
 
 use std::fmt;
 use std::io::{self, Write};
@@ -54,9 +55,15 @@ usage:
   opencircuit test <path>... [--update-golden]
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
                      [--theme print|live] [--library <file.oclib|dir>]
+  opencircuit serve <project.ocircuit> [--listen <address:port>] [--print-map]
+                    [--library <file.oclib|dir>] [--duration-ms N]
 
 A directory given to --library stands for its *.oclib files. Scenarios name
 their libraries in `libraries` (scenario schema version 2).
+
+serve answers Modbus TCP on 127.0.0.1:5020 unless --listen names another
+address. Modbus has no authentication. OpenCircuit is a simulator, not a
+controller: never connect it to a real plant.
 
 exit codes: 0 success, 1 validation or test failure, 2 usage or I/O error
 ";

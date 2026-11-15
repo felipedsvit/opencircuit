@@ -28,7 +28,7 @@ second real consumer justifies the boundary.
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | Export | `circuit-export` | Deterministic SVG written directly and PDF written with `pdf-writer` (ADR-0006) from the neutral scene, with a print and a live theme; no I/O |
 | I/O | `circuit-io` | Modbus TCP codec and the I/O map of a project (ADR-0009); no socket, no thread, no clock |
-| CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation, golden execution and export |
+| CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation, golden execution, export and the Modbus TCP server (`serve`, the only place with a socket and a real-time loop) |
 | Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that creates, opens, draws, edits (palette, inspector, undo/redo through `circuit-commands` and `circuit-editor`), saves atomically and runs a project with operator controls; the only package with a GUI dependency |
 | Tooling | `xtask` | Architecture checks, generation of the example projects and benchmarks |
 
@@ -59,7 +59,7 @@ circuit-commands    -> circuit-model
 circuit-editor      -> circuit-model, circuit-commands
 circuit-export      -> circuit-model, circuit-renderer
 circuit-io          -> circuit-model
-apps/cli            -> circuit-model, circuit-sim, circuit-project, circuit-renderer, circuit-export
+apps/cli            -> circuit-model, circuit-sim, circuit-project, circuit-renderer, circuit-export, circuit-io
 xtask               -> circuit-model, circuit-project, circuit-sim, circuit-renderer, circuit-commands, circuit-export
 apps/desktop        -> model, sim, project, renderer, editor, commands, export
 ```
