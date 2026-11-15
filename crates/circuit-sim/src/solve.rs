@@ -174,15 +174,16 @@ struct SupplyLabel {
 }
 
 /// Loads that share conductor-less groups, and what feeds them from outside.
-#[derive(Default)]
+/// One per component of the dead groups, kept in a buffer the solver reuses.
+#[derive(Clone, Copy, Debug, Default)]
 struct DeadComponent {
     /// Conductors and section of the first live group reached through a
     /// load.
     boundary: Option<(ConductorSet, Option<SupplyId>)>,
     /// Whether live groups with different conductors were reached.
     mixed: bool,
-    loads: BTreeSet<usize>,
-    devices: BTreeSet<DeviceId>,
+    /// How many loads touch the component.
+    loads: usize,
 }
 
 /// Reusable solver for one compiled circuit.
@@ -197,6 +198,15 @@ pub struct Solver {
     solution: ElectricalSolution,
     last_mask: Option<SwitchMask>,
     solve_count: u64,
+    /// What the enabled sources provide to each group, by group. Only the
+    /// groups listed in `fed` hold a value; the others are default.
+    feeds: Vec<GroupFeed>,
+    /// The groups with at least one enabled source, in the order found.
+    fed: Vec<u32>,
+    /// The series-load accumulators, by root of `dead`. Only the roots listed
+    /// in `touched` hold a value.
+    components: Vec<DeadComponent>,
+    touched: Vec<u32>,
 }
 
 impl Solver {
@@ -230,6 +240,10 @@ impl Solver {
             },
             last_mask: None,
             solve_count: 0,
+            feeds: vec![GroupFeed::default(); nets as usize],
+            fed: Vec::new(),
+            components: vec![DeadComponent::default(); nets as usize],
+            touched: Vec::new(),
         }
     }
 
@@ -270,36 +284,71 @@ impl Solver {
         // Conductors present in each group, with their supply section.
         self.solution.conductors_of_group.fill(ConductorSet::EMPTY);
         self.sections.fill(None);
-        let mut feeds: BTreeMap<u32, (GroupFeed, Vec<DeviceId>)> = BTreeMap::new();
+        for group in self.fed.drain(..) {
+            if let Some(feed) = self.feeds.get_mut(group as usize) {
+                *feed = GroupFeed::default();
+            }
+        }
         for (index, source) in circuit.sources().iter().enumerate() {
             if source.enabled_by.is_some() && !closed.source_enabled(index) {
                 continue;
             }
             let group = self.groups.find(source.net.raw());
-            let feed = feeds.entry(group).or_default();
-            feed.0.add(source.conductor, source.supply);
-            feed.1.push(source.owner);
+            let Some(feed) = self.feeds.get_mut(group as usize) else {
+                continue;
+            };
+            if feed.conductors.is_empty() {
+                self.fed.push(group);
+            }
+            feed.add(source.conductor, source.supply);
         }
 
         // Conflicts. A group in fault energizes nothing.
-        let mut faults = Vec::new();
+        let mut faults = std::mem::take(&mut self.solution.faults);
+        faults.clear();
         self.faulted.fill(false);
-        for (group, (feed, devices)) in &feeds {
+        let mut conflicting = Vec::new();
+        for group in &self.fed {
             let index = *group as usize;
+            let Some(feed) = self.feeds.get(index).copied() else {
+                continue;
+            };
             if let Some(conductors) = self.solution.conductors_of_group.get_mut(index) {
                 *conductors = feed.conductors;
             }
             if let Some(section) = self.sections.get_mut(index) {
                 *section = feed.section;
             }
+            let conflict = feed.conflict();
             let in_fault = matches!(
-                feed.conflict(),
+                conflict,
                 ConductorConflict::ShortCircuit | ConductorConflict::ProtectiveEarthFault
             );
             if let Some(flag) = self.faulted.get_mut(index) {
                 *flag = in_fault;
             }
-            faults.extend(conflict_diagnostic(*feed, devices));
+            if conflict != ConductorConflict::None {
+                conflicting.push(*group);
+            }
+        }
+        if !conflicting.is_empty() {
+            // The sources of a group are only needed to name a conflict.
+            conflicting.sort_unstable();
+            let mut owners: BTreeMap<u32, Vec<DeviceId>> = BTreeMap::new();
+            for (index, source) in circuit.sources().iter().enumerate() {
+                if source.enabled_by.is_some() && !closed.source_enabled(index) {
+                    continue;
+                }
+                let group = self.groups.find(source.net.raw());
+                if conflicting.binary_search(&group).is_ok() {
+                    owners.entry(group).or_default().push(source.owner);
+                }
+            }
+            for group in &conflicting {
+                let feed = self.feeds.get(*group as usize).copied().unwrap_or_default();
+                let sources = owners.get(group).map_or(&[][..], Vec::as_slice);
+                faults.extend(conflict_diagnostic(feed, sources));
+            }
         }
 
         // Loads.
@@ -601,23 +650,28 @@ impl Solver {
             }
         }
 
-        let mut components: BTreeMap<u32, DeadComponent> = BTreeMap::new();
-        for (index, load) in circuit.loads().iter().enumerate() {
-            let states: Vec<(u32, ConductorSet, bool)> =
-                load.nets.iter().map(|net| self.group_state(*net)).collect();
-            let Some(dead_group) = states
-                .iter()
-                .find(|(_, conductors, _)| conductors.is_empty())
-                .map(|(group, _, _)| *group)
-            else {
+        // The accumulators leave the solver while they are filled, so that
+        // the group lookups below can borrow it.
+        let mut components = std::mem::take(&mut self.components);
+        let mut touched = std::mem::take(&mut self.touched);
+        for root in touched.drain(..) {
+            if let Some(component) = components.get_mut(root as usize) {
+                *component = DeadComponent::default();
+            }
+        }
+        for load in circuit.loads() {
+            let Some(root) = self.dead_root_of(load) else {
                 continue;
             };
-            let component = components.entry(self.dead.find(dead_group)).or_default();
-            component.loads.insert(index);
-            if let Some(device) = circuit.device(load.device) {
-                component.devices.insert(device.id);
+            let Some(component) = components.get_mut(root as usize) else {
+                continue;
+            };
+            if component.loads == 0 {
+                touched.push(root);
             }
-            for (group, conductors, faulted) in states {
+            component.loads = component.loads.saturating_add(1);
+            for net in &load.nets {
+                let (group, conductors, faulted) = self.group_state(*net);
                 if conductors.is_empty() || faulted {
                     continue;
                 }
@@ -630,23 +684,58 @@ impl Solver {
             }
         }
 
-        for component in components.into_values() {
-            if !component.mixed || component.loads.len() < 2 {
-                continue;
+        // Only a component with two loads fed from different conductors is
+        // reported, so the devices are collected for those alone.
+        let mut reported: Vec<u32> = touched
+            .iter()
+            .copied()
+            .filter(|root| {
+                components
+                    .get(*root as usize)
+                    .is_some_and(|component| component.mixed && component.loads >= 2)
+            })
+            .collect();
+        reported.sort_unstable();
+        if !reported.is_empty() {
+            let mut devices: BTreeMap<u32, BTreeSet<DeviceId>> = BTreeMap::new();
+            for load in circuit.loads() {
+                let Some(root) = self.dead_root_of(load) else {
+                    continue;
+                };
+                if reported.binary_search(&root).is_ok() {
+                    devices.entry(root).or_default().insert(load.device_id);
+                }
             }
-            let mut devices = component.devices.into_iter();
-            let Some(first) = devices.next() else {
-                continue;
-            };
-            faults.push(
-                Diagnostic::new(
-                    DiagnosticCode::DynamicUnsupportedTopology,
-                    Subject::Device(first),
-                    "loads are connected in series, which the discrete model does not represent",
-                )
-                .with_related(devices.map(Subject::Device).collect()),
-            );
+            for devices in devices.into_values() {
+                let mut devices = devices.into_iter();
+                let Some(first) = devices.next() else {
+                    continue;
+                };
+                faults.push(
+                    Diagnostic::new(
+                        DiagnosticCode::DynamicUnsupportedTopology,
+                        Subject::Device(first),
+                        "loads are connected in series, which the discrete model does not represent",
+                    )
+                    .with_related(devices.map(Subject::Device).collect()),
+                );
+            }
         }
+        self.components = components;
+        self.touched = touched;
+    }
+
+    /// The component of the dead groups a load touches, named by its root,
+    /// or `None` when no terminal of the load is on a group without
+    /// conductors.
+    fn dead_root_of(&mut self, load: &CompiledLoad) -> Option<u32> {
+        let dead_group = load
+            .nets
+            .iter()
+            .map(|net| self.group_state(*net))
+            .find(|(_, conductors, _)| conductors.is_empty())
+            .map(|(group, _, _)| group)?;
+        Some(self.dead.find(dead_group))
     }
 }
 
