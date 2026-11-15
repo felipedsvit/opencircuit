@@ -127,3 +127,11 @@ transaction applied whole or not at all, with undo and redo;
 GUI; the desktop application edits, saves atomically and reopens projects.
 Hostile input is covered by proptests (loader, compiler, transactions);
 `cargo-fuzz` is deferred.
+M3 is implemented: changeover contacts in version 2 relays and timers,
+combined pushbuttons and mechanical interlocks, the six-terminal motor with
+its star/delta winding model, galvanically separate supply sections
+(ADR-0005), and `circuit-export`, which writes the neutral scene as
+deterministic SVG and, with `pdf-writer`, as PDF (ADR-0006), from the
+command line and the desktop application. The star-delta starter under
+`examples/star-delta` is validated by goldens and by a property test that
+star and delta are never picked up together.

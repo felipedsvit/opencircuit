@@ -15,27 +15,30 @@ M1, the headless vertical slice, is implemented: circuits are loaded,
 compiled, simulated and checked against golden traces from the command line.
 M2a, the viewer, and M2b, the editor, are implemented: the desktop
 application creates, opens, edits, saves and runs a project with operator
-controls. M3 (advanced circuits and export) is next. See
-[`ROADMAP.md`](ROADMAP.md).
+controls. M3 is implemented: changeover contacts, full interlocking, the
+six-terminal motor with star/delta starting, separate supply sections, and
+SVG and PDF export. M4 (ecosystem) is next. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
 
 ```text
 apps/
-  cli/                 `opencircuit`: validate, simulate, test
-  desktop/             `opencircuit-desktop`: egui viewer (open, draw, run)
+  cli/                 `opencircuit`: validate, simulate, test, export
+  desktop/             `opencircuit-desktop`: egui editor and viewer (draw, run, export)
 crates/
   circuit-model/       IDs, document, catalog and geometry, diagnostics, inputs, snapshot
   circuit-sim/         compile, solve, logic, runtime, trace
   circuit-project/     JSON .ocircuit: strict loading, canonical writing, migrations
   circuit-renderer/    neutral scene: primitives with semantic styles, no GUI
+  circuit-commands/    transactional edits with undo/redo
+  circuit-editor/      selection, tools and hit-test, no GUI
+  circuit-export/      deterministic SVG and PDF from the neutral scene
 xtask/                 architecture checks and example generation
 examples/              reference projects with scenarios and golden traces
 tests/fixtures/        projects that must be rejected, with their scenarios
 ```
 
-M2b adds `circuit-editor` and `circuit-commands`; M3 adds `circuit-export`.
-The other directories are placeholders for those milestones.
+The other directories under `crates/` and `apps/` are placeholders for M4.
 
 The dependency direction is enforced by
 `cargo run -p xtask -- check-architecture`:
@@ -43,7 +46,8 @@ The dependency direction is enforced by
 ```text
 circuit-model <- circuit-sim
 circuit-model <- circuit-project
-circuit-model <- circuit-renderer (and commands/editor in M2b)
+circuit-model <- circuit-renderer <- circuit-export
+circuit-model <- circuit-commands <- circuit-editor
 the renderer consumes SimSnapshot, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```
@@ -55,6 +59,9 @@ cargo run -p opencircuit-cli -- validate examples/direct-starter/starter.ocircui
 cargo run -p opencircuit-cli -- simulate examples/forward-reverse/reversing.ocircuit \
     --scenario examples/forward-reverse/simultaneous.scenario.json
 cargo run -p opencircuit-cli -- test examples tests/fixtures
+cargo run -p opencircuit-cli -- export examples/star-delta/star-delta.ocircuit \
+    --output star-delta.pdf
+cargo run -p opencircuit-desktop -- examples/star-delta/star-delta.ocircuit
 ```
 
 `simulate` prints the change-log trace. The simultaneous start of the
