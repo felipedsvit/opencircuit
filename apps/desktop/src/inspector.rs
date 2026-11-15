@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_commands::arrange::{self, Align, Axis};
+use circuit_commands::sheets::{self, SheetSpec};
 use circuit_commands::{CommandError, SupplyPreset, Transaction, ops};
 use circuit_model::{
     DeviceClass, DeviceId, GridPoint, LayoutIndex, ParamType, ParamValue, QuarterTurn, Subject,
@@ -103,6 +104,10 @@ pub fn show(
     }
     ui.separator();
     if let Some(change) = supplies_section(ui, session, state) {
+        request = Some(change);
+    }
+    ui.separator();
+    if let Some(change) = sheets_section(ui, session, state) {
         request = Some(change);
     }
     request
@@ -449,6 +454,128 @@ fn param_row(
         }
     }
     request
+}
+
+/// The information of the project and its sheets (ADR-0011): the name and
+/// the fields of the title block, the title of each sheet, and buttons to
+/// add and remove sheets.
+fn sheets_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) -> Option<Request> {
+    let doc = session.document();
+    let mut request = None;
+    ui.strong("Sheets and title block");
+
+    let project = &doc.project;
+    let fields = [
+        ("name", "Project", project.name.as_str()),
+        ("author", "Author", project.author.as_deref().unwrap_or("")),
+        (
+            "company",
+            "Company",
+            project.company.as_deref().unwrap_or(""),
+        ),
+        (
+            "revision",
+            "Revision",
+            project.revision.as_deref().unwrap_or(""),
+        ),
+        ("date", "Date", project.date.as_deref().unwrap_or("")),
+    ];
+    for (key, label, current) in fields {
+        if let Some(text) = state.text_field(ui, format!("project:{key}"), label, current) {
+            // An empty text clears an optional field; the name stays.
+            let value = |own: &str, field: Option<&String>| -> Option<String> {
+                if own == key {
+                    (!text.is_empty()).then(|| text.clone())
+                } else {
+                    field.cloned()
+                }
+            };
+            let name = if key == "name" {
+                text.as_str()
+            } else {
+                project.name.as_str()
+            };
+            request = Some(ops_info(
+                doc,
+                name,
+                value("author", project.author.as_ref()),
+                value("company", project.company.as_ref()),
+                value("revision", project.revision.as_ref()),
+                value("date", project.date.as_ref()),
+            ));
+        }
+    }
+
+    let mut sheets: Vec<&circuit_model::Sheet> = doc.sheets.iter().collect();
+    sheets.sort_by_key(|sheet| (sheet.number, sheet.id));
+    for sheet in sheets {
+        ui.horizontal(|ui| {
+            ui.label(format!("Sheet {}", sheet.number));
+            if ui.button("Remove").clicked() {
+                request = Some(sheets::remove_sheet(doc, sheet.id));
+            }
+        });
+        if let Some(title) = state.text_field(
+            ui,
+            format!("sheet:{}:title", sheet.id),
+            "Title",
+            &sheet.title,
+        ) {
+            request = Some(sheets::set_sheet(
+                doc,
+                circuit_model::Sheet {
+                    title,
+                    ..sheet.clone()
+                },
+            ));
+        }
+    }
+    if ui
+        .button("Add A4 sheet")
+        .on_hover_text("A new landscape sheet to the right of the others")
+        .clicked()
+    {
+        request = Some(next_sheet(doc));
+    }
+    request
+}
+
+/// A new A4 landscape sheet to the right of the last one, a few grid units
+/// apart; the first one at the origin.
+fn next_sheet(doc: &circuit_model::Schematic) -> Request {
+    const GAP: i32 = 6;
+    let origin = doc
+        .sheets
+        .iter()
+        .filter_map(|sheet| sheet.frame())
+        .max_by_key(|frame| frame.max.x)
+        .map_or(Some(GridPoint::new(0, 0)), |frame| {
+            frame
+                .max
+                .x
+                .checked_add(GAP)
+                .map(|x| GridPoint::new(x, frame.min.y))
+        })
+        .ok_or(CommandError::OutOfRange)?;
+    sheets::add_sheet(doc, &SheetSpec::a4(String::new(), origin))
+}
+
+fn ops_info(
+    doc: &circuit_model::Schematic,
+    name: &str,
+    author: Option<String>,
+    company: Option<String>,
+    revision: Option<String>,
+    date: Option<String>,
+) -> Request {
+    sheets::set_project_info(
+        doc,
+        name,
+        author.as_deref(),
+        company.as_deref(),
+        revision.as_deref(),
+        date.as_deref(),
+    )
 }
 
 fn supplies_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) -> Option<Request> {
