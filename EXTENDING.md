@@ -10,6 +10,7 @@ the simulator.
 | --- | --- | --- |
 | [Extension libraries](#extension-libraries) | add component models, parameters and symbol artwork | [`LIBRARY.md`](LIBRARY.md), [ADR-0008](docs/adr/0008-extension-libraries.md) |
 | [Scenarios and traces](#scenarios-and-traces) | drive a simulation from a file and compare it with a golden trace | [`SIMULATION.md`](SIMULATION.md) |
+| [JSON output](#json-output) | read the result of any command from another program | this file |
 | [Project files](#project-files) | generate or transform schematics with another tool | [`FORMAT.md`](FORMAT.md) |
 | [Modbus TCP server](#modbus-tcp-server) | let a PLC program or an HMI under test press buttons and read outputs | [ADR-0009](docs/adr/0009-industrial-io.md) |
 | [Export](#export) | publish drawings as SVG or PDF | [ADR-0006](docs/adr/0006-pdf-export.md) |
@@ -57,6 +58,35 @@ byte for byte. Both formats are specified in [`SIMULATION.md`](SIMULATION.md);
 exit codes are `0` success, `1` validation or golden failure, `2` usage or
 I/O error. This is the interface for regression tests of your own circuits
 in continuous integration.
+
+## JSON output
+
+`validate`, `simulate`, `test`, `export` and `serve --print-map` take
+`--format json` and then write **one JSON document on stdout**, in place of
+their text. Every document starts with
+
+| Field | Meaning |
+| --- | --- |
+| `format` | version of the document layout, `1` today |
+| `command` | the command that wrote it |
+| `ok` | whether it succeeded: the exit code is `0` when true and `1` when false |
+
+A field may be added without a new `format`; one that changes meaning or goes
+away takes a new version. A failure with exit code 1 (a project that does not
+load or compile, a golden trace that differs, a sheet that does not exist) is
+a document with `ok: false`, an `error` text and `diagnostics`, so a program
+reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
+
+| Command | Fields after the common ones |
+| --- | --- |
+| `validate` | `error` (why the file did not load, or `null`), `errors`, `warnings`, `diagnostics` |
+| `simulate` | `tick` (the last solved tick), `faulted`, `diagnostics`, `trace` (the text of the trace, `null` when `--trace` wrote it to a file), `snapshot` (the last solved tick, as `--snapshot-json` writes it) |
+| `test` | `total`, `failed`, `scenarios`: a list of `path`, `status` (`pass`, `updated` or `fail`) and `reasons` |
+| `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
+| `serve --print-map` | `map`: a list of `table` (`coil`, `discrete_input` or `input_register`), `address`, `words`, `name`, `meaning`; the same lines as the text map |
+
+`diagnostics` are the structured diagnostics of `FORMAT.md` (`code`,
+severity, `subject`, `related`, `message`).
 
 ## Project files
 

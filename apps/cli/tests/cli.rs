@@ -845,3 +845,261 @@ mod serve {
         eventually_at(&mut client, 1, false);
     }
 }
+
+// `--format json`: one document on stdout, `"format": 1`.
+
+fn json(output: &Output) -> serde_json::Value {
+    serde_json::from_str(&stdout(output)).unwrap_or_else(|error| {
+        panic!(
+            "stdout is not one JSON document ({error}): {}",
+            stdout(output)
+        )
+    })
+}
+
+#[test]
+fn every_json_document_names_its_format_and_command() {
+    let validate = opencircuit(&["validate", COMMAND, "--format", "json"]);
+    let value = json(&validate);
+
+    assert_eq!(value["format"], 1);
+    assert_eq!(value["command"], "validate");
+    assert_eq!(value["ok"], true);
+}
+
+#[test]
+fn simulate_in_json_carries_the_trace_the_snapshot_and_the_diagnostics() {
+    let run = opencircuit(&[
+        "simulate",
+        "examples/direct-starter/starter.ocircuit",
+        "--scenario",
+        "examples/direct-starter/starter.scenario.json",
+        "--format",
+        "json",
+    ]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let value = json(&run);
+    assert_eq!(
+        (value["format"].clone(), value["command"].clone()),
+        (1.into(), "simulate".into())
+    );
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["faulted"], false);
+    assert_eq!(value["tick"], 24);
+    assert_eq!(value["diagnostics"], serde_json::json!([]));
+    assert_eq!(
+        value["trace"].as_str().expect("the trace text"),
+        fs::read_to_string(root().join("examples/direct-starter/starter.trace")).expect("golden")
+    );
+    assert_eq!(value["snapshot"]["tick"], 24);
+    // Nothing goes to stderr: the diagnostics are in the document.
+    assert_eq!(stderr(&run), "");
+}
+
+#[test]
+fn simulate_in_json_leaves_the_trace_to_its_file_when_one_is_asked_for() {
+    let directory = scratch("simulate-json-trace");
+    let trace = directory.join("out.trace");
+
+    let run = opencircuit(&[
+        "simulate",
+        "examples/direct-starter/starter.ocircuit",
+        "--scenario",
+        "examples/direct-starter/starter.scenario.json",
+        "--trace",
+        trace.to_str().expect("UTF-8 path"),
+        "--format",
+        "json",
+    ]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert!(json(&run)["trace"].is_null());
+    assert!(
+        fs::read_to_string(&trace)
+            .expect("written")
+            .starts_with("# opencircuit trace v1")
+    );
+}
+
+#[test]
+fn a_circuit_that_does_not_compile_is_a_failure_document_with_its_diagnostics() {
+    let run = opencircuit(&[
+        "simulate",
+        "tests/fixtures/static-short/static-short.ocircuit",
+        "--scenario",
+        "tests/fixtures/static-short/static-short.scenario.json",
+        "--format",
+        "json",
+    ]);
+
+    assert_eq!(code(&run), 1);
+    let value = json(&run);
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["command"], "simulate");
+    assert!(
+        value["error"]
+            .as_str()
+            .expect("a message")
+            .contains("does not compile")
+    );
+    assert!(
+        value["diagnostics"]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "OC-ELEC-001")
+    );
+}
+
+#[test]
+fn test_in_json_lists_every_scenario_and_why_one_failed() {
+    let all = opencircuit(&["test", "examples", "tests/fixtures", "--format", "json"]);
+    assert_eq!(code(&all), 0, "{}", stdout(&all));
+    let value = json(&all);
+    assert_eq!(
+        (
+            value["ok"].clone(),
+            value["total"].clone(),
+            value["failed"].clone()
+        ),
+        (true.into(), 24.into(), 0.into())
+    );
+    let scenarios = value["scenarios"].as_array().expect("a list");
+    assert_eq!(scenarios.len(), 24);
+    assert!(
+        scenarios
+            .iter()
+            .all(|s| s["status"] == "pass" && s["reasons"] == serde_json::json!([]))
+    );
+
+    // A golden trace that no longer matches.
+    let directory = copy_example("examples/direct-starter", "test-json-fail");
+    fs::write(directory.join("starter.trace"), "# opencircuit trace v1\n").expect("changed");
+    let failing = opencircuit(&[
+        "test",
+        directory.to_str().expect("UTF-8 path"),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&failing), 1);
+    let value = json(&failing);
+    assert_eq!(value["ok"], false);
+    let failed: Vec<&serde_json::Value> = value["scenarios"]
+        .as_array()
+        .expect("a list")
+        .iter()
+        .filter(|s| s["status"] == "fail")
+        .collect();
+    assert_eq!(failed.len(), 1);
+    assert!(
+        failed[0]["reasons"][0]
+            .as_str()
+            .expect("a reason")
+            .contains("differs")
+    );
+}
+
+#[test]
+fn export_in_json_names_the_file_its_kind_and_its_pages() {
+    let directory = scratch("export-json");
+    let pdf = directory.join("s.pdf");
+    let svg = directory.join("s.svg");
+
+    let run = opencircuit(&[
+        "export",
+        SHEETS,
+        "--output",
+        pdf.to_str().expect("UTF-8 path"),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let value = json(&run);
+    assert_eq!(
+        (value["kind"].clone(), value["pages"].clone()),
+        ("pdf".into(), 2.into())
+    );
+    assert!(value["file"].as_str().expect("a path").ends_with("s.pdf"));
+
+    let run = opencircuit(&[
+        "export",
+        SHEETS,
+        "--output",
+        svg.to_str().expect("UTF-8 path"),
+        "--sheet",
+        "1",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert_eq!(
+        (json(&run)["kind"].clone(), json(&run)["pages"].clone()),
+        ("svg".into(), 1.into())
+    );
+
+    // Asking for a sheet that is not there is a failure document, and writes
+    // nothing.
+    let missing = directory.join("none.pdf");
+    let run = opencircuit(&[
+        "export",
+        SHEETS,
+        "--output",
+        missing.to_str().expect("UTF-8 path"),
+        "--sheet",
+        "9",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&run), 1);
+    assert_eq!(json(&run)["ok"], false);
+    assert!(!missing.exists());
+}
+
+#[test]
+fn the_modbus_map_in_json_is_the_map_of_the_text() {
+    let text = opencircuit(&["serve", COMMAND, "--print-map"]);
+    let run = opencircuit(&["serve", COMMAND, "--print-map", "--format", "json"]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    let value = json(&run);
+    assert_eq!(value["command"], "serve");
+    let lines: Vec<String> = value["map"]
+        .as_array()
+        .expect("a list")
+        .iter()
+        .map(|entry| {
+            let table = match entry["table"].as_str().expect("a table") {
+                "discrete_input" => "discrete input",
+                "input_register" if entry["words"] == 1 => "input register",
+                "input_register" => "input registers",
+                other => other,
+            };
+            let address = entry["address"].as_u64().expect("an address");
+            let words = entry["words"].as_u64().expect("a size");
+            let range = if words > 1 {
+                format!("{address}-{}", address + words - 1)
+            } else {
+                address.to_string()
+            };
+            format!(
+                "{table} {range} {} ({})",
+                entry["name"].as_str().expect("a name"),
+                entry["meaning"].as_str().expect("a meaning")
+            )
+        })
+        .collect();
+    assert_eq!(lines.join("\n") + "\n", stdout(&text));
+}
+
+#[test]
+fn a_bad_format_and_serve_without_print_map_are_usage_errors() {
+    for args in [
+        vec!["test", "examples", "--format", "xml"],
+        vec!["serve", COMMAND, "--format", "json"],
+    ] {
+        let run = opencircuit(&args);
+        assert_eq!(code(&run), 2, "{args:?}");
+        assert_eq!(stdout(&run), "");
+    }
+}

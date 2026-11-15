@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use circuit_export::Theme;
 use circuit_sim::FaultPolicy;
 
-/// How `validate` prints its findings.
+/// How a command reports its result: for a person, or as one JSON document
+/// for another program (`"format": 1`, see EXTENDING.md).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OutputFormat {
     Text,
@@ -33,10 +34,12 @@ pub(crate) enum Command {
         fault_policy: Option<FaultPolicy>,
         trace: Option<PathBuf>,
         snapshot_json: Option<PathBuf>,
+        report: OutputFormat,
     },
     Test {
         paths: Vec<PathBuf>,
         update_golden: bool,
+        report: OutputFormat,
     },
     Export {
         project: PathBuf,
@@ -45,6 +48,7 @@ pub(crate) enum Command {
         theme: Theme,
         sheet: SheetChoice,
         library: Option<PathBuf>,
+        report: OutputFormat,
     },
     Serve {
         project: PathBuf,
@@ -52,6 +56,7 @@ pub(crate) enum Command {
         library: Option<PathBuf>,
         print_map: bool,
         duration_ms: Option<u64>,
+        report: OutputFormat,
     },
 }
 
@@ -148,6 +153,15 @@ impl<'a> Words<'a> {
     }
 }
 
+/// The `--format` of a command: `text`, the default, or `json`.
+fn report_format(words: &Words<'_>) -> Result<OutputFormat, String> {
+    match words.value("--format") {
+        None | Some("text") => Ok(OutputFormat::Text),
+        Some("json") => Ok(OutputFormat::Json),
+        Some(other) => Err(format!("unknown format `{other}`; use `text` or `json`")),
+    }
+}
+
 pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
     let Some((command, rest)) = args.split_first() else {
         return Err("missing command".to_owned());
@@ -156,13 +170,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
         "help" | "--help" | "-h" => Ok(Command::Help),
         "validate" => {
             let words = Words::split(rest, &["--format", "--library"], &["--deny-warnings"])?;
-            let format = match words.value("--format") {
-                None | Some("text") => OutputFormat::Text,
-                Some("json") => OutputFormat::Json,
-                Some(other) => {
-                    return Err(format!("unknown format `{other}`; use `text` or `json`"));
-                }
-            };
+            let format = report_format(&words)?;
             Ok(Command::Validate {
                 project: words.single_positional("project file")?,
                 format,
@@ -179,6 +187,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                     "--fault-policy",
                     "--trace",
                     "--snapshot-json",
+                    "--format",
                     "--library",
                 ],
                 &[],
@@ -215,20 +224,26 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 fault_policy,
                 trace: words.value("--trace").map(PathBuf::from),
                 snapshot_json: words.value("--snapshot-json").map(PathBuf::from),
+                report: report_format(&words)?,
             })
         }
         "test" => {
-            let words = Words::split(rest, &[], &["--update-golden"])?;
+            let words = Words::split(rest, &["--format"], &["--update-golden"])?;
             if words.positional.is_empty() {
                 return Err("`test` needs at least one path".to_owned());
             }
             Ok(Command::Test {
                 paths: words.positional.iter().map(PathBuf::from).collect(),
                 update_golden: words.flag("--update-golden"),
+                report: report_format(&words)?,
             })
         }
         "export" => {
-            let words = Words::split(rest, &["--output", "--theme", "--sheet", "--library"], &[])?;
+            let words = Words::split(
+                rest,
+                &["--output", "--theme", "--sheet", "--format", "--library"],
+                &[],
+            )?;
             let output = words
                 .value("--output")
                 .map(PathBuf::from)
@@ -280,14 +295,22 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 theme,
                 sheet,
                 library: words.value("--library").map(PathBuf::from),
+                report: report_format(&words)?,
             })
         }
         "serve" => {
             let words = Words::split(
                 rest,
-                &["--listen", "--library", "--duration-ms"],
+                &["--listen", "--library", "--duration-ms", "--format"],
                 &["--print-map"],
             )?;
+            let report = report_format(&words)?;
+            if report == OutputFormat::Json && !words.flag("--print-map") {
+                return Err(
+                    "`--format json` of `serve` goes with `--print-map`; the server itself only prints a log"
+                        .to_owned(),
+                );
+            }
             let listen_text = words.value("--listen").unwrap_or(DEFAULT_LISTEN);
             let listen = listen_text.parse().map_err(|_| {
                 format!("`--listen` must be an address and a port, found `{listen_text}`")
@@ -304,6 +327,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 library: words.value("--library").map(PathBuf::from),
                 print_map: words.flag("--print-map"),
                 duration_ms,
+                report,
             })
         }
         other => Err(format!("unknown command `{other}`")),
@@ -371,8 +395,49 @@ mod tests {
                 fault_policy: Some(FaultPolicy::Report),
                 trace: Some(PathBuf::from("out.trace")),
                 snapshot_json: Some(PathBuf::from("snap.json")),
+                report: OutputFormat::Text,
             })
         );
+    }
+
+    #[test]
+    fn every_command_with_a_report_takes_format_json() {
+        for words in [
+            &[
+                "simulate",
+                "a.ocircuit",
+                "--scenario",
+                "s.json",
+                "--format",
+                "json",
+            ][..],
+            &["test", "examples", "--format", "json"],
+            &[
+                "export",
+                "a.ocircuit",
+                "--output",
+                "a.pdf",
+                "--format",
+                "json",
+            ],
+            &["serve", "a.ocircuit", "--print-map", "--format", "json"],
+        ] {
+            let json = match parse_words(words).unwrap() {
+                Command::Simulate { report, .. }
+                | Command::Test { report, .. }
+                | Command::Export { report, .. }
+                | Command::Serve { report, .. } => report,
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(json, OutputFormat::Json, "{words:?}");
+        }
+    }
+
+    #[test]
+    fn a_format_other_than_text_or_json_is_refused_and_serve_needs_print_map_for_json() {
+        assert!(parse_words(&["test", "examples", "--format", "xml"]).is_err());
+        assert!(parse_words(&["serve", "a.ocircuit", "--format", "json"]).is_err());
+        assert!(parse_words(&["serve", "a.ocircuit", "--format", "text"]).is_ok());
     }
 
     #[test]
@@ -382,6 +447,7 @@ mod tests {
             Ok(Command::Test {
                 paths: vec![PathBuf::from("examples"), PathBuf::from("more")],
                 update_golden: true,
+                report: OutputFormat::Text,
             })
         );
     }
@@ -393,6 +459,7 @@ mod tests {
             Ok(Command::Test {
                 paths: vec![PathBuf::from("--update-golden")],
                 update_golden: false,
+                report: OutputFormat::Text,
             })
         );
     }
@@ -453,6 +520,7 @@ mod tests {
                 theme: Theme::Print,
                 sheet: SheetChoice::Default,
                 library: None,
+                report: OutputFormat::Text,
             })
         );
         assert!(matches!(
@@ -501,6 +569,7 @@ mod tests {
                 library: None,
                 print_map: false,
                 duration_ms: None,
+                report: OutputFormat::Text,
             })
         );
         assert!(matches!(
