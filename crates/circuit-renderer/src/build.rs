@@ -5,9 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
-    ComponentCatalog, ComponentModel, ConductorSet, DeviceClass, DeviceId, JunctionId, LayoutIndex,
-    MotorState, Operator, PinRef, Schematic, SheetId, SimSnapshot, Subject, SymbolId,
-    SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire, WireId, terminal_label,
+    ComponentCatalog, ComponentModel, ConductorSet, CrossReferences, DeviceClass, DeviceId,
+    JunctionId, LayoutIndex, Location, MotorState, Operator, PinRef, Schematic, SheetId,
+    SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire,
+    WireId, cross_references, terminal_label,
 };
 
 use crate::frame::{draw_sheets, frame_rect};
@@ -199,8 +200,11 @@ pub fn build_scene(
         draw_symbol(&mut scene, &layout, catalog, &state, symbol);
     }
 
+    // Where the contacts of each coil are, and where the coil of each contact
+    // is: known only on sheets, so the lookup is empty without them.
+    let xrefs = cross_references(doc, catalog);
     for symbol in symbols.values() {
-        draw_label(&mut scene, &layout, catalog, &state, symbol);
+        draw_label(&mut scene, &layout, catalog, &state, &xrefs, symbol);
     }
 
     if let Some(snapshot) = snapshot {
@@ -352,6 +356,7 @@ fn draw_label(
     layout: &LayoutIndex<'_>,
     catalog: &ComponentCatalog,
     state: &State<'_>,
+    xrefs: &CrossReferences,
     symbol: &SymbolInstance,
 ) {
     let Some(device) = layout.device(symbol.device_id) else {
@@ -393,7 +398,39 @@ fn draw_label(
                 anchor: Anchor::Left,
             },
             StyleKey::Label,
-            subject,
+            subject.clone(),
+        );
+    }
+
+    // Cross-references, under the designator (and under the count of a
+    // timer, which has a line of its own while it runs).
+    let location = |location: Option<Location>| {
+        location.map_or_else(|| "-".to_owned(), |location| location.to_string())
+    };
+    let first_line: i64 = if is_coil && is_timer { 2 } else { 1 };
+    let lines: Vec<String> = if let Some(contacts) = xrefs.contacts.get(&symbol.id) {
+        contacts
+            .iter()
+            .map(|contact| {
+                format!("{} {}", contact.terminals, location(contact.location))
+                    .trim()
+                    .to_owned()
+            })
+            .collect()
+    } else if let Some(coil) = xrefs.coil.get(&symbol.id) {
+        vec![location(*coil)]
+    } else {
+        Vec::new()
+    };
+    for (index, text) in (first_line..).zip(lines) {
+        scene.push(
+            Shape::Text {
+                at: ScenePoint::new(x, y.saturating_add(LABEL_LINE.saturating_mul(index))),
+                text,
+                anchor: Anchor::Left,
+            },
+            StyleKey::Label,
+            subject.clone(),
         );
     }
 }
