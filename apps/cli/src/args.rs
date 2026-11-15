@@ -48,6 +48,7 @@ pub(crate) enum Command {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ExportFormat {
     Svg,
+    Pdf,
 }
 
 /// Positional arguments and options of one command line.
@@ -209,9 +210,10 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 .as_deref()
             {
                 Some("svg") => ExportFormat::Svg,
+                Some("pdf") => ExportFormat::Pdf,
                 _ => {
                     return Err(format!(
-                        "cannot tell the format of `{}`; the output must end in `.svg`",
+                        "cannot tell the format of `{}`; the output must end in `.svg` or `.pdf`",
                         output.display()
                     ));
                 }
@@ -375,6 +377,13 @@ mod tests {
                 theme: Theme::Print,
             })
         );
+        assert!(matches!(
+            parse_words(&["export", "a.ocircuit", "--output", "a.pdf"]),
+            Ok(Command::Export {
+                format: ExportFormat::Pdf,
+                ..
+            })
+        ));
         assert!(matches!(
             parse_words(&["export", "a.ocircuit", "--output=a.svg", "--theme", "live"]),
             Ok(Command::Export {

@@ -113,8 +113,8 @@ fn generate_examples(check_only: bool) -> Result<String, Vec<String>> {
             }
         };
         let path = root.join(&relative);
-        let current = std::fs::read_to_string(&path).ok();
-        if current.as_deref() == Some(text.as_str()) {
+        let current = std::fs::read(&path).ok();
+        if current.as_deref() == Some(text.as_slice()) {
             continue;
         }
         if check_only {

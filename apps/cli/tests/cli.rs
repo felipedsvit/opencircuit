@@ -348,6 +348,11 @@ fn examples_and_fixtures_contain_no_carriage_return() {
     let mut offenders = Vec::new();
     for directory in ["examples", "tests/fixtures"] {
         for path in files_below(&root().join(directory)) {
+            // PDF goldens are binary (`.gitattributes`): their cross-reference
+            // table ends lines with CR LF by design.
+            if path.extension().is_some_and(|extension| extension == "pdf") {
+                continue;
+            }
             let bytes = fs::read(&path).expect("file is readable");
             if bytes.contains(&b'\r') {
                 offenders.push(path);
@@ -442,5 +447,24 @@ fn export_with_an_unknown_extension_is_a_usage_error() {
     let run = opencircuit(&["export", COMMAND, "--output", "drawing.png"]);
 
     assert_eq!(code(&run), 2);
-    assert!(stderr(&run).contains("`.svg`"));
+    assert!(stderr(&run).contains("`.svg` or `.pdf`"));
+}
+
+#[test]
+fn export_writes_the_same_pdf_as_the_committed_drawing() {
+    let directory = scratch("export-pdf");
+    let output = directory.join("star-delta.pdf");
+
+    let run = opencircuit(&[
+        "export",
+        "examples/star-delta/star-delta.ocircuit",
+        "--output",
+        output.to_str().expect("UTF-8 path"),
+    ]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert_eq!(
+        fs::read(&output).expect("written"),
+        fs::read(root().join("examples/star-delta/star-delta.pdf")).expect("golden")
+    );
 }

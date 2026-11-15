@@ -324,32 +324,54 @@ impl Session {
         build_scene(&self.doc, &self.catalog, self.snapshot.as_ref(), options)
     }
 
-    /// The document as SVG text. With `with_state` and a solved tick, the
-    /// drawing shows that tick in the live theme; otherwise the document at
-    /// rest in the print theme. The same exporter as the command line.
-    #[must_use]
-    pub fn svg(&self, with_state: bool) -> String {
+    /// The scene and theme of an export. With `with_state` and a solved
+    /// tick, that tick in the live theme; otherwise the document at rest in
+    /// the print theme.
+    fn export_scene(&self, with_state: bool) -> (Scene, circuit_export::Theme) {
         let options = SceneOptions::default();
         match (with_state, self.snapshot.as_ref()) {
-            (true, Some(snapshot)) => circuit_export::svg(
-                &build_scene(&self.doc, &self.catalog, Some(snapshot), &options),
+            (true, Some(snapshot)) => (
+                build_scene(&self.doc, &self.catalog, Some(snapshot), &options),
                 circuit_export::Theme::Live,
             ),
-            _ => circuit_export::svg(
-                &build_scene(&self.doc, &self.catalog, None, &options),
+            _ => (
+                build_scene(&self.doc, &self.catalog, None, &options),
                 circuit_export::Theme::Print,
             ),
         }
     }
 
-    /// Write [`Session::svg`] to `path`, atomically.
+    /// The drawing as SVG text, with the same exporter as the command line.
+    #[must_use]
+    pub fn svg(&self, with_state: bool) -> String {
+        let (scene, theme) = self.export_scene(with_state);
+        circuit_export::svg(&scene, theme)
+    }
+
+    /// The drawing as a PDF document, with the same exporter as the command
+    /// line.
+    #[must_use]
+    pub fn pdf(&self, with_state: bool) -> Vec<u8> {
+        let (scene, theme) = self.export_scene(with_state);
+        circuit_export::pdf(&scene, theme)
+    }
+
+    /// Write the drawing to `path`, atomically, as PDF when the path ends in
+    /// `.pdf` and as SVG otherwise.
     ///
     /// # Errors
     ///
     /// Returns [`FileError`] when the file cannot be written; nothing is
     /// left behind then.
-    pub fn export_svg(&self, path: &Path, with_state: bool) -> Result<(), FileError> {
-        write_atomic(path, &self.svg(with_state))
+    pub fn export(&self, path: &Path, with_state: bool) -> Result<(), FileError> {
+        let is_pdf = path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"));
+        if is_pdf {
+            write_atomic(path, self.pdf(with_state))
+        } else {
+            write_atomic(path, self.svg(with_state))
+        }
     }
 
     /// Whether the simulation advances with real time.
@@ -641,6 +663,20 @@ mod tests {
         assert_ne!(live, committed);
         assert_eq!(session.svg(false), committed);
         assert_eq!(live, session.svg(true));
+    }
+
+    #[test]
+    fn pdf_of_the_example_is_a_stable_one_page_document() {
+        let session = Session::load(COMMAND, None).unwrap();
+
+        let pdf = session.pdf(false);
+
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert_eq!(pdf, session.pdf(false));
+        assert_eq!(
+            pdf,
+            include_bytes!("../../../examples/direct-starter/command.pdf")
+        );
     }
 
     #[test]

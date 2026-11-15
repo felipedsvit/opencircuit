@@ -60,15 +60,21 @@ fn choose_save_path(name: &str) -> Option<PathBuf> {
     Some(path)
 }
 
-/// Ask the operating system where to write a drawing. The extension is
-/// added when the user leaves it out.
-fn choose_export_path(name: &str) -> Option<PathBuf> {
+/// Ask the operating system where to write a drawing in the format of
+/// `extension` (`svg` or `pdf`). The extension is added when the user
+/// leaves it out.
+fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
+    let filter = if extension == "pdf" {
+        "PDF document"
+    } else {
+        "SVG drawing"
+    };
     let mut path = rfd::FileDialog::new()
-        .add_filter("SVG drawing", &["svg"])
-        .set_file_name(format!("{name}.svg"))
+        .add_filter(filter, &[extension])
+        .set_file_name(format!("{name}.{extension}"))
         .save_file()?;
     if path.extension().is_none() {
-        path.set_extension("svg");
+        path.set_extension(extension);
     }
     Some(path)
 }
@@ -216,13 +222,13 @@ impl DesktopApp {
 
     /// Export the drawing. While simulating the current tick is shown in
     /// colour; while editing the document is drawn at rest for printing.
-    fn export_dialog(&mut self) {
+    fn export_dialog(&mut self, extension: &str) {
         let Some(session) = self.session.as_ref() else {
             return;
         };
         let with_state = self.mode == Mode::Simulate;
-        if let Some(path) = choose_export_path(&session.document().project.name)
-            && let Err(error) = session.export_svg(&path, with_state)
+        if let Some(path) = choose_export_path(&session.document().project.name, extension)
+            && let Err(error) = session.export(&path, with_state)
         {
             self.error = Some(error.to_string());
         }
@@ -567,15 +573,18 @@ impl DesktopApp {
             {
                 self.save_as_dialog();
             }
-            if ui
-                .add_enabled(has_session, egui::Button::new("SVG…"))
-                .on_hover_text(
-                    "Export the drawing as SVG. While simulating: the current tick in colour. While editing: the drawing at rest, black on white.",
-                )
-                .clicked()
-            {
-                self.export_dialog();
-            }
+            ui.add_enabled_ui(has_session, |ui| {
+                ui.menu_button("Export", |ui| {
+                    ui.label("While simulating: the current tick in colour.");
+                    ui.label("While editing: the drawing at rest, black on white.");
+                    for (label, extension) in [("SVG…", "svg"), ("PDF…", "pdf")] {
+                        if ui.button(label).clicked() {
+                            ui.close();
+                            self.export_dialog(extension);
+                        }
+                    }
+                });
+            });
             ui.separator();
             let name = ui.label("Path");
             let field = ui

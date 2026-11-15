@@ -3,8 +3,8 @@
 //! An exporter receives the neutral [`Scene`] built by `circuit-renderer`
 //! (integer logical coordinates and semantic styles), never GUI structures,
 //! so a file written by the command line and one written by the desktop
-//! application are the same. [`svg`] writes SVG text directly; no library is
-//! involved.
+//! application are the same. [`svg`] writes SVG text directly; [`pdf`]
+//! writes a one-page PDF with `pdf-writer` (ADR-0006).
 //!
 //! Output is deterministic: the same scene and theme give the same bytes on
 //! every platform. Coordinates are written as integers in scene subunits,
@@ -26,9 +26,11 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+mod pdf;
 mod svg;
 mod theme;
 
+pub use pdf::pdf;
 pub use svg::{MARGIN, svg};
 pub use theme::{Look, Rgb, Theme};
 

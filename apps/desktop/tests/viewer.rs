@@ -179,11 +179,14 @@ fn invalid_project_text_shows_an_error_and_opens_nothing() {
 }
 
 #[test]
-fn toolbar_offers_svg_export() {
+fn export_menu_offers_svg_and_pdf() {
     let mut app = DesktopApp::default();
     app.open_text(COMMAND, "command.ocircuit");
+    let mut harness = harness(app);
 
-    let harness = harness(app);
+    harness.get_by_label("Export").click();
+    harness.run();
 
     assert!(harness.query_by_label("SVG…").is_some());
+    assert!(harness.query_by_label("PDF…").is_some());
 }
