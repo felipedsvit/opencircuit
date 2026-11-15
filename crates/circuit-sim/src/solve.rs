@@ -197,6 +197,11 @@ pub struct Solver {
     solution: ElectricalSolution,
     last_mask: Option<SwitchMask>,
     solve_count: u64,
+    /// What the enabled sources provide to each group, by group. Only the
+    /// groups listed in `fed` hold a value; the others are default.
+    feeds: Vec<GroupFeed>,
+    /// The groups with at least one enabled source, in the order found.
+    fed: Vec<u32>,
 }
 
 impl Solver {
@@ -230,6 +235,8 @@ impl Solver {
             },
             last_mask: None,
             solve_count: 0,
+            feeds: vec![GroupFeed::default(); nets as usize],
+            fed: Vec::new(),
         }
     }
 
@@ -270,36 +277,71 @@ impl Solver {
         // Conductors present in each group, with their supply section.
         self.solution.conductors_of_group.fill(ConductorSet::EMPTY);
         self.sections.fill(None);
-        let mut feeds: BTreeMap<u32, (GroupFeed, Vec<DeviceId>)> = BTreeMap::new();
+        for group in self.fed.drain(..) {
+            if let Some(feed) = self.feeds.get_mut(group as usize) {
+                *feed = GroupFeed::default();
+            }
+        }
         for (index, source) in circuit.sources().iter().enumerate() {
             if source.enabled_by.is_some() && !closed.source_enabled(index) {
                 continue;
             }
             let group = self.groups.find(source.net.raw());
-            let feed = feeds.entry(group).or_default();
-            feed.0.add(source.conductor, source.supply);
-            feed.1.push(source.owner);
+            let Some(feed) = self.feeds.get_mut(group as usize) else {
+                continue;
+            };
+            if feed.conductors.is_empty() {
+                self.fed.push(group);
+            }
+            feed.add(source.conductor, source.supply);
         }
 
         // Conflicts. A group in fault energizes nothing.
-        let mut faults = Vec::new();
+        let mut faults = std::mem::take(&mut self.solution.faults);
+        faults.clear();
         self.faulted.fill(false);
-        for (group, (feed, devices)) in &feeds {
+        let mut conflicting = Vec::new();
+        for group in &self.fed {
             let index = *group as usize;
+            let Some(feed) = self.feeds.get(index).copied() else {
+                continue;
+            };
             if let Some(conductors) = self.solution.conductors_of_group.get_mut(index) {
                 *conductors = feed.conductors;
             }
             if let Some(section) = self.sections.get_mut(index) {
                 *section = feed.section;
             }
+            let conflict = feed.conflict();
             let in_fault = matches!(
-                feed.conflict(),
+                conflict,
                 ConductorConflict::ShortCircuit | ConductorConflict::ProtectiveEarthFault
             );
             if let Some(flag) = self.faulted.get_mut(index) {
                 *flag = in_fault;
             }
-            faults.extend(conflict_diagnostic(*feed, devices));
+            if conflict != ConductorConflict::None {
+                conflicting.push(*group);
+            }
+        }
+        if !conflicting.is_empty() {
+            // The sources of a group are only needed to name a conflict.
+            conflicting.sort_unstable();
+            let mut owners: BTreeMap<u32, Vec<DeviceId>> = BTreeMap::new();
+            for (index, source) in circuit.sources().iter().enumerate() {
+                if source.enabled_by.is_some() && !closed.source_enabled(index) {
+                    continue;
+                }
+                let group = self.groups.find(source.net.raw());
+                if conflicting.binary_search(&group).is_ok() {
+                    owners.entry(group).or_default().push(source.owner);
+                }
+            }
+            for group in &conflicting {
+                let feed = self.feeds.get(*group as usize).copied().unwrap_or_default();
+                let sources = owners.get(group).map_or(&[][..], Vec::as_slice);
+                faults.extend(conflict_diagnostic(feed, sources));
+            }
         }
 
         // Loads.

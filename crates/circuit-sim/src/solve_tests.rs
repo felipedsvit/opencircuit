@@ -3,7 +3,10 @@ use circuit_model::{ParamValue, PhaseSequence, Schematic, SymbolId};
 
 use super::*;
 use crate::compiled::Drive;
-use crate::testkit::{Rig, compile_ok, dc_load, load, out};
+use crate::testkit::{
+    Rig, Secondary, compile_ok, dc_load, direct_online_circuit, load, out, reversing_circuit,
+    transformer_circuit,
+};
 
 /// Mask with the always-closed switches and the switches of `closed` symbols
 /// closed.
@@ -496,6 +499,53 @@ fn series_circuit() -> (CompiledCircuit, SymbolId) {
     rig.wire(pin(bypass, "p2"), common);
     rig.wire(common, out(p0));
     (compile_ok(&rig.finish()), bypass)
+}
+
+/// A solver that has already solved other masks must give what a fresh one
+/// gives: the buffers it reuses may not carry anything from a previous solve.
+/// The masks are a fixed pseudo-random sequence, so a failure repeats.
+#[test]
+fn a_reused_solver_gives_the_solution_of_a_fresh_one_for_every_mask() {
+    let circuits = [
+        series_circuit().0,
+        compile_ok(&direct_online_circuit()),
+        compile_ok(&reversing_circuit()),
+        compile_ok(&transformer_circuit(Secondary::Own)),
+    ];
+    let mut seed = 0x9E37_79B9_7F4A_7C15_u64;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let mut faults_seen = 0;
+    for circuit in &circuits {
+        let mut reused = Solver::new(circuit);
+        for _ in 0..300 {
+            let bits = next();
+            let mut mask = SwitchMask::for_circuit(circuit);
+            for (index, switch) in circuit.switches().iter().enumerate() {
+                let closed = switch.drive == Drive::Always || (bits >> (index % 64)) & 1 == 1;
+                mask.set_index(index, closed);
+            }
+            for (index, source) in circuit.sources().iter().enumerate() {
+                mask.set_source(
+                    index,
+                    source.enabled_by.is_none() || (bits >> ((index + 7) % 64)) & 1 == 1,
+                );
+            }
+
+            let solution = reused.solve(circuit, &mask).clone();
+            let fresh = Solver::new(circuit).solve(circuit, &mask).clone();
+
+            assert_eq!(solution, fresh);
+            faults_seen += solution.faults().len();
+        }
+    }
+    // The sequence reaches faults, so the buffers of the fault paths are part
+    // of what is compared.
+    assert!(faults_seen > 0);
 }
 
 #[test]
