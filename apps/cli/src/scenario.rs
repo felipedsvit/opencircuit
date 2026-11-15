@@ -8,8 +8,11 @@ use std::path::{Component, Path};
 
 use serde::Deserialize;
 
-/// Scenario schema version this build reads.
-pub const SCENARIO_SCHEMA_VERSION: u32 = 1;
+/// Newest scenario schema version this build reads. Version 1 is still
+/// read; version 2 adds `libraries`.
+pub const SCENARIO_SCHEMA_VERSION: u32 = 2;
+/// Most libraries one scenario may load.
+pub const MAX_SCENARIO_LIBRARIES: usize = 64;
 /// Largest scenario text, in bytes.
 pub const MAX_SCENARIO_BYTES: usize = 4 * 1024 * 1024;
 /// Last tick a scenario may ask for. Bounds the run time of one scenario.
@@ -21,10 +24,14 @@ pub const MAX_EVENTS: usize = 100_000;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
-    /// Must be [`SCENARIO_SCHEMA_VERSION`].
+    /// 1 or [`SCENARIO_SCHEMA_VERSION`].
     pub schema_version: u32,
     /// Project file, relative to the scenario file.
     pub circuit: String,
+    /// Extension library files the project needs, relative to the scenario
+    /// file, added to the catalog in this order (schema version 2).
+    #[serde(default)]
+    pub libraries: Vec<String>,
     /// Simulator configuration; every field is optional.
     #[serde(default)]
     pub config: ScenarioConfig,
@@ -117,11 +124,17 @@ impl Scenario {
             ));
         }
         let scenario: Self = serde_json::from_str(text).map_err(|error| error.to_string())?;
-        if scenario.schema_version != SCENARIO_SCHEMA_VERSION {
+        if !(1..=SCENARIO_SCHEMA_VERSION).contains(&scenario.schema_version) {
             return Err(format!(
-                "scenario schema version {} is not supported; this build reads version {SCENARIO_SCHEMA_VERSION}",
+                "scenario schema version {} is not supported; this build reads versions 1 to {SCENARIO_SCHEMA_VERSION}",
                 scenario.schema_version
             ));
+        }
+        if scenario.schema_version < 2 && !scenario.libraries.is_empty() {
+            return Err("`libraries` needs scenario schema version 2".to_owned());
+        }
+        if scenario.libraries.len() > MAX_SCENARIO_LIBRARIES {
+            return Err(format!("more than {MAX_SCENARIO_LIBRARIES} libraries"));
         }
         if scenario.until_tick > MAX_UNTIL_TICK {
             return Err(format!(
@@ -134,10 +147,17 @@ impl Scenario {
         }
         // A scenario names the files it reads and, when goldens are updated,
         // the file it writes. Keep both inside the scenario's own directory.
+        let libraries = scenario
+            .libraries
+            .iter()
+            .map(|path| ("libraries", Some(path.as_str())));
         for (field, path) in [
             ("circuit", Some(scenario.circuit.as_str())),
             ("expect.trace", scenario.expect.trace.as_deref()),
-        ] {
+        ]
+        .into_iter()
+        .chain(libraries)
+        {
             if path.is_some_and(|path| !is_plain_relative(path)) {
                 return Err(format!(
                     "`{field}` must be a relative path without `..` components"
@@ -216,14 +236,35 @@ mod tests {
 
     #[test]
     fn other_schema_versions_are_rejected() {
-        let newer = MINIMAL.replace("\"schema_version\": 1", "\"schema_version\": 2");
+        for version in ["0", "3"] {
+            let other = MINIMAL.replace(
+                "\"schema_version\": 1",
+                &format!("\"schema_version\": {version}"),
+            );
+
+            assert_eq!(
+                Scenario::parse(&other),
+                Err(format!(
+                    "scenario schema version {version} is not supported; this build reads versions 1 to 2"
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn libraries_need_version_2_and_stay_inside_the_directory() {
+        let with = |version: u32, library: &str| {
+            format!(
+                r#"{{ "schema_version": {version}, "circuit": "a.ocircuit", "libraries": ["{library}"], "until_tick": 5 }}"#
+            )
+        };
 
         assert_eq!(
-            Scenario::parse(&newer),
-            Err(
-                "scenario schema version 2 is not supported; this build reads version 1".to_owned()
-            )
+            Scenario::parse(&with(2, "acme.oclib")).map(|s| s.libraries),
+            Ok(vec!["acme.oclib".to_owned()])
         );
+        assert!(Scenario::parse(&with(1, "acme.oclib")).is_err());
+        assert!(Scenario::parse(&with(2, "../acme.oclib")).is_err());
     }
 
     #[test]

@@ -312,7 +312,7 @@ and replay reproduce trace and snapshot (property-tested).
 
 ## Scenarios
 
-The CLI reads scenarios (`*.scenario.json`, schema version 1):
+The CLI reads scenarios (`*.scenario.json`, schema version 1 or 2):
 
 ```json
 {
@@ -325,6 +325,10 @@ The CLI reads scenarios (`*.scenario.json`, schema version 1):
 }
 ```
 
+Version 2 adds `libraries`: extension library files (`*.oclib`,
+[`LIBRARY.md`](LIBRARY.md)) the project needs, relative to the scenario file,
+added to the built-in catalog in order; version 1 is still read and has no
+libraries.
 `action` is `press`, `release`, `close`, `open`, `trip` or `reset_trip`;
 `device` is a reference designator. `until_tick` is the last tick executed,
 inclusive, at most 10 000 000. Paths are relative to the scenario file and

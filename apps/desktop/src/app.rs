@@ -6,7 +6,10 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Tool};
-use circuit_model::{Control, DeviceId, GridPoint, InputAction, LayoutIndex, Subject};
+use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
+use circuit_model::{
+    CatalogError, ComponentCatalog, Control, DeviceId, GridPoint, InputAction, LayoutIndex, Subject,
+};
 use circuit_renderer::{
     SUBUNITS_PER_GRID, Scene, SceneItem, SceneOptions, ScenePoint, SceneRect, Shape, StyleKey,
     build_scene,
@@ -114,6 +117,9 @@ pub struct DesktopApp {
     confirm: Option<Pending>,
     /// The user agreed to close the window.
     allow_close: bool,
+    /// Extension libraries loaded in this window, in loading order. Every
+    /// project opened here compiles against the built-in catalog with them.
+    libraries: Vec<Library>,
     /// Close the window at the next frame.
     close_now: bool,
     /// The window title last sent.
@@ -234,6 +240,26 @@ impl DesktopApp {
         }
     }
 
+    /// Ask for library files and load them, stopping at the first error.
+    fn library_dialog(&mut self) {
+        let Some(paths) = rfd::FileDialog::new()
+            .add_filter("OpenCircuit library", &["oclib"])
+            .pick_files()
+        else {
+            return;
+        };
+        for path in paths {
+            let origin = path.display().to_string();
+            let loaded = crate::files::read_text(&path, MAX_LIBRARY_BYTES)
+                .map_err(|error| error.to_string())
+                .and_then(|text| self.add_library_text(&text, &origin));
+            if let Err(error) = loaded {
+                self.error = Some(error);
+                return;
+            }
+        }
+    }
+
     fn save_as_dialog(&mut self) -> bool {
         let name = self.session.as_ref().map_or_else(
             || "project".to_owned(),
@@ -312,7 +338,13 @@ impl DesktopApp {
         }
     }
 
-    fn replace(&mut self, session: Session) {
+    fn replace(&mut self, mut session: Session) {
+        if !self.libraries.is_empty() {
+            match self.catalog() {
+                Ok(catalog) => session.set_catalog(catalog),
+                Err(error) => self.error = Some(error.to_string()),
+            }
+        }
         self.session = Some(session);
         self.error = None;
         self.editor = Editor::new();
@@ -320,6 +352,44 @@ impl DesktopApp {
         self.focus = None;
         self.held = None;
         self.fit_pending = true;
+    }
+
+    /// The built-in catalog with the libraries of this window.
+    fn catalog(&self) -> Result<ComponentCatalog, CatalogError> {
+        self.libraries
+            .iter()
+            .cloned()
+            .try_fold(ComponentCatalog::builtin(), |catalog, library| {
+                catalog.with_library(library)
+            })
+    }
+
+    /// Load an extension library from its text (ADR-0008) and recompile the
+    /// open project with it. `origin` names the file in messages.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message when the text is not a library or the library
+    /// cannot be added (taken namespace, inconsistent model, bad artwork);
+    /// nothing changes then.
+    pub fn add_library_text(&mut self, text: &str, origin: &str) -> Result<(), String> {
+        let library = circuit_project::library::from_str(text)
+            .map_err(|error| format!("{origin}: {error}"))?;
+        let catalog = self
+            .catalog()
+            .and_then(|catalog| catalog.with_library(library.clone()))
+            .map_err(|error| format!("{origin}: {error}"))?;
+        self.libraries.push(library);
+        if let Some(session) = self.session.as_mut() {
+            session.set_catalog(catalog);
+        }
+        Ok(())
+    }
+
+    /// The libraries loaded in this window.
+    #[must_use]
+    pub fn libraries(&self) -> &[Library] {
+        &self.libraries
     }
 
     /// The open project.
@@ -553,7 +623,9 @@ impl DesktopApp {
     }
 
     fn toolbar(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
+        // Wrapped, so that a narrow window shows every control on a second
+        // row instead of cutting the last ones off.
+        ui.horizontal_wrapped(|ui| {
             if ui.button("New").clicked() {
                 self.new_project();
             }
@@ -572,6 +644,15 @@ impl DesktopApp {
                 .clicked()
             {
                 self.save_as_dialog();
+            }
+            if ui
+                .button("Library…")
+                .on_hover_text(
+                    "Load an extension library (.oclib): more components for this window",
+                )
+                .clicked()
+            {
+                self.library_dialog();
             }
             ui.add_enabled_ui(has_session, |ui| {
                 ui.menu_button("Export", |ui| {

@@ -23,10 +23,12 @@ pub(crate) enum Command {
         project: PathBuf,
         format: OutputFormat,
         deny_warnings: bool,
+        library: Option<PathBuf>,
     },
     Simulate {
         project: PathBuf,
         scenario: PathBuf,
+        library: Option<PathBuf>,
         tick_us: Option<u32>,
         fault_policy: Option<FaultPolicy>,
         trace: Option<PathBuf>,
@@ -41,6 +43,7 @@ pub(crate) enum Command {
         output: PathBuf,
         format: ExportFormat,
         theme: Theme,
+        library: Option<PathBuf>,
     },
 }
 
@@ -128,7 +131,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
     match command.as_str() {
         "help" | "--help" | "-h" => Ok(Command::Help),
         "validate" => {
-            let words = Words::split(rest, &["--format"], &["--deny-warnings"])?;
+            let words = Words::split(rest, &["--format", "--library"], &["--deny-warnings"])?;
             let format = match words.value("--format") {
                 None | Some("text") => OutputFormat::Text,
                 Some("json") => OutputFormat::Json,
@@ -140,6 +143,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 project: words.single_positional("project file")?,
                 format,
                 deny_warnings: words.flag("--deny-warnings"),
+                library: words.value("--library").map(PathBuf::from),
             })
         }
         "simulate" => {
@@ -151,6 +155,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                     "--fault-policy",
                     "--trace",
                     "--snapshot-json",
+                    "--library",
                 ],
                 &[],
             )?;
@@ -181,6 +186,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                     .value("--scenario")
                     .map(PathBuf::from)
                     .ok_or("`simulate` needs `--scenario <file>`")?,
+                library: words.value("--library").map(PathBuf::from),
                 tick_us,
                 fault_policy,
                 trace: words.value("--trace").map(PathBuf::from),
@@ -198,7 +204,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
             })
         }
         "export" => {
-            let words = Words::split(rest, &["--output", "--theme"], &[])?;
+            let words = Words::split(rest, &["--output", "--theme", "--library"], &[])?;
             let output = words
                 .value("--output")
                 .map(PathBuf::from)
@@ -230,6 +236,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 output,
                 format,
                 theme,
+                library: words.value("--library").map(PathBuf::from),
             })
         }
         other => Err(format!("unknown command `{other}`")),
@@ -253,6 +260,7 @@ mod tests {
                 project: PathBuf::from("a.ocircuit"),
                 format: OutputFormat::Text,
                 deny_warnings: false,
+                library: None,
             })
         );
     }
@@ -291,6 +299,7 @@ mod tests {
             Ok(Command::Simulate {
                 project: PathBuf::from("a.ocircuit"),
                 scenario: PathBuf::from("s.json"),
+                library: None,
                 tick_us: Some(500),
                 fault_policy: Some(FaultPolicy::Report),
                 trace: Some(PathBuf::from("out.trace")),
@@ -375,6 +384,7 @@ mod tests {
                 output: PathBuf::from("out/a.SVG"),
                 format: ExportFormat::Svg,
                 theme: Theme::Print,
+                library: None,
             })
         );
         assert!(matches!(

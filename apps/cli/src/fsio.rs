@@ -5,7 +5,15 @@ use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use circuit_model::ComponentCatalog;
+use circuit_model::library::MAX_LIBRARY_BYTES;
+
 use crate::CliError;
+
+/// Extension of library files found in a directory.
+const LIBRARY_EXTENSION: &str = "oclib";
+/// Most library files one directory may provide.
+const MAX_LIBRARY_FILES: usize = 256;
 
 /// Deepest directory nesting followed when looking for scenarios.
 const MAX_DIRECTORY_DEPTH: u32 = 16;
@@ -17,6 +25,49 @@ fn file_error(path: &Path, source: io::Error) -> CliError {
         path: path.to_path_buf(),
         source,
     }
+}
+
+/// The built-in catalog with the given libraries added in order. A
+/// directory stands for its `*.oclib` files, sorted by name, without
+/// descending into subdirectories.
+pub(crate) fn load_catalog(paths: &[PathBuf]) -> Result<ComponentCatalog, CliError> {
+    let mut files: Vec<PathBuf> = Vec::new();
+    for path in paths {
+        if path.is_dir() {
+            let mut found: Vec<PathBuf> = fs::read_dir(path)
+                .map_err(|source| file_error(path, source))?
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|file| {
+                    file.is_file()
+                        && file
+                            .extension()
+                            .is_some_and(|extension| extension == LIBRARY_EXTENSION)
+                })
+                .take(MAX_LIBRARY_FILES.saturating_add(1))
+                .collect();
+            if found.len() > MAX_LIBRARY_FILES {
+                return Err(CliError::Usage(format!(
+                    "{}: more than {MAX_LIBRARY_FILES} library files",
+                    path.display()
+                )));
+            }
+            found.sort();
+            files.extend(found);
+        } else {
+            files.push(path.clone());
+        }
+    }
+    let mut catalog = ComponentCatalog::builtin();
+    for file in files {
+        let text = read_text(&file, MAX_LIBRARY_BYTES)?;
+        let library = circuit_project::library::from_str(&text)
+            .map_err(|error| CliError::Usage(format!("{}: {error}", file.display())))?;
+        catalog = catalog
+            .with_library(library)
+            .map_err(|error| CliError::Usage(format!("{}: {error}", file.display())))?;
+    }
+    Ok(catalog)
 }
 
 /// Read a text file, refusing one larger than `limit` bytes before reading

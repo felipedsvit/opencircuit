@@ -15,7 +15,13 @@ pub(crate) struct Example {
     /// Path relative to the workspace root.
     pub(crate) path: &'static str,
     build: fn() -> Result<Schematic, IdExhausted>,
+    /// Text of the extension library the project uses, if any.
+    library: Option<&'static str>,
 }
+
+/// The example library of `LIBRARY.md`, committed next to the project that
+/// uses it.
+const ACME_LIBRARY: &str = include_str!("../../examples/library/acme.oclib");
 
 impl Example {
     /// The canonical text of the project file.
@@ -39,7 +45,10 @@ impl Example {
             Ok(doc) => doc,
             Err(error) => return vec![Err(format!("{}: {error}", self.path))],
         };
-        let catalog = circuit_model::ComponentCatalog::builtin();
+        let catalog = match self.catalog() {
+            Ok(catalog) => catalog,
+            Err(error) => return vec![Err(error)],
+        };
         let scene = circuit_renderer::build_scene(
             &doc,
             &catalog,
@@ -60,6 +69,22 @@ impl Example {
     }
 }
 
+impl Example {
+    /// The catalog the project is drawn and checked with: the built-in one,
+    /// plus the example's library when it uses one.
+    pub(crate) fn catalog(&self) -> Result<circuit_model::ComponentCatalog, String> {
+        let builtin = circuit_model::ComponentCatalog::builtin();
+        let Some(text) = self.library else {
+            return Ok(builtin);
+        };
+        let library = circuit_project::library::from_str(text)
+            .map_err(|error| format!("{}: {error}", self.path))?;
+        builtin
+            .with_library(library)
+            .map_err(|error| format!("{}: {error}", self.path))
+    }
+}
+
 /// Every generated file, project files then drawings, as `(path, bytes)`.
 pub(crate) fn outputs() -> Vec<Result<(String, Vec<u8>), String>> {
     let projects = EXAMPLES.iter().map(|example| {
@@ -76,50 +101,67 @@ pub(crate) const EXAMPLES: &[Example] = &[
     Example {
         path: "examples/direct-starter/command.ocircuit",
         build: command,
+        library: None,
     },
     Example {
         path: "examples/direct-starter/starter.ocircuit",
         build: starter,
+        library: None,
     },
     Example {
         path: "examples/forward-reverse/reversing.ocircuit",
         build: reversing,
+        library: None,
     },
     Example {
         path: "examples/forward-reverse/interlocked.ocircuit",
         build: interlocked,
+        library: None,
     },
     Example {
         path: "examples/star-delta/star-delta.ocircuit",
         build: star_delta,
+        library: None,
     },
     Example {
         path: "tests/fixtures/star-delta-overlap/star-delta-overlap.ocircuit",
         build: star_delta_overlap,
+        library: None,
     },
     Example {
         path: "examples/multi-section/multi-section.ocircuit",
         build: multi_section,
+        library: None,
     },
     Example {
         path: "examples/control-transformer/control-transformer.ocircuit",
         build: control_transformer,
+        library: None,
     },
     Example {
         path: "examples/pump-level/pump-level.ocircuit",
         build: pump_level,
+        library: None,
+    },
+    Example {
+        path: "examples/library/acme-lamp.ocircuit",
+        build: acme_lamp,
+        library: Some(ACME_LIBRARY),
     },
     Example {
         path: "tests/fixtures/sections-bridged/sections-bridged.ocircuit",
         build: sections_bridged,
+        library: None,
     },
     Example {
         path: "tests/fixtures/static-short/static-short.ocircuit",
         build: static_short,
+        library: None,
     },
     Example {
         path: "tests/fixtures/series-loads/series-loads.ocircuit",
         build: series_loads,
+        library: None,
     },
 ];
 
@@ -988,6 +1030,30 @@ fn pump_level() -> Built<Schematic> {
     Ok(sheet.finish())
 }
 
+/// A project that uses a model of the example library `acme`
+/// (`examples/library/acme.oclib`, the example of `LIBRARY.md`): S1 picks up
+/// the ACME relay K1, whose own NO contact lights H1.
+fn acme_lamp() -> Built<Schematic> {
+    let mut sheet = Sheet::new("Lamp switched by an ACME relay");
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 16))?;
+    let start = sheet.part("S1", "pushbutton_no", "contact", &[], (0, 4))?;
+    let k1 = sheet.device("K1", "acme.relay_r2", &dc_load())?;
+    let coil = sheet.symbol(k1, "coil", None, (0, 10))?;
+    let contact = sheet.symbol(k1, "no", Some(1), (8, 4))?;
+    let lamp = sheet.part("H1", "lamp.generic", "lamp", &dc_load(), (8, 10))?;
+    let feed = sheet.junction((0, 1))?;
+    let rail = sheet.junction((0, 14))?;
+    sheet.wire(out(p24), feed)?;
+    sheet.wire(feed, pin(start, "p1"))?;
+    sheet.route(feed, pin(contact, "p1"), &[(8, 1)])?;
+    sheet.wire(pin(start, "p2"), pin(coil, "a1"))?;
+    sheet.wire(pin(coil, "a2"), rail)?;
+    sheet.wire(pin(contact, "p2"), pin(lamp, "x1"))?;
+    sheet.route(pin(lamp, "x2"), rail, &[(8, 14)])?;
+    sheet.wire(rail, out(p0))?;
+    Ok(sheet.finish())
+}
+
 /// A lamp across the supply with the two poles also wired together: a
 /// permanent short circuit, rejected at compile time.
 fn static_short() -> Built<Schematic> {
@@ -1047,8 +1113,8 @@ mod tests {
 
     #[test]
     fn every_generated_wire_resolves_and_is_orthogonal() {
-        let catalog = circuit_model::ComponentCatalog::builtin();
         for example in EXAMPLES {
+            let catalog = example.catalog().unwrap();
             let doc = (example.build)().unwrap();
             let layout = circuit_model::LayoutIndex::new(&doc, &catalog);
             for wire in &doc.wires {
@@ -1068,8 +1134,8 @@ mod tests {
 
     #[test]
     fn symbols_of_a_generated_project_do_not_overlap() {
-        let catalog = circuit_model::ComponentCatalog::builtin();
         for example in EXAMPLES {
+            let catalog = example.catalog().unwrap();
             let doc = (example.build)().unwrap();
             let layout = circuit_model::LayoutIndex::new(&doc, &catalog);
             let placed: Vec<_> = doc
@@ -1219,5 +1285,17 @@ mod tests {
         let drawings = || EXAMPLES[0].drawings();
 
         assert_eq!(drawings(), drawings());
+    }
+
+    #[test]
+    fn the_committed_example_library_is_the_example_of_library_md() {
+        let markdown = include_str!("../../LIBRARY.md");
+        let example = markdown
+            .split_once("```json\n")
+            .and_then(|(_, rest)| rest.split_once("```"))
+            .map(|(json, _)| json)
+            .unwrap();
+
+        assert_eq!(ACME_LIBRARY, example);
     }
 }

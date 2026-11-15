@@ -29,7 +29,13 @@ pub fn show(ui: &mut Ui, catalog: &ComponentCatalog, editor: &mut Editor) {
                         if m.id == model.id() && m.version == model.version() && s == symbol.key()
                 );
                 let label = format!("{} · {}", model.id(), symbol.key().0);
-                if ui.selectable_label(current, label).clicked() {
+                let provenance = model.provenance();
+                let hover = format!("{} · {}", provenance.origin, provenance.license);
+                if ui
+                    .selectable_label(current, label)
+                    .on_hover_text(hover)
+                    .clicked()
+                {
                     editor.set_tool(Tool::Place {
                         model: ModelRef {
                             id: model.id().to_owned(),

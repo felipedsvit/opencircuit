@@ -251,7 +251,7 @@ fn every_committed_scenario_passes() {
     let output = opencircuit(&["test", "examples", "tests/fixtures"]);
 
     assert_eq!(code(&output), 0, "{}", stdout(&output));
-    assert!(stdout(&output).ends_with("22 scenario(s), 0 failed\n"));
+    assert!(stdout(&output).ends_with("23 scenario(s), 0 failed\n"));
 }
 
 #[test]
@@ -466,5 +466,62 @@ fn export_writes_the_same_pdf_as_the_committed_drawing() {
     assert_eq!(
         fs::read(&output).expect("written"),
         fs::read(root().join("examples/star-delta/star-delta.pdf")).expect("golden")
+    );
+}
+
+const ACME_LAMP: &str = "examples/library/acme-lamp.ocircuit";
+
+#[test]
+fn a_project_of_a_library_model_validates_only_with_the_library() {
+    let without = opencircuit(&["validate", ACME_LAMP]);
+    let file = opencircuit(&[
+        "validate",
+        ACME_LAMP,
+        "--library",
+        "examples/library/acme.oclib",
+    ]);
+    let directory = opencircuit(&["validate", ACME_LAMP, "--library", "examples/library"]);
+
+    assert_eq!(code(&without), 1);
+    assert!(stdout(&without).contains("OC-STR-003"));
+    assert_eq!(code(&file), 0, "{}", stdout(&file));
+    assert_eq!(code(&directory), 0, "{}", stdout(&directory));
+}
+
+#[test]
+fn a_broken_library_is_a_usage_error_that_names_the_file() {
+    let directory = scratch("broken-library");
+    let library = directory.join("broken.oclib");
+    fs::write(&library, "{ \"schema_version\": 1 }").expect("library");
+
+    let run = opencircuit(&[
+        "validate",
+        ACME_LAMP,
+        "--library",
+        library.to_str().expect("UTF-8 path"),
+    ]);
+
+    assert_eq!(code(&run), 2);
+    assert!(stderr(&run).contains("broken.oclib"), "{}", stderr(&run));
+}
+
+#[test]
+fn export_draws_library_artwork_with_the_library() {
+    let directory = scratch("export-library");
+    let output = directory.join("acme.svg");
+
+    let run = opencircuit(&[
+        "export",
+        ACME_LAMP,
+        "--output",
+        output.to_str().expect("UTF-8 path"),
+        "--library",
+        "examples/library",
+    ]);
+
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert_eq!(
+        fs::read_to_string(&output).expect("written"),
+        fs::read_to_string(root().join("examples/library/acme-lamp.svg")).expect("golden")
     );
 }
