@@ -53,7 +53,7 @@ pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,
 };
-pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView};
+pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingConnection};
 pub use supply::{
     Conductor, ConductorConflict, ConductorSet, PhaseSequence, SupplyKind, SupplyProfile,
 };

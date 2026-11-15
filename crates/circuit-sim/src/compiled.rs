@@ -134,6 +134,12 @@ pub enum LoadRule {
         /// Rated line voltage label in millivolts.
         rated_voltage_mv: u32,
     },
+    /// Six-terminal motor on `u1`, `v1`, `w1`, `u2`, `v2`, `w2`, connected
+    /// in star or delta by the circuit.
+    SixTerminalMotor {
+        /// Rated line voltage label in delta, in millivolts.
+        rated_voltage_mv: u32,
+    },
 }
 
 /// A load and the nets of its terminals, in terminal order.

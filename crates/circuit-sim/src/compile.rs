@@ -670,6 +670,21 @@ fn build(
                     }
                 }
             }
+            SymbolKind::MotorSixTerminal => {
+                let nets: Option<Vec<NetIx>> = (0..6).map(&terminal_net).collect();
+                let (Some(nets), Some(rated_voltage_mv)) =
+                    (nets, rated_voltage_param(owner.device, owner.model))
+                else {
+                    continue;
+                };
+                loads.push(CompiledLoad {
+                    device: device_ix,
+                    symbol: id,
+                    symbol_key: symbol.definition.key().clone(),
+                    rule: LoadRule::SixTerminalMotor { rated_voltage_mv },
+                    nets,
+                });
+            }
             SymbolKind::Motor => {
                 let (Some(u), Some(v), Some(w), Some(rated_voltage_mv)) = (
                     terminal_net(0),
@@ -889,15 +904,11 @@ fn build(
     }
 
     if !sources.is_empty() {
-        report_floating_nets(
-            &pins,
-            &junction_ids,
-            &net_of_node,
-            net_count,
-            &mut closed,
-            &fed,
-            out,
-        );
+        let star_points = star_point_nets(&pins, &loads);
+        let quiet: BTreeSet<u32> = (0..net_count)
+            .filter(|net| fed.contains(&closed.find(*net)) || star_points.contains(net))
+            .collect();
+        report_floating_nets(&pins, &junction_ids, &net_of_node, net_count, &quiet, out);
     }
 
     report_static_series_loads(&switches, &sources, &loads, &devices, net_count, out);
@@ -991,15 +1002,37 @@ fn check_conflicting_supplies(sources: &[CompiledSource], out: &mut Vec<Diagnost
     }
 }
 
+/// Nets made only of the second ends (`u2`, `v2`, `w2`) of six-terminal
+/// motors, with any junctions: a star point wired permanently carries no
+/// conductor by design and is not a floating net.
+fn star_point_nets(pins: &[CompiledPin], loads: &[CompiledLoad]) -> BTreeSet<u32> {
+    let six_terminal: BTreeSet<SymbolId> = loads
+        .iter()
+        .filter(|load| matches!(load.rule, LoadRule::SixTerminalMotor { .. }))
+        .map(|load| load.symbol)
+        .collect();
+    let mut star_ends: BTreeSet<u32> = BTreeSet::new();
+    let mut other_pins: BTreeSet<u32> = BTreeSet::new();
+    for pin in pins {
+        let star_end = six_terminal.contains(&pin.pin.symbol_id)
+            && matches!(pin.pin.terminal.0.as_str(), "u2" | "v2" | "w2");
+        if star_end {
+            star_ends.insert(pin.net.0);
+        } else {
+            other_pins.insert(pin.net.0);
+        }
+    }
+    star_ends.difference(&other_pins).copied().collect()
+}
+
 /// A net with two or more points that no supply reaches even with every
-/// switch closed.
+/// switch closed. `quiet` holds the nets that are reached, or exempt.
 fn report_floating_nets(
     pins: &[CompiledPin],
     junction_ids: &[JunctionId],
     net_of_node: &[u32],
     net_count: u32,
-    closed: &mut UnionFind,
-    fed: &BTreeSet<u32>,
+    quiet: &BTreeSet<u32>,
     out: &mut Vec<Diagnostic>,
 ) {
     let mut points = vec![0_u32; net_count as usize];
@@ -1010,8 +1043,7 @@ fn report_floating_nets(
     }
     let floating: BTreeSet<u32> = (0..net_count)
         .filter(|net| {
-            points.get(*net as usize).is_some_and(|count| *count >= 2)
-                && !fed.contains(&closed.find(*net))
+            points.get(*net as usize).is_some_and(|count| *count >= 2) && !quiet.contains(net)
         })
         .collect();
     if floating.is_empty() {
@@ -1162,6 +1194,10 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             }
             LoadRule::ThreePhaseMotor { rated_voltage_mv } => {
                 hash.u8(2);
+                hash.u32(rated_voltage_mv);
+            }
+            LoadRule::SixTerminalMotor { rated_voltage_mv } => {
+                hash.u8(3);
                 hash.u32(rated_voltage_mv);
             }
         }

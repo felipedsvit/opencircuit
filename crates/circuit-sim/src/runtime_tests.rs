@@ -1,13 +1,14 @@
 use circuit_model::builder::pin;
 use circuit_model::{
-    Conductor, ConductorSet, InputAction, MotorState, ParamValue, Schematic, SymbolId,
+    Conductor, ConductorSet, InputAction, MotorState, MotorView, ParamValue, Schematic, SymbolId,
+    WindingConnection,
 };
 use proptest::prelude::*;
 
 use super::*;
 use crate::testkit::{
-    Interlocks, Rig, action, command_circuit, compile_ok, dc_load, direct_online_circuit, out,
-    reversing_circuit, reversing_with, run, simulator,
+    Interlocks, Rig, action, codes, command_circuit, compile_doc, compile_ok, dc_load,
+    direct_online_circuit, out, reversing_circuit, reversing_with, run, simulator,
 };
 use crate::trace::format_trace;
 
@@ -660,7 +661,8 @@ fn snapshot_reports_motor_direction_and_tripped_overload() {
         running.motors,
         [MotorView {
             device: motor,
-            state: MotorState::Forward
+            state: MotorState::Forward,
+            winding: None,
         }]
     );
     assert_eq!(running.tripped_devices, []);
@@ -668,7 +670,8 @@ fn snapshot_reports_motor_direction_and_tripped_overload() {
         tripped.motors,
         [MotorView {
             device: motor,
-            state: MotorState::Stopped
+            state: MotorState::Stopped,
+            winding: None,
         }]
     );
     assert_eq!(tripped.tripped_devices, [id(&sim, "F1")]);
@@ -1184,6 +1187,121 @@ proptest! {
             prop_assert!(!snapshot.faulted, "tick {}", tick);
         }
     }
+}
+
+/// A six-terminal motor `M1` on a 400 V supply, each terminal wired to the
+/// phases listed for it (none leaves it unconnected), and the second ends in
+/// `star` joined at a junction.
+fn six_terminal(wiring: [&[usize]; 6], star: bool) -> Schematic {
+    let mut rig = Rig::new();
+    let phases = rig.three_phase();
+    let motor = rig.part(
+        "M1",
+        "motor.3ph.6t",
+        "motor",
+        &[("rated_voltage_mv", ParamValue::Int(400_000))],
+    );
+    for (terminal, feeds) in ["u1", "v1", "w1", "u2", "v2", "w2"].into_iter().zip(wiring) {
+        for phase in feeds {
+            rig.wire(out(phases[*phase]), pin(motor, terminal));
+        }
+    }
+    if star {
+        let point = rig.junction();
+        for terminal in ["u2", "v2", "w2"] {
+            rig.wire(pin(motor, terminal), point);
+        }
+    }
+    rig.finish()
+}
+
+fn motor_after_one_tick(doc: &Schematic) -> (Vec<String>, Vec<MotorView>, Vec<DiagnosticCode>) {
+    let mut sim = default_sim(doc);
+    let trace = run(&mut sim, 0, &[]);
+    let snapshot = sim.snapshot().unwrap();
+    let codes = snapshot.faults.iter().map(Diagnostic::code).collect();
+    (trace, snapshot.motors, codes)
+}
+
+#[test]
+fn six_terminal_motor_runs_in_star_with_a_dead_star_point() {
+    let doc = six_terminal([&[0], &[1], &[2], &[], &[], &[]], true);
+    assert_eq!(compile_doc(&doc).diagnostics, []);
+
+    let (trace, motors, codes) = motor_after_one_tick(&doc);
+
+    assert_eq!(trace, ["t=0 load M1.motor forward-star"]);
+    assert_eq!(motors[0].state, MotorState::Forward);
+    assert_eq!(motors[0].winding, Some(WindingConnection::Star));
+    assert_eq!(codes, []);
+}
+
+#[test]
+fn six_terminal_motor_runs_in_delta_with_each_line_on_the_next_second_end() {
+    let doc = six_terminal([&[0], &[1], &[2], &[1], &[2], &[0]], false);
+
+    let (trace, motors, codes) = motor_after_one_tick(&doc);
+
+    assert_eq!(trace, ["t=0 load M1.motor forward-delta"]);
+    assert_eq!(motors[0].winding, Some(WindingConnection::Delta));
+    assert_eq!(codes, []);
+}
+
+#[test]
+fn six_terminal_motor_with_swapped_phases_runs_in_reverse() {
+    let doc = six_terminal([&[2], &[1], &[0], &[], &[], &[]], true);
+
+    let (trace, motors, _) = motor_after_one_tick(&doc);
+
+    assert_eq!(trace, ["t=0 load M1.motor reverse-star"]);
+    assert_eq!(motors[0].state, MotorState::Reverse);
+}
+
+#[test]
+fn six_terminal_motor_with_open_windings_is_off_without_a_diagnostic() {
+    let doc = six_terminal([&[0], &[1], &[2], &[], &[], &[]], false);
+
+    let (trace, motors, codes) = motor_after_one_tick(&doc);
+
+    assert_eq!(trace, Vec::<String>::new());
+    assert_eq!(motors[0].state, MotorState::Stopped);
+    assert_eq!(motors[0].winding, None);
+    assert_eq!(codes, []);
+}
+
+#[test]
+fn six_terminal_motor_in_star_with_a_missing_phase_reports_phase_loss() {
+    let doc = six_terminal([&[0], &[1], &[], &[], &[], &[]], true);
+
+    let (_, motors, codes) = motor_after_one_tick(&doc);
+
+    assert_eq!(motors[0].state, MotorState::Stopped);
+    assert_eq!(codes, [DiagnosticCode::PhaseLoss]);
+}
+
+#[test]
+fn single_winding_across_two_phases_is_an_unsupported_connection() {
+    let doc = six_terminal([&[0], &[], &[], &[1], &[], &[]], false);
+
+    let (_, motors, codes) = motor_after_one_tick(&doc);
+
+    assert_eq!(motors[0].state, MotorState::Stopped);
+    assert_eq!(codes, [DiagnosticCode::UnsupportedWindingConnection]);
+    assert!(!sim_latches(&doc));
+}
+
+fn sim_latches(doc: &Schematic) -> bool {
+    let mut sim = default_sim(doc);
+    sim.step(&[]).unwrap().faulted
+}
+
+#[test]
+fn star_point_joined_to_the_lines_is_a_short_circuit() {
+    // Star and delta at once: the three phases meet at the star point.
+    let doc = six_terminal([&[0], &[1], &[2], &[1], &[2], &[0]], true);
+    let output = compile_doc(&doc);
+
+    assert!(codes(&output).contains(&DiagnosticCode::ShortCircuit));
 }
 
 fn trace_text(sim: &mut Simulator) -> String {

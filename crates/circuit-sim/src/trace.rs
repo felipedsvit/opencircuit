@@ -23,6 +23,14 @@ pub enum LoadActivity {
     Forward,
     /// A motor running against the phase sequence.
     Reverse,
+    /// A six-terminal motor running with the phase sequence in star.
+    ForwardStar,
+    /// A six-terminal motor running with the phase sequence in delta.
+    ForwardDelta,
+    /// A six-terminal motor running against the phase sequence in star.
+    ReverseStar,
+    /// A six-terminal motor running against the phase sequence in delta.
+    ReverseDelta,
 }
 
 impl LoadActivity {
@@ -32,6 +40,10 @@ impl LoadActivity {
             Self::On => "on",
             Self::Forward => "forward",
             Self::Reverse => "reverse",
+            Self::ForwardStar => "forward-star",
+            Self::ForwardDelta => "forward-delta",
+            Self::ReverseStar => "reverse-star",
+            Self::ReverseDelta => "reverse-delta",
         }
     }
 }

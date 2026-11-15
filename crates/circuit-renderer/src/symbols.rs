@@ -8,7 +8,7 @@
 //! top to bottom, with its leads ending exactly on the terminal offsets of the
 //! catalog. It stays inside the bounds of its kind, except for texts.
 
-use circuit_model::{MotorState, QuarterTurn, SymbolKind, catalog::POLE_PITCH};
+use circuit_model::{MotorState, QuarterTurn, SymbolKind, WindingConnection, catalog::POLE_PITCH};
 
 use crate::scene::{Anchor, SUBUNITS_PER_GRID, ScenePoint, SceneRect, Shape, StyleKey};
 
@@ -43,6 +43,8 @@ pub(crate) struct Look {
     pub(crate) tripped: bool,
     /// What the motor does, when a simulation runs.
     pub(crate) motor: Option<MotorState>,
+    /// How the windings of a running six-terminal motor are connected.
+    pub(crate) winding: Option<WindingConnection>,
 }
 
 const fn point(x: i64, y: i64) -> ScenePoint {
@@ -175,6 +177,36 @@ fn actuator(x: i64, kind: Actuator, actuated: bool, out: &mut Vec<(Shape, StyleK
     }
 }
 
+/// A motor: three leads from `u1`, `v1`, `w1` above into a circle marked
+/// `M 3~`, drawn in the style of what it is doing.
+fn motor(look: Look, out: &mut Vec<(Shape, StyleKey)>) {
+    let style = look.motor.map_or(StyleKey::Symbol, StyleKey::Motor);
+    let pitch = i64::from(POLE_PITCH).saturating_mul(SUBUNITS_PER_GRID);
+    let above = LEAD.saturating_neg();
+    out.push((
+        polyline(&[
+            (pitch.saturating_neg(), above),
+            (pitch.saturating_neg(), 0),
+            (-15, 10),
+        ]),
+        StyleKey::Symbol,
+    ));
+    out.push((line((0, above), (0, 5)), StyleKey::Symbol));
+    out.push((
+        polyline(&[(pitch, above), (pitch, 0), (15, 10)]),
+        StyleKey::Symbol,
+    ));
+    out.push((
+        Shape::Circle {
+            center: point(0, 30),
+            radius: 25,
+        },
+        style,
+    ));
+    out.push((text((0, 26), "M"), StyleKey::Label));
+    out.push((text((0, 40), "3~"), StyleKey::Label));
+}
+
 /// The drawing of one symbol in local subunits.
 pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shape, StyleKey)> {
     let mut out = Vec::new();
@@ -302,32 +334,33 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
                 style,
             ));
         }
-        SymbolKind::Motor => {
-            let style = look.motor.map_or(StyleKey::Symbol, StyleKey::Motor);
+        SymbolKind::Motor => motor(look, &mut out),
+        SymbolKind::MotorSixTerminal => {
+            motor(look, &mut out);
+            // The second ends of the windings come out below the motor.
             let pitch = i64::from(POLE_PITCH).saturating_mul(SUBUNITS_PER_GRID);
-            let above = LEAD.saturating_neg();
+            let below = 80;
             out.push((
                 polyline(&[
-                    (pitch.saturating_neg(), above),
-                    (pitch.saturating_neg(), 0),
-                    (-15, 10),
+                    (pitch.saturating_neg(), below),
+                    (pitch.saturating_neg(), 60),
+                    (-15, 50),
                 ]),
                 StyleKey::Symbol,
             ));
-            out.push((line((0, above), (0, 5)), StyleKey::Symbol));
+            out.push((line((0, below), (0, 55)), StyleKey::Symbol));
             out.push((
-                polyline(&[(pitch, above), (pitch, 0), (15, 10)]),
+                polyline(&[(pitch, below), (pitch, 60), (15, 50)]),
                 StyleKey::Symbol,
             ));
-            out.push((
-                Shape::Circle {
-                    center: point(0, 30),
-                    radius: 25,
-                },
-                style,
-            ));
-            out.push((text((0, 26), "M"), StyleKey::Label));
-            out.push((text((0, 40), "3~"), StyleKey::Label));
+            let mark = match look.winding {
+                Some(WindingConnection::Star) => Some("Y"),
+                Some(WindingConnection::Delta) => Some("\u{394}"),
+                None => None,
+            };
+            if let Some(mark) = mark {
+                out.push((text((25, 70), mark), StyleKey::Label));
+            }
         }
         SymbolKind::SupplyTerminal => {
             out.push((line((-8, -12), (8, -12)), StyleKey::Symbol));
@@ -403,6 +436,7 @@ mod tests {
             SymbolKind::InterlockLink,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
+            SymbolKind::MotorSixTerminal,
             SymbolKind::Lamp,
             SymbolKind::Buzzer,
             SymbolKind::SupplyTerminal,
@@ -424,6 +458,7 @@ mod tests {
                 actuated: bits & 8 != 0,
                 tripped: bits & 16 != 0,
                 motor: Some(MotorState::Forward),
+                winding: Some(WindingConnection::Delta),
             });
         }
         looks.push(Look::default());

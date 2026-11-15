@@ -6,7 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ConductorSet, DeviceClass, DeviceId, JunctionId, LayoutIndex, MotorState,
-    Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, Wire, WireId,
+    Schematic, SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView,
+    WindingConnection, Wire, WireId,
 };
 
 use crate::scene::{Anchor, Scene, ScenePoint, SceneRect, Shape, StyleKey};
@@ -41,7 +42,7 @@ struct State<'a> {
     closed: BTreeSet<SymbolId>,
     wires: BTreeMap<WireId, ConductorSet>,
     junctions: BTreeMap<JunctionId, ConductorSet>,
-    motors: BTreeMap<DeviceId, MotorState>,
+    motors: BTreeMap<DeviceId, (MotorState, Option<WindingConnection>)>,
     timers: BTreeMap<DeviceId, &'a TimerView>,
 }
 
@@ -70,7 +71,7 @@ impl<'a> State<'a> {
             motors: snapshot
                 .motors
                 .iter()
-                .map(|view| (view.device, view.state))
+                .map(|view| (view.device, (view.state, view.winding)))
                 .collect(),
             timers: snapshot
                 .timers
@@ -244,7 +245,11 @@ fn draw_symbol(
         active: state.active.contains(&device.id),
         actuated,
         tripped: state.tripped.contains(&device.id),
-        motor: state.motors.get(&device.id).copied(),
+        motor: state.motors.get(&device.id).map(|(motor, _)| *motor),
+        winding: state
+            .motors
+            .get(&device.id)
+            .and_then(|(_, winding)| *winding),
     };
 
     let at = origin(symbol);

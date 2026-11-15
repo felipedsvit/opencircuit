@@ -31,6 +31,18 @@ pub enum MotorState {
     Reverse,
 }
 
+/// How the windings of a six-terminal motor are connected while it runs.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindingConnection {
+    /// `u2`, `v2` and `w2` joined at a star point that carries no
+    /// conductor.
+    Star,
+    /// Each winding across two phases: `u1` with `w2`, `v1` with `u2`, `w1`
+    /// with `v2`.
+    Delta,
+}
+
 /// State of one motor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub struct MotorView {
@@ -38,6 +50,10 @@ pub struct MotorView {
     pub device: DeviceId,
     /// What it is doing.
     pub state: MotorState,
+    /// How the windings of a six-terminal motor are connected while it
+    /// runs; `None` for a three-terminal motor or a motor that is stopped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub winding: Option<WindingConnection>,
 }
 
 /// State of one timer.

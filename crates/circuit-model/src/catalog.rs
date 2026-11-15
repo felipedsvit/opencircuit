@@ -104,6 +104,9 @@ pub enum SymbolKind {
     FuseLink,
     /// Three-terminal motor.
     Motor,
+    /// Motor with both ends of its three windings brought out: `u1`-`u2`,
+    /// `v1`-`v2`, `w1`-`w2`; connected in star or delta by the circuit.
+    MotorSixTerminal,
     /// Lamp: a two-terminal load.
     Lamp,
     /// Buzzer: a two-terminal load.
@@ -128,6 +131,10 @@ pub const POLE_PITCH: i32 = 4;
 
 /// Offset of the leftmost motor terminal, one pitch left of the origin.
 const MOTOR_LEFT: i32 = -4;
+
+/// Vertical offset of the second ends (`u2`, `v2`, `w2`) of the windings of
+/// a six-terminal motor, below the motor.
+const MOTOR_SECOND_ENDS: i32 = 8;
 
 /// Horizontal offset of the `nc` terminal of a changeover contact; `com`
 /// and `no` sit on the vertical through the origin.
@@ -187,6 +194,14 @@ impl SymbolKind {
                 TerminalDefinition::new("v1", false, GridPoint::new(0, ABOVE)),
                 TerminalDefinition::new("w1", false, GridPoint::new(POLE_PITCH, ABOVE)),
             ],
+            Self::MotorSixTerminal => vec![
+                TerminalDefinition::new("u1", false, GridPoint::new(MOTOR_LEFT, ABOVE)),
+                TerminalDefinition::new("v1", false, GridPoint::new(0, ABOVE)),
+                TerminalDefinition::new("w1", false, GridPoint::new(POLE_PITCH, ABOVE)),
+                TerminalDefinition::new("u2", false, GridPoint::new(MOTOR_LEFT, MOTOR_SECOND_ENDS)),
+                TerminalDefinition::new("v2", false, GridPoint::new(0, MOTOR_SECOND_ENDS)),
+                TerminalDefinition::new("w2", false, GridPoint::new(POLE_PITCH, MOTOR_SECOND_ENDS)),
+            ],
             Self::Lamp | Self::Buzzer => pair("x1", "x2", false),
             Self::SupplyTerminal => {
                 vec![TerminalDefinition::new("out", false, GridPoint::new(0, 0))]
@@ -215,6 +230,7 @@ impl SymbolKind {
                 corners(outer.saturating_neg(), ABOVE, outer, BELOW)
             }
             Self::Motor => corners(MOTOR_LEFT, ABOVE, POLE_PITCH, 6),
+            Self::MotorSixTerminal => corners(MOTOR_LEFT, ABOVE, POLE_PITCH, MOTOR_SECOND_ENDS),
             Self::SupplyTerminal => corners(-1, -2, 1, 0),
             Self::InterlockLink => corners(-2, -1, 2, 1),
         }
@@ -863,7 +879,7 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
             SymbolKind::ContactNo | SymbolKind::ContactNc | SymbolKind::PowerContacts { .. }
         ),
         DeviceClass::Fuse => matches!(kind, SymbolKind::FuseLink),
-        DeviceClass::Motor => matches!(kind, SymbolKind::Motor),
+        DeviceClass::Motor => matches!(kind, SymbolKind::Motor | SymbolKind::MotorSixTerminal),
         DeviceClass::Lamp => matches!(kind, SymbolKind::Lamp),
         DeviceClass::Buzzer => matches!(kind, SymbolKind::Buzzer),
         DeviceClass::PowerSupply => matches!(kind, SymbolKind::SupplyTerminal),
@@ -1208,6 +1224,18 @@ fn builtin_models() -> Vec<ComponentModel> {
             )],
         ),
         model(
+            "motor.3ph.6t",
+            DeviceClass::Motor,
+            vec![rated_voltage()],
+            vec![SymbolDefinition::new(
+                "motor",
+                SymbolKind::MotorSixTerminal,
+                1,
+                1,
+                false,
+            )],
+        ),
+        model(
             "lamp.generic",
             DeviceClass::Lamp,
             vec![rated_voltage(), connection()],
@@ -1262,6 +1290,7 @@ mod tests {
             SymbolKind::Changeover,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
+            SymbolKind::MotorSixTerminal,
             SymbolKind::Lamp,
             SymbolKind::Buzzer,
             SymbolKind::SupplyTerminal,
@@ -1331,6 +1360,18 @@ mod tests {
     }
 
     #[test]
+    fn six_terminal_motor_has_its_second_ends_below_the_first() {
+        assert_eq!(
+            terminal_keys(SymbolKind::MotorSixTerminal),
+            ["u1", "v1", "w1", "u2", "v2", "w2"]
+        );
+        assert_eq!(
+            offsets(SymbolKind::MotorSixTerminal),
+            [(-4, -2), (0, -2), (4, -2), (-4, 8), (0, 8), (4, 8)]
+        );
+    }
+
+    #[test]
     fn supply_terminal_is_its_own_origin() {
         assert_eq!(offsets(SymbolKind::SupplyTerminal), [(0, 0)]);
     }
@@ -1363,6 +1404,7 @@ mod tests {
                 "lamp.generic@1",
                 "main_switch.3p@1",
                 "motor.3ph@1",
+                "motor.3ph.6t@1",
                 "pushbutton.combined@1",
                 "pushbutton_nc@1",
                 "pushbutton_no@1",
@@ -1386,7 +1428,7 @@ mod tests {
             .map(|model| format!("{}@{}", model.id(), model.version()))
             .collect();
 
-        assert_eq!(latest.len(), 16);
+        assert_eq!(latest.len(), 17);
         assert!(latest.contains(&"relay.generic@2".to_owned()));
         assert!(latest.contains(&"timer_on.generic@2".to_owned()));
         assert!(latest.contains(&"timer_off.generic@2".to_owned()));
