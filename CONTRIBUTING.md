@@ -17,6 +17,7 @@ repository root:
 cargo test --workspace --locked
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
 cargo run -p xtask -- check-architecture
 cargo run -p xtask -- generate-examples --check
 cargo run -p opencircuit-cli -- test examples tests/fixtures

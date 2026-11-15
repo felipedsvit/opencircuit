@@ -39,6 +39,7 @@ cargo test -p circuit-sim
 cargo test -p circuit-sim simultaneous_start   # single test substring
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked   # no broken or ambiguous doc links
 cargo run -p xtask -- check-architecture
 cargo run -p xtask -- generate-examples --check   # example projects match their generator
 cargo run -p xtask --release -- bench               # timings recorded in docs/benchmarks.md
@@ -49,7 +50,7 @@ cargo deny check
 
 - Example projects are generated from `xtask/src/examples.rs`; edit the generator and run `cargo run -p xtask -- generate-examples`, never the `.ocircuit` by hand. Golden traces are rewritten only with `opencircuit test <path> --update-golden`, which is refused when `CI` is set; review every golden diff.
 
-- CI is in `.github/workflows/ci.yml` and runs fmt, clippy, tests, `cargo-deny` and the architecture checker. Its jobs are the quality gate; run the same commands locally before opening a pull request.
+- CI is in `.github/workflows/ci.yml` and runs fmt, clippy, rustdoc with warnings denied, tests, `cargo-deny` and the architecture checker. Its jobs are the quality gate; run the same commands locally before opening a pull request.
 - `rust-toolchain.toml` pins rustc 1.99.1. The root `clippy.toml` allows `unwrap`, `expect`, `panic` and indexing in tests only, and the `clippy.toml` of each core crate adds `disallowed-types` (clock, `HashMap`/`HashSet`, files and sockets). There is no `rustfmt.toml`: rustfmt runs with its defaults. Edition 2024, resolver 3, MSRV 1.85.
 - Only the root `Cargo.lock` should be committed. Do not run cargo from inside a crate directory; do not add nested `Cargo.lock` or `target/` files.
 - If a command cannot run in your environment, say so in the pull request and rely on CI.
