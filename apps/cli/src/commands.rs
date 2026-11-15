@@ -99,6 +99,34 @@ pub(crate) fn execute(
             };
             export(project, output, drawing, &catalog, out, err)
         }
+        Command::New {
+            file,
+            name,
+            force,
+            report,
+        } => new_project(file, name.as_deref(), *force, *report, out),
+        Command::Edit {
+            project,
+            apply,
+            output,
+            dry_run,
+            library,
+            report,
+        } => {
+            let catalog = load_catalog(library.as_slice())?;
+            edit_project(
+                &EditRequest {
+                    project,
+                    apply,
+                    output: output.as_deref(),
+                    dry_run: *dry_run,
+                    report: *report,
+                },
+                &catalog,
+                out,
+                err,
+            )
+        }
         Command::Serve {
             project,
             listen,
@@ -242,6 +270,179 @@ struct ExportReport<'a> {
     file: String,
     kind: &'a str,
     pages: usize,
+}
+
+#[derive(Serialize)]
+struct NewReport {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    file: String,
+}
+
+/// Write an empty project.
+fn new_project(
+    file: &Path,
+    name: Option<&str>,
+    force: bool,
+    report: OutputFormat,
+    out: &mut dyn Write,
+) -> Result<u8, CliError> {
+    if file.exists() && !force {
+        return Err(CliError::Usage(format!(
+            "{} exists; give `--force` to replace it",
+            file.display()
+        )));
+    }
+    let default_name = file.file_stem().map_or_else(
+        || "project".to_owned(),
+        |stem| stem.to_string_lossy().into_owned(),
+    );
+    let doc = Schematic::new(name.map_or(default_name, str::to_owned));
+    let text = circuit_project::to_string(&doc)
+        .map_err(|error| CliError::Usage(format!("{}: {error}", file.display())))?;
+    write_atomic(file, &text)?;
+    match report {
+        OutputFormat::Text => writeln!(out, "wrote  {}", file.display())?,
+        OutputFormat::Json => emit(
+            out,
+            &NewReport {
+                format: JSON_FORMAT,
+                command: "new",
+                ok: true,
+                file: file.display().to_string(),
+            },
+        )?,
+    }
+    Ok(EXIT_OK)
+}
+
+/// What `edit` was asked to do.
+struct EditRequest<'a> {
+    project: &'a Path,
+    apply: &'a Path,
+    output: Option<&'a Path>,
+    dry_run: bool,
+    report: OutputFormat,
+}
+
+#[derive(Serialize)]
+struct EditReport<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    operations: usize,
+    /// The elements the file named, with their kind and ID.
+    created: std::collections::BTreeMap<&'a str, CreatedElement>,
+    /// The file written, or `null` for a dry run.
+    wrote: Option<String>,
+    /// What the compiler finds in the result; not a failure of the edit.
+    errors: usize,
+    warnings: usize,
+    diagnostics: &'a [Diagnostic],
+}
+
+#[derive(Serialize)]
+struct CreatedElement {
+    kind: &'static str,
+    id: u64,
+}
+
+/// Apply an edit file to a project: all of it, or nothing.
+fn edit_project(
+    request: &EditRequest<'_>,
+    catalog: &ComponentCatalog,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<u8, CliError> {
+    let EditRequest {
+        project,
+        apply,
+        output,
+        dry_run,
+        report,
+    } = *request;
+    let text = read_text(project, MAX_PROJECT_BYTES)?;
+    let doc = match circuit_project::from_str(&text) {
+        Ok(doc) => doc,
+        Err(error) => {
+            let message = format!("{}: {error}", project.display());
+            return fail(report, "edit", &message, &[], out, err);
+        }
+    };
+    let file = read_text(apply, crate::edit::MAX_EDIT_BYTES)?;
+    let applied = match crate::edit::apply(doc, catalog, &file) {
+        Ok(applied) => applied,
+        // A file that is not an edit file is a usage error, like a
+        // malformed scenario; an operation that the project refuses is a
+        // failure of the edit, and nothing is written.
+        Err(error @ crate::edit::EditError::Invalid(_)) => {
+            return Err(CliError::Usage(format!("{}: {error}", apply.display())));
+        }
+        Err(error @ crate::edit::EditError::Refused { .. }) => {
+            let message = format!("{}: {error}", apply.display());
+            return fail(report, "edit", &message, &[], out, err);
+        }
+    };
+
+    let target = output.unwrap_or(project);
+    let wrote = if dry_run {
+        None
+    } else {
+        let text = circuit_project::to_string(&applied.doc)
+            .map_err(|error| CliError::Usage(format!("{}: {error}", target.display())))?;
+        write_atomic(target, &text)?;
+        Some(target.display().to_string())
+    };
+    let diagnostics = compile(&applied.doc, catalog).diagnostics;
+    let errors = count(&diagnostics, Severity::Error);
+    let warnings = count(&diagnostics, Severity::Warning);
+    match report {
+        OutputFormat::Text => {
+            let what = wrote.as_deref().map_or_else(
+                || "dry run, nothing written".to_owned(),
+                |path| format!("wrote {path}"),
+            );
+            writeln!(
+                out,
+                "applied {} operation(s); {what}; {errors} error(s), {warnings} warning(s)",
+                applied.operations
+            )?;
+            for (name, created) in &applied.created {
+                writeln!(out, "  {name}: {} {}", created.kind(), created.id())?;
+            }
+            for diagnostic in &diagnostics {
+                writeln!(err, "{diagnostic}")?;
+            }
+        }
+        OutputFormat::Json => emit(
+            out,
+            &EditReport {
+                format: JSON_FORMAT,
+                command: "edit",
+                ok: true,
+                operations: applied.operations,
+                created: applied
+                    .created
+                    .iter()
+                    .map(|(name, created)| {
+                        (
+                            name.as_str(),
+                            CreatedElement {
+                                kind: created.kind(),
+                                id: created.id(),
+                            },
+                        )
+                    })
+                    .collect(),
+                wrote,
+                errors,
+                warnings,
+                diagnostics: &diagnostics,
+            },
+        )?,
+    }
+    Ok(EXIT_OK)
 }
 
 /// What `export` draws and how.
