@@ -37,6 +37,7 @@ pub mod sheet;
 pub mod snapshot;
 pub mod supply;
 mod validate;
+pub mod xref;
 
 pub use builder::SchematicBuilder;
 pub use catalog::{
@@ -67,3 +68,4 @@ pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingC
 pub use supply::{
     Conductor, ConductorConflict, ConductorSet, PhaseSequence, SupplyKind, SupplyProfile,
 };
+pub use xref::{ContactRef, CrossReferences, Location, cross_references};

@@ -159,6 +159,15 @@ Texts are cut to the width of their cell. The page of a sheet in a PDF or SVG
 is exactly its frame; what lies outside is not drawn, and what crosses the
 edge is cut.
 
+Cross-references are drawn when the project has sheets and are never stored
+(`circuit_model::cross_references`). Under the designator of a coil (or a
+transformer primary) there is one line per contact of its device, as the first
+and last terminal number and the place of the contact, such as `13-14 1/2C`
+(sheet 1, column 2, row C) or `1-6 2/2B`; `-` stands for a contact outside
+every sheet. Beside each contact, under its designator, goes the place of the
+coil. Contacts are listed by sheet and zone, then by symbol. A device without
+a coil, such as a pushbutton or a thermal relay, has none.
+
 Validation: a number that is 0 or used twice is `OC-STR-015`
 (`DuplicateSheetNumber`); a frame with 0 or more than 26 zone columns or
 rows, a side of 0 or more than 1 000 grid units, a frame beyond the

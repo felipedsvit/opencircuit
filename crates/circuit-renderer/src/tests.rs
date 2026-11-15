@@ -1066,3 +1066,78 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn a_coil_lists_where_its_contacts_are_and_each_contact_says_where_its_coil_is() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = two_sheets();
+    // A seal-in contact of K1 beside its coil.
+    let coil_symbol = doc
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol_key.0 == "coil")
+        .unwrap()
+        .clone();
+    let id = doc.next_id;
+    doc.next_id += 1;
+    doc.symbols.push(circuit_model::SymbolInstance {
+        id: SymbolId(id),
+        symbol_key: circuit_model::SymbolKey("aux_no".to_owned()),
+        slot: Some(1),
+        position: GridPoint::new(coil_symbol.position.x + 6, coil_symbol.position.y),
+        ..coil_symbol
+    });
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    let coil = doc
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol_key.0 == "coil")
+        .unwrap();
+    let seal = doc
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol_key.0 == "aux_no")
+        .unwrap();
+    let labels_of = |id: SymbolId| -> Vec<&str> {
+        scene
+            .items
+            .iter()
+            .filter(|item| {
+                item.style == StyleKey::Label && item.subject == Some(Subject::Symbol(id))
+            })
+            .filter_map(|item| match &item.shape {
+                Shape::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    };
+    // The coil: designator, its terminals, then the seal-in contact with its
+    // terminals and place. Both are on sheet 1.
+    let on_coil = labels_of(coil.id);
+    assert!(on_coil.contains(&"K1"));
+    assert!(
+        on_coil.iter().any(|text| text.starts_with("13-14 1/")),
+        "{on_coil:?}"
+    );
+    // The contact: its coil is on sheet 1 too.
+    let on_contact = labels_of(seal.id);
+    assert!(
+        on_contact.iter().any(|text| text.starts_with("1/")),
+        "{on_contact:?}"
+    );
+}
+
+#[test]
+fn a_document_without_sheets_has_no_cross_reference_lines() {
+    let catalog = ComponentCatalog::builtin();
+
+    let scene = build_scene(&starter().doc, &catalog, None, &SceneOptions::default());
+
+    assert!(
+        !texts(&scene, StyleKey::Label)
+            .iter()
+            .any(|text| text.contains('/'))
+    );
+}

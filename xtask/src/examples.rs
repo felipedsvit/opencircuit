@@ -365,13 +365,14 @@ fn command() -> Built<Schematic> {
 /// K1, thermal overload F1 and motor M1. The trip contact of F1 is in series
 /// with the control circuit.
 fn starter() -> Built<Schematic> {
-    starter_at("Direct-online starter", 0)
+    starter_at("Direct-online starter", 0, 28)
 }
 
-/// [`starter`] with the power circuit `power_dx` grid units to the right.
-fn starter_at(name: &str, power_dx: i32) -> Built<Schematic> {
+/// [`starter`] with the power circuit `power_dx` grid units to the right and
+/// the 0 V tap at `bottom`.
+fn starter_at(name: &str, power_dx: i32, bottom: i32) -> Built<Schematic> {
     let mut sheet = Sheet::new(name);
-    let (p24, p0) = sheet.control_supply((0, 0), (0, 28))?;
+    let (p24, p0) = sheet.control_supply((0, 0), (0, bottom))?;
     let phases = sheet.power_supply(20_i32.saturating_add(power_dx), 0)?;
     let px = |x: i32| x.saturating_add(power_dx);
 
@@ -413,7 +414,9 @@ fn starter_at(name: &str, power_dx: i32) -> Built<Schematic> {
 /// K1 has its coil and its seal-in contact on sheet 1 and its main contacts
 /// on sheet 2.
 fn starter_sheets() -> Built<Schematic> {
-    let mut doc = starter_at("Partida direta", 100)?;
+    // The 0 V tap lies lower than in the plain starter, so that the contact
+    // list under the coil does not run into its label.
+    let mut doc = starter_at("Partida direta", 100, 36)?;
     doc.project.author = Some("OpenCircuit".to_owned());
     doc.project.company = Some("Exemplo".to_owned());
     doc.project.revision = Some("A".to_owned());
