@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "circuit": "sections-bridged.ocircuit",
+  "events": [
+    { "tick": 2, "action": "close", "device": "S2" }
+  ],
+  "until_tick": 6,
+  "expect": { "trace": "sections-bridged.trace", "diagnostics": [] }
+}

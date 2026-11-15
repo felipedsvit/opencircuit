@@ -1151,7 +1151,7 @@ Regras:
 | OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
 | OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
 | OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |
-| OC-SEM-004 | `ConflictingSupplies` | Error | não | Mesmo condutor fornecido por mais de um `SupplyId` |
+| OC-SEM-004 | `ConflictingSupplies` | Error | não | Mesmo condutor fornecido por mais de um `SupplyId`. **Retirado no M3** (seções, ADR-0005): não é mais emitido; o código fica reservado |
 | OC-SEM-005 | `DeviceWithoutSymbols` | Warning | não | Dispositivo sem nenhum símbolo |
 | OC-SEM-006 | `FloatingNet` | Warning | não | Rede com 2+ pontos inalcançável por qualquer fonte, mesmo com todos os switches fechados |
 | OC-SEM-007 | `NoSupply` | Warning | não | Documento com cargas e nenhuma fonte |

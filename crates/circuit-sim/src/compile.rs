@@ -14,16 +14,16 @@ use circuit_model::catalog::{
     PARAM_RATED_VOLTAGE_MV, PARAM_SECOND, PARAM_SUPPLY,
 };
 use circuit_model::{
-    ComponentCatalog, ComponentModel, Conductor, ConductorSet, Connection, Device, DeviceClass,
-    DeviceId, Diagnostic, DiagnosticCode, Endpoint, JunctionId, LayoutIndex, PhaseSequence, PinRef,
+    ComponentCatalog, ComponentModel, Conductor, Connection, Device, DeviceClass, DeviceId,
+    Diagnostic, DiagnosticCode, Endpoint, JunctionId, LayoutIndex, PhaseSequence, PinRef,
     Schematic, Subject, SupplyId, SupplyKind, SupplyProfile, SymbolDefinition, SymbolId,
     SymbolInstance, SymbolKey, SymbolKind, TimerMode, has_errors, is_orthogonal, sort_diagnostics,
 };
 
 use crate::compiled::{
     CompiledCircuit, CompiledDevice, CompiledLoad, CompiledPin, CompiledSource, CompiledSupply,
-    CompiledSwitch, DeviceIx, Drive, Level, LoadIx, LoadRule, NetIx, SigIx, SignalDef, SignalKind,
-    conflict_diagnostic,
+    CompiledSwitch, DeviceIx, Drive, GroupFeed, Level, LoadIx, LoadRule, NetIx, SigIx, SignalDef,
+    SignalKind, conflict_diagnostic,
 };
 use crate::fingerprint::{Fingerprint, Fnv64};
 use crate::union_find::UnionFind;
@@ -846,8 +846,6 @@ fn build(
         }
     }
 
-    check_conflicting_supplies(&sources, out);
-
     if !loads.is_empty() && sources.is_empty() {
         out.push(Diagnostic::new(
             DiagnosticCode::NoSupply,
@@ -863,16 +861,16 @@ fn build(
             permanent.union(switch.a.0, switch.b.0);
         }
     }
-    let mut permanent_groups: BTreeMap<u32, (ConductorSet, Vec<DeviceId>)> = BTreeMap::new();
+    let mut permanent_groups: BTreeMap<u32, (GroupFeed, Vec<DeviceId>)> = BTreeMap::new();
     for source in &sources {
         let group = permanent_groups
             .entry(permanent.find(source.net.0))
             .or_default();
-        group.0.insert(source.conductor);
+        group.0.add(source.conductor, source.supply);
         group.1.push(source.owner);
     }
-    for (conductors, owners) in permanent_groups.into_values() {
-        out.extend(conflict_diagnostic(conductors, &owners));
+    for (feed, owners) in permanent_groups.into_values() {
+        out.extend(conflict_diagnostic(feed, &owners));
     }
 
     // Reachability with every switch closed.
@@ -960,46 +958,6 @@ fn build(
     };
     circuit.fingerprint = fingerprint(&circuit);
     Some(circuit)
-}
-
-/// Each conductor may be provided by one supply profile only, so that the
-/// solver can carry conductor bits without losing where the voltage label
-/// comes from.
-fn check_conflicting_supplies(sources: &[CompiledSource], out: &mut Vec<Diagnostic>) {
-    let mut providers: BTreeMap<Conductor, BTreeMap<SupplyId, BTreeSet<DeviceId>>> =
-        BTreeMap::new();
-    for source in sources {
-        providers
-            .entry(source.conductor)
-            .or_default()
-            .entry(source.supply)
-            .or_default()
-            .insert(source.owner);
-    }
-    for (conductor, by_supply) in providers {
-        if by_supply.len() < 2 {
-            continue;
-        }
-        let mut devices: BTreeSet<DeviceId> = BTreeSet::new();
-        let mut related: Vec<Subject> = Vec::new();
-        for (supply, owners) in by_supply {
-            related.push(Subject::Supply(supply));
-            devices.extend(owners);
-        }
-        let mut devices = devices.into_iter();
-        let Some(first) = devices.next() else {
-            continue;
-        };
-        related.extend(devices.map(Subject::Device));
-        out.push(
-            Diagnostic::new(
-                DiagnosticCode::ConflictingSupplies,
-                Subject::Device(first),
-                format!("conductor `{conductor}` is provided by more than one supply"),
-            )
-            .with_related(related),
-        );
-    }
 }
 
 /// Nets made only of the second ends (`u2`, `v2`, `w2`) of six-terminal

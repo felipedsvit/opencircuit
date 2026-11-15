@@ -46,9 +46,9 @@ The circuit is present exactly when no diagnostic has error severity.
    main contacts are one switch per pole sharing the signal; fuse links and thermal
    elements are always closed; supply terminals are sources; coils, lamps,
    buzzers and motors are loads.
-5. **Static checks**: required terminals, devices without symbols, one supply
-   per conductor, loads without supply, permanent conductor conflicts (only
-   always-closed switches conduct), unused supplies, floating nets (with every
+5. **Static checks**: required terminals, devices without symbols, loads
+   without supply, permanent conductor conflicts (only always-closed switches
+   conduct, the table below applied with sections), unused supplies, floating nets (with every
    switch closed), loads permanently in series.
 
 The compiled circuit carries a 64-bit FNV-1a `fingerprint` of its canonical
@@ -60,10 +60,14 @@ encoding. Geometry and the project name do not affect it.
 pure function of the switch mask; an unchanged mask reuses the previous
 solution without recomputation.
 
+Every supply profile is a galvanically separate **section**: a conductor in
+a group is identified by its supply and its conductor, so two supplies may
+both provide `l1` or `n`. Protective earth `pe` is common to every section.
 Conflict table, applied to the conductors of each group:
 
 | Conductors in the group | Result |
 | --- | --- |
+| live conductors of two or more sections (`pe` aside) | `OC-ELEC-001` fault |
 | none or one | normal |
 | exactly `n` and `pe` | `OC-ELEC-003` warning; loads keep working |
 | `pe` with any live conductor | `OC-ELEC-002` fault |
@@ -85,7 +89,10 @@ Loads:
 …and the voltage label matches exactly: `dc` uses the DC nominal voltage,
 `line_neutral` the phase voltage of a three-phase supply or the nominal
 voltage of a single-phase supply, `line_line` and motors the three-phase
-nominal (line) voltage. Both conductors must come from the same supply.
+nominal (line) voltage. Both conductors must come from the same supply
+section; conductors of two sections across one load leave it off with
+`OC-ELEC-004`. `OC-SEM-004` (one conductor provided by two supplies) is no
+longer emitted since sections exist; the code stays reserved.
 
 - Wrong label or connection type: load off, `OC-ELEC-004` warning.
 - Both terminals in one group: load off, `OC-ELEC-005` warning.

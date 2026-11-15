@@ -18,7 +18,8 @@ use circuit_model::{
 
 use crate::bitset::BitSet;
 use crate::compiled::{
-    CompiledCircuit, CompiledLoad, LoadIx, LoadRule, NetIx, SwitchIx, conflict_diagnostic,
+    CompiledCircuit, CompiledLoad, GroupFeed, LoadIx, LoadRule, NetIx, SwitchIx,
+    conflict_diagnostic,
 };
 use crate::union_find::UnionFind;
 
@@ -142,7 +143,6 @@ impl ElectricalSolution {
 /// Voltage labels of the supply that provides a conductor.
 #[derive(Clone, Copy, Debug)]
 struct SupplyLabel {
-    supply: SupplyId,
     kind: SupplyKind,
     nominal_voltage_mv: u32,
     phase_voltage_mv: Option<u32>,
@@ -152,8 +152,9 @@ struct SupplyLabel {
 /// Loads that share conductor-less groups, and what feeds them from outside.
 #[derive(Default)]
 struct DeadComponent {
-    /// Conductors of the first live group reached through a load.
-    boundary: Option<ConductorSet>,
+    /// Conductors and section of the first live group reached through a
+    /// load.
+    boundary: Option<(ConductorSet, Option<SupplyId>)>,
     /// Whether live groups with different conductors were reached.
     mixed: bool,
     loads: BTreeSet<usize>,
@@ -166,7 +167,9 @@ pub struct Solver {
     groups: UnionFind,
     dead: UnionFind,
     faulted: Vec<bool>,
-    labels: BTreeMap<Conductor, SupplyLabel>,
+    /// The supply section of the live conductors of each group, by group.
+    sections: Vec<Option<SupplyId>>,
+    labels: BTreeMap<SupplyId, SupplyLabel>,
     solution: ElectricalSolution,
     last_mask: Option<SwitchMask>,
     solve_count: u64,
@@ -181,8 +184,7 @@ impl Solver {
         let mut labels = BTreeMap::new();
         for source in circuit.sources() {
             if let Some(supply) = circuit.supply(source.supply) {
-                labels.entry(source.conductor).or_insert(SupplyLabel {
-                    supply: supply.id,
+                labels.entry(supply.id).or_insert(SupplyLabel {
                     kind: supply.kind,
                     nominal_voltage_mv: supply.nominal_voltage_mv,
                     phase_voltage_mv: supply.phase_voltage_mv,
@@ -194,6 +196,7 @@ impl Solver {
             groups: UnionFind::new(nets),
             dead: UnionFind::new(nets),
             faulted: vec![false; nets as usize],
+            sections: vec![None; nets as usize],
             labels,
             solution: ElectricalSolution {
                 group_of_net: (0..nets).map(NetIx).collect(),
@@ -240,35 +243,36 @@ impl Solver {
             *group = NetIx(self.groups.find(net));
         }
 
-        // Conductors present in each group.
+        // Conductors present in each group, with their supply section.
         self.solution.conductors_of_group.fill(ConductorSet::EMPTY);
-        let mut owners: BTreeMap<u32, Vec<DeviceId>> = BTreeMap::new();
+        self.sections.fill(None);
+        let mut feeds: BTreeMap<u32, (GroupFeed, Vec<DeviceId>)> = BTreeMap::new();
         for source in circuit.sources() {
             let group = self.groups.find(source.net.raw());
-            if let Some(conductors) = self.solution.conductors_of_group.get_mut(group as usize) {
-                conductors.insert(source.conductor);
-            }
-            owners.entry(group).or_default().push(source.owner);
+            let feed = feeds.entry(group).or_default();
+            feed.0.add(source.conductor, source.supply);
+            feed.1.push(source.owner);
         }
 
         // Conflicts. A group in fault energizes nothing.
         let mut faults = Vec::new();
         self.faulted.fill(false);
-        for (group, devices) in &owners {
-            let conductors = self
-                .solution
-                .conductors_of_group
-                .get(*group as usize)
-                .copied()
-                .unwrap_or_default();
+        for (group, (feed, devices)) in &feeds {
+            let index = *group as usize;
+            if let Some(conductors) = self.solution.conductors_of_group.get_mut(index) {
+                *conductors = feed.conductors;
+            }
+            if let Some(section) = self.sections.get_mut(index) {
+                *section = feed.section;
+            }
             let in_fault = matches!(
-                conductors.conflict(),
+                feed.conflict(),
                 ConductorConflict::ShortCircuit | ConductorConflict::ProtectiveEarthFault
             );
-            if let Some(flag) = self.faulted.get_mut(*group as usize) {
+            if let Some(flag) = self.faulted.get_mut(index) {
                 *flag = in_fault;
             }
-            faults.extend(conflict_diagnostic(conductors, devices));
+            faults.extend(conflict_diagnostic(*feed, devices));
         }
 
         // Loads.
@@ -294,6 +298,11 @@ impl Solver {
             None => self.last_mask = Some(closed.clone()),
         }
         &self.solution
+    }
+
+    /// The supply section of the live conductors of a group.
+    fn section(&self, group: u32) -> Option<SupplyId> {
+        self.sections.get(group as usize).copied().flatten()
     }
 
     fn group_state(&self, net: NetIx) -> (u32, ConductorSet, bool) {
@@ -352,8 +361,9 @@ impl Solver {
             return (LoadState::Off, None);
         }
         match valid_pair(connection, set_a, set_b) {
-            Some((a, b)) => {
-                if self.expected_voltage(connection, a, b) == Some(rated_voltage_mv) {
+            Some(_) => {
+                let sections = (self.section(group_a), self.section(group_b));
+                if self.expected_voltage(connection, sections) == Some(rated_voltage_mv) {
                     (LoadState::On, None)
                 } else {
                     (
@@ -376,13 +386,18 @@ impl Solver {
         }
     }
 
-    /// Voltage label between two conductors, when one supply provides both.
-    fn expected_voltage(&self, connection: Connection, a: Conductor, b: Conductor) -> Option<u32> {
-        let label_a = self.labels.get(&a)?;
-        let label_b = self.labels.get(&b)?;
-        if label_a.supply != label_b.supply {
+    /// Voltage label between two conductors, when one supply section
+    /// provides both.
+    fn expected_voltage(
+        &self,
+        connection: Connection,
+        (section_a, section_b): (Option<SupplyId>, Option<SupplyId>),
+    ) -> Option<u32> {
+        let section = section_a?;
+        if section_b != Some(section) {
             return None;
         }
+        let label_a = self.labels.get(&section)?;
         match (connection, label_a.kind) {
             (Connection::Dc, SupplyKind::Dc)
             | (Connection::LineNeutral, SupplyKind::SinglePhase)
@@ -417,7 +432,7 @@ impl Solver {
             );
         }
 
-        match self.rotation(rated_voltage_mv, states.map(|(_, set, _)| set)) {
+        match self.rotation(rated_voltage_mv, states.map(|(group, set, _)| (group, set))) {
             Ok(Some(direction)) => (LoadState::Rotating(direction), None),
             Ok(None) => (LoadState::Off, None),
             Err(diagnostic) => (LoadState::Off, Some(diagnostic)),
@@ -430,9 +445,9 @@ impl Solver {
     fn rotation(
         &self,
         rated_voltage_mv: u32,
-        phases: [ConductorSet; 3],
+        lines: [(u32, ConductorSet); 3],
     ) -> Result<Option<Direction>, (DiagnosticCode, &'static str)> {
-        let phases = phases.map(ConductorSet::single);
+        let phases = lines.map(|(_, set)| set.single());
         let [Some(u), Some(v), Some(w)] = phases else {
             return Err(phase_loss());
         };
@@ -440,12 +455,11 @@ impl Solver {
             return Err(phase_loss());
         }
 
-        let Some(label) = self.labels.get(&u) else {
+        let [first, second, third] = lines.map(|(group, _)| self.section(group));
+        let Some(label) = first.and_then(|section| self.labels.get(&section)) else {
             return Ok(None);
         };
-        let same_supply = [v, w]
-            .iter()
-            .all(|phase| self.labels.get(phase).map(|l| l.supply) == Some(label.supply));
+        let same_supply = second == first && third == first;
         if !same_supply || label.nominal_voltage_mv != rated_voltage_mv {
             return Err((
                 DiagnosticCode::LoadSupplyMismatch,
@@ -530,7 +544,7 @@ impl Solver {
                 )),
             );
         };
-        match self.rotation(rated_voltage_mv, [u1.1, v1.1, w1.1]) {
+        match self.rotation(rated_voltage_mv, [(u1.0, u1.1), (v1.0, v1.1), (w1.0, w1.1)]) {
             Ok(Some(direction)) => (LoadState::RotatingWound(direction, winding), None),
             Ok(None) => (LoadState::Off, None),
             Err(diagnostic) => (LoadState::Off, Some(diagnostic)),
@@ -575,13 +589,14 @@ impl Solver {
             if let Some(device) = circuit.device(load.device) {
                 component.devices.insert(device.id);
             }
-            for (_, conductors, faulted) in states {
+            for (group, conductors, faulted) in states {
                 if conductors.is_empty() || faulted {
                     continue;
                 }
+                let feed = (conductors, self.section(group));
                 match component.boundary {
-                    None => component.boundary = Some(conductors),
-                    Some(boundary) if boundary != conductors => component.mixed = true,
+                    None => component.boundary = Some(feed),
+                    Some(boundary) if boundary != feed => component.mixed = true,
                     Some(_) => {}
                 }
             }

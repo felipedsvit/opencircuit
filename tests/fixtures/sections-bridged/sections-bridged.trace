@@ -1,0 +1,6 @@
+# opencircuit trace v1
+# fingerprint b1aeeff3d8ce85cd
+# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=halt
+t=2 input S2.closed 0->1
+t=2 fault OC-ELEC-001 started LA,L1
+t=2 runtime latched
