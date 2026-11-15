@@ -28,6 +28,7 @@ pub mod diagnostics;
 pub mod geometry;
 pub mod ids;
 pub mod input;
+pub mod labels;
 pub mod layout;
 pub mod library;
 pub mod limits;
@@ -50,6 +51,7 @@ pub use ids::{
     DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SupplyId, SymbolId, WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
+pub use labels::terminal_label;
 pub use layout::{
     Bend, LayoutIndex, is_orthogonal, orthogonal_route, orthogonal_route_bent, segment_at,
     segment_contains, stretch_route,

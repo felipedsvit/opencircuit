@@ -41,7 +41,7 @@ endobj
 
 5 0 obj
 <<
-  /Length 1619
+  /Length 1971
 >>
 stream
 1 J
@@ -231,8 +231,32 @@ ET
 0 0 0 rg
 BT
 /F1 8 Tf
+77 217.6 Td
+(11) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
+77 177.6 Td
+(12) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
 58 127.6 Td
 (S1) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
+37 147.6 Td
+(13) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
+37 107.6 Td
+(14) Tj
 ET
 0 0 0 rg
 BT
@@ -243,8 +267,32 @@ ET
 0 0 0 rg
 BT
 /F1 8 Tf
+77 77.6 Td
+(A1) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
+77 37.6 Td
+(A2) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
 138 127.6 Td
 (K1) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
+117 147.6 Td
+(13) Tj
+ET
+0 0 0 rg
+BT
+/F1 8 Tf
+117 107.6 Td
+(14) Tj
 ET
 endstream
 endobj
@@ -263,5 +311,5 @@ trailer
   /Root 1 0 R
 >>
 startxref
-2065
+2417
 %%EOF

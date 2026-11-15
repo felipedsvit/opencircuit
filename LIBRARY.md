@@ -102,7 +102,9 @@ catalog.
 | parameter `default` | `null` (mandatory parameter), a boolean, an integer or a string |
 
 Terminals, their keys and their positions come from the kind
-([`FORMAT.md`](FORMAT.md), "Terminal keys" and "Symbol geometry").
+([`FORMAT.md`](FORMAT.md), "Terminal keys" and "Symbol geometry"), and so
+do the terminal numbers drawn next to them, from the kind, the class and
+the slot: a library model gets the same markings as a built-in one.
 
 ## Artwork
 
