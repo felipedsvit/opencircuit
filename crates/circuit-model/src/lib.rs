@@ -33,6 +33,7 @@ pub mod layout;
 pub mod library;
 pub mod limits;
 pub mod schematic;
+pub mod sheet;
 pub mod snapshot;
 pub mod supply;
 mod validate;
@@ -48,7 +49,8 @@ pub use diagnostics::{
 };
 pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
-    DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SupplyId, SymbolId, WireId,
+    DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SheetId, SupplyId, SymbolId,
+    WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
 pub use labels::terminal_label;
@@ -60,6 +62,7 @@ pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,
 };
+pub use sheet::{Orientation, Sheet, SheetSize, Zone, Zones, sheet_at};
 pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingConnection};
 pub use supply::{
     Conductor, ConductorConflict, ConductorSet, PhaseSequence, SupplyKind, SupplyProfile,

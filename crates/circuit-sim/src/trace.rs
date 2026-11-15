@@ -268,5 +268,6 @@ fn subject_name(circuit: &CompiledCircuit, subject: &Subject) -> String {
         Subject::Pin(pin) => format!("pin#{}:{}", pin.symbol_id, pin.terminal.0),
         Subject::Wire(wire) => format!("wire#{wire}"),
         Subject::Junction(junction) => format!("junction#{junction}"),
+        Subject::Sheet(sheet) => format!("sheet#{sheet}"),
     }
 }

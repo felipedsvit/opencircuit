@@ -489,7 +489,7 @@ pub fn delete(
                 doc.wires.iter().find(|w| w.id == *id).ok_or_else(missing)?;
                 wires.insert(*id);
             }
-            Subject::Pin(_) | Subject::Supply(_) | Subject::Document => {}
+            Subject::Pin(_) | Subject::Supply(_) | Subject::Sheet(_) | Subject::Document => {}
         }
     }
 
@@ -585,7 +585,11 @@ pub(crate) fn movable(
             Subject::Junction(id) => {
                 junctions.insert(*id);
             }
-            Subject::Wire(_) | Subject::Pin(_) | Subject::Supply(_) | Subject::Document => {}
+            Subject::Wire(_)
+            | Subject::Pin(_)
+            | Subject::Supply(_)
+            | Subject::Sheet(_)
+            | Subject::Document => {}
         }
     }
     (symbols, junctions)

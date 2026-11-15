@@ -11,7 +11,7 @@ use std::fmt;
 use serde::Serialize;
 use serde::ser::Serializer;
 
-use crate::ids::{DeviceId, JunctionId, SupplyId, SymbolId, WireId};
+use crate::ids::{DeviceId, JunctionId, SheetId, SupplyId, SymbolId, WireId};
 use crate::schematic::PinRef;
 
 /// How serious a diagnostic is.
@@ -135,6 +135,13 @@ diagnostic_codes! {
     SelfLoopWire = "OC-STR-013", Structural, Error, latches = false;
     /// The in-memory document does not carry the current schema version.
     UnsupportedSchemaVersion = "OC-STR-014", Structural, Error, latches = false;
+    /// A sheet whose number another sheet has, or that is zero.
+    DuplicateSheetNumber = "OC-STR-015", Structural, Error, latches = false;
+    /// A sheet whose frame overlaps another, leaves the coordinate range,
+    /// has no zones, or has a size of zero or above the limit.
+    InvalidSheet = "OC-STR-016", Structural, Error, latches = false;
+    /// A wire that crosses the edge of a sheet: the printed sheets cut it.
+    WireCrossesSheet = "OC-STR-017", Structural, Warning, latches = false;
     /// The same reference designator is used by distinct devices.
     DuplicateReference = "OC-SEM-001", Semantic, Error, latches = false;
     /// A reference designator that does not match the allowed pattern.
@@ -230,6 +237,8 @@ pub enum Subject {
     Wire(WireId),
     /// A junction.
     Junction(JunctionId),
+    /// A drawing sheet.
+    Sheet(SheetId),
 }
 
 impl fmt::Display for Subject {
@@ -242,6 +251,7 @@ impl fmt::Display for Subject {
             Self::Pin(pin) => write!(f, "pin {}:{}", pin.symbol_id, pin.terminal.0),
             Self::Wire(id) => write!(f, "wire {id}"),
             Self::Junction(id) => write!(f, "junction {id}"),
+            Self::Sheet(id) => write!(f, "sheet {id}"),
         }
     }
 }
@@ -392,6 +402,9 @@ mod tests {
         ("OC-STR-012", "InvalidSupplyProfile", "error", false),
         ("OC-STR-013", "SelfLoopWire", "error", false),
         ("OC-STR-014", "UnsupportedSchemaVersion", "error", false),
+        ("OC-STR-015", "DuplicateSheetNumber", "error", false),
+        ("OC-STR-016", "InvalidSheet", "error", false),
+        ("OC-STR-017", "WireCrossesSheet", "warning", false),
         ("OC-SEM-001", "DuplicateReference", "error", false),
         ("OC-SEM-002", "InvalidReference", "error", false),
         ("OC-SEM-003", "MissingRequiredTerminal", "error", false),

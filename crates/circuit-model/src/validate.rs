@@ -7,8 +7,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::diagnostics::{Diagnostic, DiagnosticCode, Subject, sort_diagnostics};
-use crate::ids::{DeviceId, JunctionId, MAX_ENTITY_ID, SymbolId};
+use crate::geometry::GridRect;
+use crate::ids::{DeviceId, JunctionId, MAX_ENTITY_ID, SheetId, SymbolId};
 use crate::schematic::{CURRENT_SCHEMA_VERSION, Endpoint, Schematic};
+use crate::sheet::{MAX_SHEET_SIDE, MAX_ZONES};
 
 pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     let mut out = Vec::new();
@@ -20,6 +22,7 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     check_junction_degrees(doc, &mut out);
     check_designators(doc, &mut out);
     check_supply_profiles(doc, &mut out);
+    check_sheets(doc, &mut out);
 
     sort_diagnostics(&mut out);
     out
@@ -43,6 +46,7 @@ pub(crate) fn integrity(doc: &Schematic) -> Vec<Diagnostic> {
 
 /// Every entity of the document as `(raw id, subject)`.
 fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
+    let sheets = doc.sheets.iter().map(|s| (s.id.0, Subject::Sheet(s.id)));
     let supplies = doc.supplies.iter().map(|s| (s.id.0, Subject::Supply(s.id)));
     let devices = doc.devices.iter().map(|d| (d.id.0, Subject::Device(d.id)));
     let symbols = doc.symbols.iter().map(|s| (s.id.0, Subject::Symbol(s.id)));
@@ -51,7 +55,8 @@ fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
         .iter()
         .map(|j| (j.id.0, Subject::Junction(j.id)));
     let wires = doc.wires.iter().map(|w| (w.id.0, Subject::Wire(w.id)));
-    supplies
+    sheets
+        .chain(supplies)
         .chain(devices)
         .chain(symbols)
         .chain(junctions)
@@ -269,6 +274,92 @@ fn check_designators(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Sheet numbers are unique and positive; a frame has zones, a size within
+/// [`MAX_SHEET_SIDE`], stays in the coordinate range and does not overlap
+/// another frame.
+fn check_sheets(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    let mut numbers: BTreeMap<u32, BTreeSet<SheetId>> = BTreeMap::new();
+    for sheet in &doc.sheets {
+        numbers.entry(sheet.number).or_default().insert(sheet.id);
+    }
+    for (number, ids) in numbers {
+        let mut ids = ids.into_iter();
+        let Some(first) = ids.next() else {
+            continue;
+        };
+        let others: Vec<Subject> = ids.map(Subject::Sheet).collect();
+        if number == 0 || !others.is_empty() {
+            let text = if number == 0 {
+                "sheet number 0: sheets are numbered from 1".to_owned()
+            } else {
+                format!("sheet number {number} is used by more than one sheet")
+            };
+            out.push(
+                Diagnostic::new(
+                    DiagnosticCode::DuplicateSheetNumber,
+                    Subject::Sheet(first),
+                    text,
+                )
+                .with_related(others),
+            );
+        }
+    }
+
+    let mut frames: Vec<(SheetId, GridRect)> = Vec::new();
+    for sheet in &doc.sheets {
+        let invalid = |text: String| {
+            Diagnostic::new(DiagnosticCode::InvalidSheet, Subject::Sheet(sheet.id), text)
+        };
+        let zones = sheet.zones;
+        if !(1..=MAX_ZONES).contains(&zones.columns) || !(1..=MAX_ZONES).contains(&zones.rows) {
+            out.push(invalid(format!(
+                "sheet {} must have 1 to {MAX_ZONES} zone columns and rows",
+                sheet.number
+            )));
+        }
+        let (width, height) = sheet.extent();
+        if width == 0 || height == 0 || width > MAX_SHEET_SIDE || height > MAX_SHEET_SIDE {
+            out.push(invalid(format!(
+                "sheet {} must be 1 to {MAX_SHEET_SIDE} grid units on each side",
+                sheet.number
+            )));
+            continue;
+        }
+        let Some(frame) = sheet.frame() else {
+            out.push(invalid(format!(
+                "sheet {} leaves the coordinate range",
+                sheet.number
+            )));
+            continue;
+        };
+        frames.push((sheet.id, frame));
+    }
+    frames.sort_by_key(|(id, _)| *id);
+    for (index, (id, frame)) in frames.iter().enumerate() {
+        let overlapping: Vec<Subject> = frames
+            .iter()
+            .skip(index.saturating_add(1))
+            .filter(|(_, other)| {
+                frame.min.x < other.max.x
+                    && other.min.x < frame.max.x
+                    && frame.min.y < other.max.y
+                    && other.min.y < frame.max.y
+            })
+            .map(|(other, _)| Subject::Sheet(*other))
+            .collect();
+        if !overlapping.is_empty() {
+            out.push(
+                Diagnostic::new(
+                    DiagnosticCode::InvalidSheet,
+                    Subject::Sheet(*id),
+                    "the frame of this sheet overlaps another sheet",
+                )
+                .with_related(overlapping),
+            );
+        }
+    }
+}
+
 fn check_supply_profiles(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     for supply in &doc.supplies {
         if let Some(reason) = supply.inconsistency() {
@@ -292,6 +383,7 @@ mod tests {
         Device, Junction, ModelRef, PinRef, ReferenceDesignator, SymbolInstance, SymbolKey,
         TerminalKey, Wire,
     };
+    use crate::sheet::MAX_SHEET_SIDE;
     use crate::supply::{SupplyKind, SupplyProfile};
 
     fn device(id: u64, reference: &str) -> Device {
@@ -637,6 +729,88 @@ mod tests {
                 .collect();
             assert_eq!(doc.integrity_errors(), expected);
         }
+    }
+
+    fn sheet(id: u64, number: u32, x: i32) -> crate::Sheet {
+        crate::Sheet {
+            id: crate::SheetId(id),
+            number,
+            title: "sheet".to_owned(),
+            origin: GridPoint::new(x, 0),
+            size: crate::SheetSize::A4,
+            orientation: crate::Orientation::Landscape,
+            zones: crate::Zones {
+                columns: 8,
+                rows: 6,
+            },
+        }
+    }
+
+    #[test]
+    fn side_by_side_sheets_with_distinct_numbers_are_valid() {
+        let mut doc = valid();
+        doc.sheets = vec![sheet(7, 1, 0), sheet(8, 2, 84)];
+        doc.next_id = 9;
+
+        assert_eq!(codes(&doc), []);
+    }
+
+    #[test]
+    fn sheet_numbers_are_unique_and_start_at_one() {
+        let mut doc = valid();
+        doc.sheets = vec![sheet(7, 1, 0), sheet(8, 1, 100), sheet(9, 0, 200)];
+        doc.next_id = 10;
+
+        assert_eq!(
+            codes(&doc),
+            [
+                (
+                    DiagnosticCode::DuplicateSheetNumber,
+                    Subject::Sheet(SheetId(7))
+                ),
+                (
+                    DiagnosticCode::DuplicateSheetNumber,
+                    Subject::Sheet(SheetId(9))
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn overlapping_empty_huge_and_out_of_range_frames_are_refused() {
+        let mut doc = valid();
+        let mut no_zones = sheet(9, 3, 300);
+        no_zones.zones.columns = 0;
+        let mut huge = sheet(10, 4, 400);
+        huge.size = crate::SheetSize::Custom {
+            width: MAX_SHEET_SIDE + 1,
+            height: 10,
+        };
+        let far = sheet(11, 5, i32::MAX - 10);
+        doc.sheets = vec![sheet(7, 1, 0), sheet(8, 2, 50), no_zones, huge, far];
+        doc.next_id = 12;
+
+        let found = codes(&doc);
+        for id in [7, 9, 10, 11] {
+            assert!(
+                found.contains(&(DiagnosticCode::InvalidSheet, Subject::Sheet(SheetId(id)))),
+                "sheet {id}: {found:?}"
+            );
+        }
+        // An overlap is reported once, on the smaller ID.
+        assert!(!found.contains(&(DiagnosticCode::InvalidSheet, Subject::Sheet(SheetId(8)))));
+    }
+
+    #[test]
+    fn a_sheet_id_shared_with_another_entity_is_a_duplicate() {
+        let mut doc = valid();
+        doc.sheets = vec![sheet(2, 1, 0)];
+
+        assert!(
+            codes(&doc)
+                .iter()
+                .any(|(code, _)| *code == DiagnosticCode::DuplicateId)
+        );
     }
 
     #[test]

@@ -58,6 +58,7 @@ pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutp
     let mut diagnostics = schematic.validate();
     let resolved = resolve(schematic, catalog, &mut diagnostics);
     report_non_orthogonal_wires(schematic, catalog, &mut diagnostics);
+    report_wires_across_sheets(schematic, catalog, &mut diagnostics);
 
     let circuit = if has_errors(&diagnostics) {
         None
@@ -74,6 +75,46 @@ pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutp
     CompileOutput {
         circuit,
         diagnostics,
+    }
+}
+
+/// Warn about every wire that crosses the edge of a sheet frame: printed on
+/// separate pages, it would be cut. Sheets have no electrical meaning, so this
+/// never blocks the compilation (ADR-0011).
+fn report_wires_across_sheets(
+    schematic: &Schematic,
+    catalog: &ComponentCatalog,
+    out: &mut Vec<Diagnostic>,
+) {
+    if schematic.sheets.is_empty() {
+        return;
+    }
+    let layout = LayoutIndex::new(schematic, catalog);
+    for wire in &schematic.wires {
+        let Some(path) = layout.wire_polyline(wire) else {
+            continue;
+        };
+        let crossed: Vec<Subject> = schematic
+            .sheets
+            .iter()
+            .filter(|sheet| {
+                path.windows(2).any(|pair| match pair {
+                    [a, b] => sheet.zone_of(*a).is_some() != sheet.zone_of(*b).is_some(),
+                    _ => false,
+                })
+            })
+            .map(|sheet| Subject::Sheet(sheet.id))
+            .collect();
+        if !crossed.is_empty() {
+            out.push(
+                Diagnostic::new(
+                    DiagnosticCode::WireCrossesSheet,
+                    Subject::Wire(wire.id),
+                    format!("wire {} crosses the edge of a sheet", wire.id),
+                )
+                .with_related(crossed),
+            );
+        }
     }
 }
 

@@ -14,6 +14,89 @@ use super::*;
 /// The canonical text of [`sample`]. It fixes field order, indentation,
 /// explicit nulls, line endings and the final newline.
 const SAMPLE: &str = r#"{
+  "schema_version": 2,
+  "next_id": 6,
+  "project": {
+    "name": "demo",
+    "grid_unit": 10,
+    "author": null,
+    "company": null,
+    "revision": null,
+    "date": null
+  },
+  "sheets": [],
+  "supplies": [
+    {
+      "id": 1,
+      "kind": "dc",
+      "nominal_voltage_mv": 24000,
+      "phase_voltage_mv": null,
+      "frequency_millihz": null,
+      "phase_sequence": null
+    }
+  ],
+  "devices": [
+    {
+      "id": 2,
+      "reference": "P24",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_pos",
+        "supply": 1
+      }
+    }
+  ],
+  "symbols": [
+    {
+      "id": 3,
+      "device_id": 2,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": -4
+      },
+      "rotation": "deg0"
+    }
+  ],
+  "junctions": [
+    {
+      "id": 4,
+      "position": {
+        "x": 2,
+        "y": 0
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 5,
+      "from": {
+        "terminal": {
+          "symbol_id": 3,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 4
+      },
+      "route": [
+        {
+          "x": 1,
+          "y": 0
+        }
+      ]
+    }
+  ]
+}
+"#;
+
+/// [`SAMPLE`] as version 1 wrote it, before sheets and the title block: it
+/// loads through the migration to the same document.
+const SAMPLE_V1: &str = r#"{
   "schema_version": 1,
   "next_id": 6,
   "project": {
@@ -121,11 +204,37 @@ fn sample_with(from: &str, to: &str) -> String {
 fn schema_message(result: Result<Schematic, ProjectError>) -> String {
     match result {
         Err(ProjectError::Schema {
-            version: 1,
+            version: 2,
             message,
         }) => message,
         other => panic!("expected a schema error, got {other:?}"),
     }
+}
+
+#[test]
+fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_2() {
+    let loaded = from_str(SAMPLE_V1).unwrap();
+
+    assert_eq!(loaded, sample());
+    assert_eq!(to_string(&loaded).unwrap(), SAMPLE);
+}
+
+#[test]
+fn a_version_1_file_that_already_has_version_2_fields_is_refused() {
+    let with_sheets = SAMPLE_V1.replacen("\"supplies\"", "\"sheets\": [],\n  \"supplies\"", 1);
+    assert!(matches!(
+        from_str(&with_sheets),
+        Err(ProjectError::Migration { from: 1, .. })
+    ));
+    let with_author = SAMPLE_V1.replacen(
+        "\"grid_unit\": 10",
+        "\"grid_unit\": 10, \"author\": \"x\"",
+        1,
+    );
+    assert!(matches!(
+        from_str(&with_author),
+        Err(ProjectError::Migration { from: 1, .. })
+    ));
 }
 
 #[test]
@@ -296,13 +405,13 @@ fn negative_or_oversized_id_is_rejected() {
 
 #[test]
 fn newer_schema_is_refused_without_reading_the_rest() {
-    let text = r#"{ "schema_version": 2, "something": { "new": true } }"#;
+    let text = r#"{ "schema_version": 3, "something": { "new": true } }"#;
 
     assert_eq!(
         from_str(text),
         Err(ProjectError::NewerSchema {
-            found: 2,
-            supported: 1
+            found: 3,
+            supported: 2
         })
     );
 }
@@ -545,19 +654,72 @@ fn schematic() -> impl Strategy<Value = Schematic> {
             0..3,
         ),
         prop::collection::vec(wire(), 0..4),
+        prop::collection::vec(sheet(), 0..3),
+        prop::option::of(".{0,8}"),
     )
         .prop_map(
-            |((next_id, name, grid_unit), supplies, devices, symbols, junctions, wires)| {
+            |(
+                (next_id, name, grid_unit),
+                supplies,
+                devices,
+                symbols,
+                junctions,
+                wires,
+                sheets,
+                author,
+            )| {
                 Schematic {
                     schema_version: CURRENT_SCHEMA_VERSION,
                     next_id,
-                    project: ProjectMeta { name, grid_unit },
+                    project: ProjectMeta {
+                        name,
+                        grid_unit,
+                        author: author.clone(),
+                        company: author.clone(),
+                        revision: author.clone(),
+                        date: author,
+                    },
+                    sheets,
                     supplies,
                     devices,
                     symbols,
                     junctions,
                     wires,
                 }
+            },
+        )
+}
+
+fn sheet() -> impl Strategy<Value = circuit_model::Sheet> {
+    (
+        any::<u64>(),
+        any::<u32>(),
+        ".{0,8}",
+        point(),
+        prop_oneof![
+            Just(circuit_model::SheetSize::A4),
+            Just(circuit_model::SheetSize::A3),
+            Just(circuit_model::SheetSize::A2),
+            (any::<u32>(), any::<u32>())
+                .prop_map(|(width, height)| circuit_model::SheetSize::Custom { width, height }),
+        ],
+        any::<bool>(),
+        any::<u8>(),
+        any::<u8>(),
+    )
+        .prop_map(
+            |(id, number, title, origin, size, portrait, columns, rows)| circuit_model::Sheet {
+                id: circuit_model::SheetId(id),
+                number,
+                title,
+                origin,
+                size,
+                orientation: if portrait {
+                    circuit_model::Orientation::Portrait
+                } else {
+                    circuit_model::Orientation::Landscape
+                },
+                zones: circuit_model::Zones { columns, rows },
             },
         )
 }

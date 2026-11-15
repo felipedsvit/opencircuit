@@ -22,16 +22,21 @@ is fixed in the same change.
 - Unknown fields, repeated fields and repeated parameter keys are rejected.
   Unknown fields are not preserved.
 
-## Shape (schema version 1)
+## Shape (schema version 2)
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "next_id": 6,
   "project": {
     "name": "demo",
-    "grid_unit": 10
+    "grid_unit": 10,
+    "author": null,
+    "company": null,
+    "revision": null,
+    "date": null
   },
+  "sheets": [],
   "supplies": [
     {
       "id": 1,
@@ -118,10 +123,38 @@ Field values:
 | `params` values | boolean, integer or string; a supply or device reference is the integer ID |
 | supply terminal `conductor` | `l1`, `l2`, `l3`, `n`, `pe`, `dc_pos`, `dc_neg` |
 | load `connection` | `dc`, `line_neutral`, `line_line` |
+| `project.author`, `company`, `revision`, `date` | text for the title block, or `null`; the date is written by the author, the core has no clock |
+| `sheets[].size` | `a4`, `a3`, `a2`, or `{ "custom": { "width": <grid units>, "height": <grid units> } }` |
+| `sheets[].orientation` | `landscape`, `portrait` |
+| `sheets[].zones` | `{ "columns": 1..26, "rows": 1..26 }` |
 
 A supply profile must be consistent with its kind: DC has no frequency, phase
 voltage or sequence; single-phase has a frequency and no sequence;
 three-phase has a frequency and a sequence; voltages are positive.
+
+## Sheets
+
+A sheet is a frame over the canvas (ADR-0011): an `id` from the document
+counter, a `number` printed in the title block, a `title`, the `origin` of its
+top-left corner, a paper `size`, an `orientation` and its `zones`. Sheets have
+no electrical meaning; wires connect across them as everywhere else.
+
+- One grid unit is 10 points (about 3.53 mm), the PDF scale. A paper size is
+  the largest whole number of grid units that fits it, in landscape: A4 is
+  84 by 59, A3 119 by 84, A2 168 by 119. Portrait swaps the two.
+- Zones divide the frame evenly: columns are numbered from 1, left to right,
+  and rows lettered from A, top to bottom, so a point is in zone `4B`.
+- The sheet of a symbol is the frame that holds its origin. It is derived,
+  never stored; a symbol outside every frame is on no sheet.
+- A document without sheets is drawn and exported as one page sized to its
+  content, as in version 1.
+
+Validation: a number that is 0 or used twice is `OC-STR-015`
+(`DuplicateSheetNumber`); a frame with 0 or more than 26 zone columns or
+rows, a side of 0 or more than 1 000 grid units, a frame beyond the
+coordinate range, or two overlapping frames is `OC-STR-016`
+(`InvalidSheet`). The compiler warns with `OC-STR-017` (`WireCrossesSheet`)
+about a wire that crosses the edge of a frame, which printing would cut.
 
 ## Terminal keys
 
@@ -269,3 +302,4 @@ migration and an entry below.
 | Version | Change |
 | --- | --- |
 | 1 | First schema. |
+| 2 | `sheets`, and `author`, `company`, `revision` and `date` in `project` (ADR-0011). The migration adds no sheet and sets the four fields to `null`. |

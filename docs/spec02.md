@@ -1150,6 +1150,9 @@ Regras:
 | OC-STR-012 | `InvalidSupplyProfile` | Error | não | Campos do perfil de alimentação incoerentes com o tipo |
 | OC-STR-013 | `SelfLoopWire` | Error | não | Fio com os dois extremos no mesmo ponto |
 | OC-STR-014 | `UnsupportedSchemaVersion` | Error | não | Documento em memória fora da versão de schema atual |
+| OC-STR-015 | `DuplicateSheetNumber` | Error | não | Número de folha zero ou repetido (ADR-0011) |
+| OC-STR-016 | `InvalidSheet` | Error | não | Moldura sem zonas, de tamanho inválido, fora do intervalo de coordenadas ou sobreposta a outra |
+| OC-STR-017 | `WireCrossesSheet` | Warning | não | Fio que atravessa a borda de uma folha; a impressão o cortaria |
 | OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
 | OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
 | OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |

@@ -17,11 +17,12 @@ use serde::{Deserialize, Serialize};
 use crate::diagnostics::Diagnostic;
 use crate::geometry::{GridPoint, QuarterTurn};
 use crate::ids::{DeviceId, JunctionId, SymbolId, WireId};
+use crate::sheet::Sheet;
 use crate::supply::SupplyProfile;
 use crate::validate;
 
 /// Schema version written by this build.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// User-visible label of a device, such as `K1` or `S2`.
 ///
@@ -215,6 +216,15 @@ pub struct ProjectMeta {
     pub name: String,
     /// Editor hint for the grid pitch.
     pub grid_unit: u32,
+    /// Who drew the project, for the title block.
+    pub author: Option<String>,
+    /// Company or organization, for the title block.
+    pub company: Option<String>,
+    /// Revision mark, such as `B` or `1.2`, for the title block.
+    pub revision: Option<String>,
+    /// Date as the author writes it, for the title block; the core has no
+    /// clock and never fills it in.
+    pub date: Option<String>,
 }
 
 /// The schematic document.
@@ -227,6 +237,9 @@ pub struct Schematic {
     pub next_id: u64,
     /// Metadata.
     pub project: ProjectMeta,
+    /// Drawing sheets, frames over the canvas (ADR-0011). Empty: the
+    /// drawing is one page sized to its content.
+    pub sheets: Vec<Sheet>,
     /// Supply profiles.
     pub supplies: Vec<SupplyProfile>,
     /// Devices.
@@ -249,7 +262,12 @@ impl Schematic {
             project: ProjectMeta {
                 name: name.into(),
                 grid_unit: 10,
+                author: None,
+                company: None,
+                revision: None,
+                date: None,
             },
+            sheets: Vec::new(),
             supplies: Vec::new(),
             devices: Vec::new(),
             symbols: Vec::new(),
@@ -262,7 +280,8 @@ impl Schematic {
     /// [`sort_canonical`](Self::sort_canonical) would change nothing.
     #[must_use]
     pub fn is_canonical(&self) -> bool {
-        self.supplies.is_sorted_by_key(|supply| supply.id)
+        self.sheets.is_sorted_by_key(|sheet| sheet.id)
+            && self.supplies.is_sorted_by_key(|supply| supply.id)
             && self.devices.is_sorted_by_key(|device| device.id)
             && self.symbols.is_sorted_by_key(|symbol| symbol.id)
             && self.junctions.is_sorted_by_key(|junction| junction.id)
@@ -271,6 +290,7 @@ impl Schematic {
 
     /// Sort every collection by ID, the canonical order of a saved file.
     pub fn sort_canonical(&mut self) {
+        self.sheets.sort_by_key(|sheet| sheet.id);
         self.supplies.sort_by_key(|supply| supply.id);
         self.devices.sort_by_key(|device| device.id);
         self.symbols.sort_by_key(|symbol| symbol.id);

@@ -237,6 +237,7 @@ impl Editor {
             Subject::Wire(id) => doc.wires.iter().any(|w| w.id == *id),
             Subject::Supply(id) => doc.supplies.iter().any(|s| s.id == *id),
             Subject::Pin(pin) => doc.symbols.iter().any(|s| s.id == pin.symbol_id),
+            Subject::Sheet(id) => doc.sheets.iter().any(|s| s.id == *id),
             Subject::Document => true,
         };
         let selected = self.selection.len();
