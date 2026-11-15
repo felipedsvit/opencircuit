@@ -498,6 +498,127 @@ fn limit_switch_is_drawn_with_a_roller_and_emergency_stop_without() {
     assert!(styles_of(&scene, &Subject::Symbol(mushroom)).contains(&StyleKey::ContactClosed));
 }
 
+/// A line of a scene: start, end and style.
+type DrawnLine = ((i64, i64), (i64, i64), StyleKey);
+
+/// The built-in catalog with library `acme`: relay `acme.r2` whose NO
+/// contact has its own artwork, a blade open at rest and closed operated.
+fn acme_catalog() -> ComponentCatalog {
+    use circuit_model::library::{ArtPoint, ArtPrimitive, Artwork, Library};
+    use circuit_model::{
+        ComponentModel, DeviceClass, ParamDefinition, ParamType, Provenance, SymbolDefinition,
+        SymbolKind,
+    };
+    let p = |x, y| ArtPoint { x, y };
+    let leads = || {
+        vec![
+            ArtPrimitive::Line {
+                from: p(0, -20),
+                to: p(0, -8),
+            },
+            ArtPrimitive::Line {
+                from: p(0, 8),
+                to: p(0, 20),
+            },
+        ]
+    };
+    let with_blade = |tip: ArtPoint| {
+        let mut list = leads();
+        list.push(ArtPrimitive::Line {
+            from: p(0, 8),
+            to: tip,
+        });
+        list
+    };
+    let params = vec![
+        ParamDefinition {
+            key: "rated_voltage_mv".to_owned(),
+            ty: ParamType::Int {
+                min: 1,
+                max: i64::from(u32::MAX),
+            },
+            default: None,
+        },
+        ParamDefinition {
+            key: "connection".to_owned(),
+            ty: ParamType::Enum(vec!["dc".to_owned()]),
+            default: None,
+        },
+    ];
+    let relay = ComponentModel::new(
+        "acme.r2",
+        1,
+        DeviceClass::Relay,
+        params,
+        vec![
+            SymbolDefinition::new("coil", SymbolKind::Coil, 1, 1, false),
+            SymbolDefinition::new("no", SymbolKind::ContactNo, 0, 2, true).with_artwork(Artwork {
+                rest: with_blade(p(-7, -7)),
+                operated: Some(with_blade(p(0, -8))),
+            }),
+        ],
+        Provenance {
+            origin: "test".to_owned(),
+            license: "MIT".to_owned(),
+            standard_reference: None,
+        },
+    );
+    ComponentCatalog::builtin()
+        .with_library(Library {
+            id: "acme".to_owned(),
+            version: 1,
+            name: "ACME".to_owned(),
+            provenance: Provenance {
+                origin: "test".to_owned(),
+                license: "MIT".to_owned(),
+                standard_reference: None,
+            },
+            models: vec![relay],
+        })
+        .unwrap()
+}
+
+#[test]
+fn library_artwork_replaces_the_kind_artwork_and_follows_the_state() {
+    let catalog = acme_catalog();
+    let mut b = SchematicBuilder::new("library");
+    let relay = b
+        .device(
+            "K1",
+            "acme.r2",
+            &[
+                ("rated_voltage_mv", ParamValue::Int(24_000)),
+                ("connection", ParamValue::Text("dc".to_owned())),
+            ],
+        )
+        .unwrap();
+    b.symbol(relay, "coil", None, GridPoint::new(8, 0)).unwrap();
+    let contact = b
+        .symbol(relay, "no", Some(1), GridPoint::new(0, 0))
+        .unwrap();
+    let doc = b.finish();
+    let lines = |scene: &crate::Scene| -> Vec<DrawnLine> {
+        scene
+            .items
+            .iter()
+            .filter(|item| item.subject == Some(Subject::Symbol(contact)))
+            .filter_map(|item| match item.shape {
+                Shape::Line { from, to } => Some(((from.x, from.y), (to.x, to.y), item.style)),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut picked_up = snapshot();
+    picked_up.active_devices = vec![relay];
+
+    let at_rest = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let operated = build_scene(&doc, &catalog, Some(&picked_up), &SceneOptions::default());
+
+    assert_eq!(lines(&at_rest).len(), 3);
+    assert!(lines(&at_rest).contains(&((0, 8), (-7, -7), StyleKey::Symbol)));
+    assert!(lines(&operated).contains(&((0, 8), (0, -8), StyleKey::ContactClosed)));
+}
+
 #[test]
 fn timer_coil_shows_elapsed_and_preset_ticks() {
     let catalog = ComponentCatalog::builtin();

@@ -255,7 +255,11 @@ fn draw_symbol(
     };
 
     let at = origin(symbol);
-    for (shape, style) in symbols::art(kind, operator, look) {
+    let drawing = match definition.artwork() {
+        Some(artwork) => symbols::library_art(artwork, look),
+        None => symbols::art(kind, operator, look),
+    };
+    for (shape, style) in drawing {
         // A shape that cannot be placed is beyond the coordinate range; it
         // is left out rather than drawn somewhere else.
         if let Some(placed) = symbols::place(&shape, symbol.rotation, at) {

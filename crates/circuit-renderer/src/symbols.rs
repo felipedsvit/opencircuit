@@ -8,6 +8,7 @@
 //! top to bottom, with its leads ending exactly on the terminal offsets of the
 //! catalog. It stays inside the bounds of its kind, except for texts.
 
+use circuit_model::library::{ArtPoint, ArtPrimitive, Artwork};
 use circuit_model::{MotorState, QuarterTurn, SymbolKind, WindingConnection, catalog::POLE_PITCH};
 
 use crate::scene::{Anchor, SUBUNITS_PER_GRID, ScenePoint, SceneRect, Shape, StyleKey};
@@ -234,6 +235,71 @@ fn motor(look: Look, out: &mut Vec<(Shape, StyleKey)>) {
     ));
     out.push((text((0, 26), "M"), StyleKey::Label));
     out.push((text((0, 40), "3~"), StyleKey::Label));
+}
+
+/// The drawing of a library symbol (ADR-0008) in local subunits: its
+/// `operated` list while the device is operated (button held, switch
+/// closed, contactor or relay picked up, timer out, relay tripped) when it
+/// has one, otherwise its `rest` list. Lines take the style of the state,
+/// texts are labels.
+pub(crate) fn library_art(artwork: &Artwork, look: Look) -> Vec<(Shape, StyleKey)> {
+    let operated = look.actuated || look.active || look.tripped;
+    let list = match (&artwork.operated, operated) {
+        (Some(list), true) => list,
+        _ => &artwork.rest,
+    };
+    let style = if operated && artwork.operated.is_some() {
+        StyleKey::ContactClosed
+    } else if look.tripped {
+        StyleKey::Tripped
+    } else if look.energized {
+        StyleKey::Energized
+    } else if let Some(motor) = look.motor {
+        StyleKey::Motor(motor)
+    } else {
+        StyleKey::Symbol
+    };
+    let at = |p: &ArtPoint| point(i64::from(p.x), i64::from(p.y));
+    list.iter()
+        .map(|primitive| match primitive {
+            ArtPrimitive::Line { from, to } => (
+                Shape::Line {
+                    from: at(from),
+                    to: at(to),
+                },
+                style,
+            ),
+            ArtPrimitive::Polyline(points) => {
+                (Shape::Polyline(points.iter().map(at).collect()), style)
+            }
+            ArtPrimitive::Rect { from, to } => (
+                Shape::Rect(SceneRect::from_corners(at(from), at(to))),
+                style,
+            ),
+            ArtPrimitive::Circle { center, radius } => (
+                Shape::Circle {
+                    center: at(center),
+                    radius: i64::from(*radius),
+                },
+                style,
+            ),
+            ArtPrimitive::Dot { center, radius } => (
+                Shape::Dot {
+                    center: at(center),
+                    radius: i64::from(*radius),
+                },
+                style,
+            ),
+            ArtPrimitive::Text { at: anchor, text } => (
+                Shape::Text {
+                    at: at(anchor),
+                    text: text.clone(),
+                    anchor: Anchor::Center,
+                },
+                StyleKey::Label,
+            ),
+        })
+        .collect()
 }
 
 /// The drawing of one symbol in local subunits.

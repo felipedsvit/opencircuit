@@ -108,7 +108,12 @@ Terminals, their keys and their positions come from the kind
 
 A symbol without `artwork` is drawn with the artwork of its kind. With
 artwork, `rest` is drawn at rest and `operated`, when present, while the
-contact is closed or the actuator held.
+device is operated: a pushbutton held, a maintained switch closed, a
+contactor or relay picked up, a timer output high, a thermal relay tripped
+(so a normally closed contact draws itself open in `operated`). The lines
+take the style of the state (operated, energized, tripped, motor running)
+and texts are labels, as for built-in symbols. Terminal positions, and
+therefore wires, never depend on the artwork.
 
 Coordinates are integers in scene subunits (ten per grid unit) around the
 symbol origin, unrotated, `y` downwards. Primitives:
