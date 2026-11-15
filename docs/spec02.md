@@ -1475,7 +1475,7 @@ O CI nunca executa `--update-golden`. Quando a aplicação web entrar em desenvo
 O exportador recebe `Scene` (coordenadas lógicas e estilos semânticos), não estruturas de egui. Formatos planejados:
 
 - **SVG:** escrito diretamente a partir da `Scene`; é texto e dispensa biblioteca.
-- **PDF:** biblioteca a escolher por licença, qualidade e portabilidade, após um spike curto de comparação **[a validar]**.
+- **PDF:** **[decidido]** no M3 após spike: `pdf-writer` (MIT OR Apache-2.0, poucas dependências, compila no MSRV 1.85 e em WASM), uma página do tamanho do desenho, texto em Courier (fonte padrão, sem embutir) e bytes determinísticos ([ADR-0006](adr/0006-pdf-export.md)).
 - PNG ou outros formatos vetoriais, se necessário.
 
 A exportação é executável pela CLI.
@@ -1650,6 +1650,7 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-003](adr/0003-conductor-model.md) | Modelo de condutores (máscara de bits, um perfil por condutor), regras de conflito e limites do solver discreto |
 | [ADR-004](adr/0004-canonical-json-format.md) | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
 | [ADR-005](adr/0005-m3-circuit-semantics.md) | M3: seções de alimentação, contatos comutadores e versões de modelo, intertravamento mecânico e enrolamentos do motor de seis terminais |
+| [ADR-006](adr/0006-pdf-export.md) | Exportação PDF com `pdf-writer`: página do tamanho do desenho, texto em Courier, bytes determinísticos |
 
 ---
 
@@ -1713,7 +1714,7 @@ Questões que são decisão de contrato, pois definem arquivo e testes, estão f
 | 4 | Roteamento automático do editor | **[a validar]**: primeira versão com traçado ortogonal e waypoints manuais; roteador automático depois | §6.6, M2 |
 | 5 | Persistência e migração do catálogo | **Decidido**: recusa de campos e schema desconhecidos; `ModelRef` com versão e `ModelMigration` | §7, §15 |
 | 6 | WASM | **[a validar]**: núcleo verificado em CI; dependências e recursos de UI da aplicação ainda a avaliar | §17.6, M4 |
-| 7 | Exportação | **Decidido** para SVG (escrita direta); PDF depende de spike de uma jornada comparando bibliotecas | §18.1 |
+| 7 | Exportação | **Decidido**: SVG por escrita direta; PDF com `pdf-writer` após spike ([ADR-0006](adr/0006-pdf-export.md)) | §18.1 |
 | 8 | Diagnósticos bloqueantes ou avisos | **Decidido**: tabela de códigos e severidades | §13.2 |
 | 9 | Tolerância de tensão nos rótulos de carga | **[a validar]** (hoje igualdade inteira) | §9.4 |
 | 10 | Atraso de atuação por dispositivo | **[adiado]** | §10.5 |
