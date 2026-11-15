@@ -9,4 +9,5 @@
 *.md text eol=lf
 *.toml text eol=lf
 *.pdf binary
+*.ttf binary
 *.oclib text eol=lf
