@@ -17,3 +17,4 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0003](0003-conductor-model.md) | Conductor bit set, one profile per conductor (superseded by 0005), conflict table, two-level connectivity |
 | [0004](0004-canonical-json-format.md) | Canonical JSON without floating point, two-phase reading, version policy |
 | [0005](0005-m3-circuit-semantics.md) | Supply sections, changeover contacts and model versions, mechanical interlock, six-terminal motor windings |
+| [0006](0006-pdf-export.md) | PDF export with `pdf-writer`: one page sized to the drawing, Courier text, deterministic bytes |
