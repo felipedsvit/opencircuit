@@ -29,6 +29,7 @@ pub mod geometry;
 pub mod ids;
 pub mod input;
 pub mod layout;
+pub mod library;
 pub mod limits;
 pub mod schematic;
 pub mod snapshot;
