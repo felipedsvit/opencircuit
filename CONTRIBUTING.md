@@ -2,9 +2,11 @@
 
 ## Before you start
 
-Read [`ARCHITECTURE.md`](ARCHITECTURE.md) and the relevant sections of
-[`docs/spec02.md`](docs/spec02.md). The project is pre-implementation; contracts are still being
-stabilized, so open an issue before large changes.
+Read [`ARCHITECTURE.md`](ARCHITECTURE.md), [`ROADMAP.md`](ROADMAP.md) and
+the relevant sections of [`docs/spec02.md`](docs/spec02.md). Open an issue
+before large changes, and say on the issue that you are working on it. If you
+use a coding agent, [`AGENTS.md`](AGENTS.md) holds the rules it follows; you
+answer for what it changes.
 
 ## Development setup
 
@@ -21,6 +23,11 @@ cargo run -p opencircuit-cli -- test examples tests/fixtures
 cargo deny check
 ```
 
+The desktop application needs Rust 1.95; the other crates keep the MSRV 1.85
+(`cargo +1.85 test --workspace --exclude opencircuit-desktop --locked`). The
+browser build is checked with
+`cargo clippy --locked --target wasm32-unknown-unknown -p opencircuit-desktop -- -D warnings`.
+
 ## Rules
 
 - Code identifiers, test names and diagnostic messages are English.
@@ -36,6 +43,36 @@ cargo deny check
 - Every behavior change needs a regression test.
 - Every schema change needs a migration.
 - Every component declares its terminals and provenance.
+
+## Contributing components
+
+There are two ways to add a component, depending on whether OpenCircuit
+already knows how it behaves.
+
+**A variant of an existing behaviour** (a relay with other contacts, a
+pushbutton with another operator, a vendor's contactor): write a library.
+It needs no change to OpenCircuit and can be distributed on its own.
+
+- Follow [`LIBRARY.md`](LIBRARY.md). Choose a namespace of your own; do not
+  use the name of a vendor or product you are not entitled to use.
+- Fill in `provenance` truthfully: who drew it, its licence (an SPDX
+  expression) and the standard it follows, if any.
+- Draw the artwork yourself from the documented conventions. Do not trace
+  or copy symbols from IEC 60617 files, CAD products or vendor catalogs.
+- Check it: `opencircuit validate <project> --library <your.oclib>` on a
+  project that uses each model, and a scenario with a golden trace
+  (`SIMULATION.md`) for its behaviour.
+
+A library may be proposed for `examples/` when it shows something the
+existing example does not; it is then generated and tested like the other
+examples.
+
+**A new behaviour** (a new class of device, a new symbol kind, a new
+signal): this changes the simulator and the file format, so it starts with
+an issue describing the behaviour, then usually an ADR under `docs/adr/`.
+The change updates the catalog, the compiler, `SIMULATION.md` or
+`FORMAT.md`, the renderer, an example with golden traces and the
+permutation property tests, in one pull request.
 
 ## Commits and pull requests
 
@@ -54,4 +91,6 @@ licenses and are checked by `cargo-deny`.
 
 Create project-owned symbols following documented electrotechnical conventions.
 Do not copy IEC 60617 or third-party symbol files without verifying the license.
-Record origin, revision and normative reference in the symbol metadata.
+Record origin, revision and normative reference in the symbol metadata (for a
+library, in its `provenance`). A file asset under `assets/` is recorded with
+author, source and licence in `ATTRIBUTION.md` in the same change.
