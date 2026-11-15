@@ -18,3 +18,6 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0004](0004-canonical-json-format.md) | Canonical JSON without floating point, two-phase reading, version policy |
 | [0005](0005-m3-circuit-semantics.md) | Supply sections, changeover contacts and model versions, mechanical interlock, six-terminal motor windings |
 | [0006](0006-pdf-export.md) | PDF export with `pdf-writer`: one page sized to the drawing, Courier text, deterministic bytes |
+| [0007](0007-control-transformer.md) | Control transformer: secondary live from the tick after the primary is energized |
+| [0008](0008-extension-libraries.md) | Extension libraries: data only, namespaced models, own artwork, no code |
+| [0009](0009-industrial-io.md) | Industrial I/O: Modbus TCP server, codec in the core, socket in the CLI, safety limits |

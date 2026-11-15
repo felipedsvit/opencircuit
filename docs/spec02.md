@@ -104,8 +104,8 @@ A compatibilidade WASM é requisito de portabilidade do **núcleo** (`circuit-mo
 - Simulação analógica geral; cálculo de tensão, corrente, impedância e transitórios.
 - Pneumática e hidráulica.
 - PLC real e execução de programas Ladder completos.
-- Modbus, OPC UA e MQTT.
-- Plugins WASM e catálogos externos.
+- Modbus, OPC UA e MQTT (M4: servidor Modbus TCP, [ADR-0009](adr/0009-industrial-io.md); OPC UA e MQTT avaliados).
+- Plugins com código (WASM) e catálogos externos (M4: bibliotecas só de dados, [ADR-0008](adr/0008-extension-libraries.md); plugins com código fora do escopo).
 - Colaboração em tempo real.
 - Importação de arquivos proprietários do CADe SIMU.
 - Certificação ou validação normativa de instalações reais.
@@ -592,7 +592,7 @@ pub struct ParamDefinition { pub key: String, pub ty: ParamType, pub default: Pa
 
 **Versionamento:** um modelo publicado é imutável; mudar chave de terminal, semântica ou parâmetros cria uma nova `version`. O arquivo guarda `(id, version)`. Ao carregar, uma versão desconhecida gera `UnknownModel`; uma versão antiga com regra de compatibilidade registrada é migrada (`ModelMigration`) e a migração é testada.
 
-**Origem do catálogo no MVP:** definido em código Rust (tipado e testado). Catálogo orientado a dados e extensões externas ficam **[adiados]** (M4).
+**Origem do catálogo no MVP:** definido em código Rust (tipado e testado). No M4, bibliotecas de terceiros só de dados estendem o catálogo, reusando as classes de comportamento do núcleo ([ADR-0008](adr/0008-extension-libraries.md)).
 
 Modelos iniciais:
 
@@ -1651,6 +1651,9 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-004](adr/0004-canonical-json-format.md) | Formato JSON canônico sem ponto flutuante, versionamento, leitura em duas fases e recusa de schema mais novo |
 | [ADR-005](adr/0005-m3-circuit-semantics.md) | M3: seções de alimentação, contatos comutadores e versões de modelo, intertravamento mecânico e enrolamentos do motor de seis terminais |
 | [ADR-006](adr/0006-pdf-export.md) | Exportação PDF com `pdf-writer`: página do tamanho do desenho, texto em Courier, bytes determinísticos |
+| [ADR-007](adr/0007-control-transformer.md) | M4: transformador de comando, secundário vivo no tick seguinte (`Powered`), `OC-SEM-010` |
+| [ADR-008](adr/0008-extension-libraries.md) | M4: bibliotecas de extensão só de dados (namespace, proveniência, desenho próprio) |
+| [ADR-009](adr/0009-industrial-io.md) | M4: E/S industrial como servidor Modbus TCP; codec no núcleo, socket na CLI; limites de segurança |
 
 ---
 
@@ -1713,19 +1716,19 @@ Questões que são decisão de contrato, pois definem arquivo e testes, estão f
 | 3 | Tick fixo | **Decidido**: padrão de 1 ms. Medição M3 ([`benchmarks.md`](benchmarks.md)): com 2.000 componentes, ~2,6 ms de cena e ~0,25 ms por tick num circuito que comuta a cada tick (~4 ms por frame em tempo real); 5.000 ainda cabem ao visualizar e simular; 10.000 excedem o frame (cena 13–15 ms, comutação constante ~23 ms por frame, arraste ~55 ms). Otimizações (cache de integridade, culling, buffers do solver) só quando um documento real precisar | §10.1, §14.5 |
 | 4 | Roteamento automático do editor | **[a validar]**: primeira versão com traçado ortogonal e waypoints manuais; roteador automático depois | §6.6, M2 |
 | 5 | Persistência e migração do catálogo | **Decidido**: recusa de campos e schema desconhecidos; `ModelRef` com versão e `ModelMigration` | §7, §15 |
-| 6 | WASM | **[a validar]**: núcleo verificado em CI; dependências e recursos de UI da aplicação ainda a avaliar | §17.6, M4 |
+| 6 | WASM | **Decidido** (M4): aplicação web compilada e verificada no CI, sem publicação no M4; núcleo verificado em CI desde o M1 | §17.6, M4 |
 | 7 | Exportação | **Decidido**: SVG por escrita direta; PDF com `pdf-writer` após spike ([ADR-0006](adr/0006-pdf-export.md)) | §18.1 |
 | 8 | Diagnósticos bloqueantes ou avisos | **Decidido**: tabela de códigos e severidades | §13.2 |
 | 9 | Tolerância de tensão nos rótulos de carga | **[a validar]** (hoje igualdade inteira) | §9.4 |
 | 10 | Atraso de atuação por dispositivo | **[adiado]** | §10.5 |
 | 11 | Detecção automática de oscilação | **[adiado]** (diagnóstico opcional) | §10.5 |
 | 12 | Rearme automático e curva do térmico | **[adiado]** | §10.3 |
-| 13 | Catálogo orientado a dados e extensões | **[adiado]** (M4) | §7 |
+| 13 | Catálogo orientado a dados e extensões | **Decidido** (M4): bibliotecas JSON só de dados, com namespace, proveniência e desenho próprio ([ADR-0008](adr/0008-extension-libraries.md)) | §7 |
 | 14 | Intervalo de checkpoints | **[a validar]** | §17.4 |
 | 15 | Política de falha padrão | **Decidido**: `Halt` (fail-closed); `Report` é opt-in | §10.6 |
 | 16 | Esquema de códigos de diagnóstico | **Decidido**: `OC-<CAT>-NNN`, com severidade e coluna de trava | §13.2 |
 | 17 | Seções de alimentação | **Decidido** (M3): condutor identificado por seção; ligar seções é curto; `PE` comum ([ADR-0005](adr/0005-m3-circuit-semantics.md)) | §6.7, §9.3 |
-| 18 | Transformador de comando | **[adiado]** (M4): exigiria fonte condicional no solver | §6.7 |
+| 18 | Transformador de comando | **Decidido** (M4): secundário vivo no tick seguinte ao primário energizado, sinal `Powered` ([ADR-0007](adr/0007-control-transformer.md)) | §6.7 |
 | 19 | Intertravamento mecânico | **Decidido** (M3): quebra antes de fechar; subida simultânea → nenhum sobe, aviso `OC-ELEC-007` ([ADR-0005](adr/0005-m3-circuit-semantics.md)) | §10 |
 
 Respostas ainda abertas devem ser registradas em ADR ou neste documento.
