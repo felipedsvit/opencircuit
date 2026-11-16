@@ -1305,3 +1305,113 @@ mod hostile {
         }
     }
 }
+
+// Symbol-only devices (ADR-0013).
+
+/// The built-in catalog plus `test.diode`, a symbol-only device with two
+/// terminals.
+fn symbolic_catalog() -> circuit_model::ComponentCatalog {
+    use circuit_model::catalog::{ComponentModel, DeviceClass, Provenance, SymbolDefinition};
+    let mut models = circuit_model::ComponentCatalog::builtin().models().to_vec();
+    models.push(ComponentModel::new(
+        "test.diode",
+        1,
+        DeviceClass::Symbolic,
+        Vec::new(),
+        vec![SymbolDefinition::new(
+            "body",
+            circuit_model::SymbolKind::Block2,
+            1,
+            1,
+            false,
+        )],
+        Provenance {
+            origin: "test".to_owned(),
+            license: "MIT OR Apache-2.0".to_owned(),
+            standard_reference: None,
+        },
+    ));
+    circuit_model::ComponentCatalog::new(models).unwrap_or_else(|error| panic!("{error}"))
+}
+
+/// P24 → A1 (symbol-only, between `t1` and `t2`) → H1 → P0.
+fn lamp_behind_a_symbolic_device() -> (Schematic, SymbolId) {
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let a1 = rig.part("A1", "test.diode", "body", &[]);
+    let lamp = rig.part("H1", "lamp.generic", "lamp", &dc_load());
+    rig.wire(out(p24), pin(a1, "t1"));
+    rig.wire(pin(a1, "t2"), pin(lamp, "x1"));
+    rig.wire(pin(lamp, "x2"), out(p0));
+    (rig.finish(), a1)
+}
+
+#[test]
+fn a_symbolic_device_is_reported_as_not_simulated_and_blocks_nothing() {
+    let (doc, _) = lamp_behind_a_symbolic_device();
+
+    let output = compile(&doc, &symbolic_catalog());
+
+    let reported: Vec<_> = output
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code() == DiagnosticCode::NotSimulated)
+        .collect();
+    assert_eq!(reported.len(), 1, "{:#?}", output.diagnostics);
+    assert_eq!(reported[0].severity(), circuit_model::Severity::Info);
+    assert!(matches!(reported[0].subject(), Subject::Device(_)));
+    assert!(!circuit_model::has_errors(&output.diagnostics));
+    assert!(output.circuit.is_some());
+}
+
+#[test]
+fn a_symbolic_device_adds_no_switch_source_or_load_and_does_not_conduct() {
+    let (doc, a1) = lamp_behind_a_symbolic_device();
+
+    let circuit = compile(&doc, &symbolic_catalog())
+        .circuit
+        .unwrap_or_else(|| panic!("the document should compile"));
+
+    // Only the lamp is a load and only the two supply terminals are sources.
+    assert_eq!(circuit.loads().len(), 1);
+    assert_eq!(circuit.sources().len(), 2);
+    assert_eq!(circuit.switches().len(), 0);
+    // Its two terminals are different nets: nothing joins them.
+    assert_ne!(net_of(&circuit, a1, "t1"), net_of(&circuit, a1, "t2"));
+}
+
+#[test]
+fn a_symbolic_device_changes_the_fingerprint_and_the_order_of_the_document_does_not() {
+    let (with_it, _) = lamp_behind_a_symbolic_device();
+    let catalog = symbolic_catalog();
+    let (lamp_only, ..) = lamp_circuit();
+    let fingerprint = |doc: &Schematic| {
+        compile(doc, &catalog)
+            .circuit
+            .unwrap_or_else(|| panic!("the document should compile"))
+            .fingerprint()
+    };
+
+    assert_ne!(fingerprint(&with_it), fingerprint(&lamp_only.finish()));
+    assert_eq!(fingerprint(&reversed(&with_it)), fingerprint(&with_it));
+}
+
+#[test]
+fn a_symbolic_device_between_the_poles_is_not_a_short_circuit() {
+    // If the device conducted, P24 and P0 would be shorted. It has no
+    // behaviour, so the circuit runs without a fault.
+    let mut rig = Rig::new();
+    let (p24, p0) = rig.dc24();
+    let a1 = rig.part("A1", "test.diode", "body", &[]);
+    rig.wire(out(p24), pin(a1, "t1"));
+    rig.wire(pin(a1, "t2"), out(p0));
+    let circuit = compile(&rig.finish(), &symbolic_catalog())
+        .circuit
+        .unwrap_or_else(|| panic!("the document should compile"));
+    let mut sim = crate::Simulator::new(circuit, crate::SimConfig::default()).unwrap();
+
+    let outcome = sim.step_n(10, &[]).unwrap();
+
+    assert!(!outcome.faulted);
+    assert!(sim.snapshot().is_some_and(|snapshot| !snapshot.faulted));
+}

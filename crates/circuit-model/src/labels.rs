@@ -84,6 +84,10 @@ pub fn terminal_label(
         SymbolKind::Lamp | SymbolKind::Buzzer | SymbolKind::TransformerSecondary => {
             matches!(key, "x1" | "x2").then(|| key.to_uppercase())
         }
+        SymbolKind::Block2 | SymbolKind::Block4 | SymbolKind::Block8 => key
+            .strip_prefix('t')
+            .filter(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
+            .map(str::to_owned),
         SymbolKind::SupplyTerminal | SymbolKind::InterlockLink => None,
     }
 }
@@ -193,6 +197,33 @@ mod tests {
         assert_eq!(label(k, SymbolKind::Coil, None, "x9"), None);
         assert_eq!(
             label(k, SymbolKind::PowerContacts { poles: 3 }, None, "pole.in"),
+            None
+        );
+    }
+
+    #[test]
+    fn block_terminals_are_marked_with_their_number() {
+        for kind in [SymbolKind::Block2, SymbolKind::Block4, SymbolKind::Block8] {
+            let numbers: Vec<Option<String>> = (1..=kind.terminals().len())
+                .map(|n| Some(n.to_string()))
+                .collect();
+
+            assert_eq!(
+                labels(DeviceClass::Symbolic, kind, None),
+                numbers,
+                "{kind:?}"
+            );
+        }
+        assert_eq!(
+            label(DeviceClass::Symbolic, SymbolKind::Block2, None, "x"),
+            None
+        );
+        assert_eq!(
+            label(DeviceClass::Symbolic, SymbolKind::Block2, None, "t"),
+            None
+        );
+        assert_eq!(
+            label(DeviceClass::Symbolic, SymbolKind::Block2, None, "tx"),
             None
         );
     }

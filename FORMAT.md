@@ -183,8 +183,8 @@ symbol kind, the class of the device and the slot of the symbol
 (`circuit_model::terminal_label`): A1/A2 on a coil, n3/n4 on the normally
 open contact in slot n and n1/n2 on a normally closed one (n7/n8 and n5/n6
 on a timer), 95/96 and 97/98 on a thermal overload relay, 1 to 6 on power
-contacts, U1 to W2 on a motor, X1/X2 on a lamp. A slot above 9 and a supply
-terminal get no label.
+contacts, U1 to W2 on a motor, X1/X2 on a lamp, the number of the key on a
+block (`t3` is 3). A slot above 9 and a supply terminal get no label.
 
 | Symbol kind | Terminals |
 | --- | --- |
@@ -199,6 +199,7 @@ terminal get no label.
 | lamp, buzzer | `x1`, `x2` |
 | supply terminal | `out` |
 | interlock link | none |
+| block (2, 4 and 8 terminals), symbol-only | `t1`, `t2` / `t1` to `t4` / `t1` to `t8` |
 
 ## Symbol geometry
 
@@ -223,6 +224,9 @@ Terminal offsets, unrotated:
 | motor | `u1` `(-4, -2)`, `v1` `(0, -2)`, `w1` `(4, -2)` |
 | six-terminal motor | as the motor, and `u2` `(-4, 8)`, `v2` `(0, 8)`, `w2` `(4, 8)` |
 | supply terminal | `out` `(0, 0)` |
+| block of 2 terminals | `t1` `(0, -2)`, `t2` `(0, 2)` |
+| block of 4 terminals | `t1` `(-2, -2)`, `t2` `(2, -2)`, `t3` `(-2, 2)`, `t4` `(2, 2)` |
+| block of 8 terminals | `t1` to `t4` at `x = -6, -2, 2, 6` and `y = -2`; `t5` to `t8` at the same `x` and `y = 2` |
 
 The poles of a multi-pole symbol are 4 units apart and centred on its origin.
 Geometry carries no electrical meaning and does not enter the circuit

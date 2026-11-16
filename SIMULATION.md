@@ -51,7 +51,10 @@ The circuit is present exactly when no diagnostic has error severity.
    signal; coils, transformer primaries, lamps, buzzers and motors are
    loads. The secondary profile of a transformer must be single-phase,
    named by that transformer only and tapped by no supply terminal
-   (`OC-SEM-010`).
+   (`OC-SEM-010`). A symbol-only device (class `symbolic`, kinds `block2`,
+   `block4`, `block8`, ADR-0013) adds no switch, source or load: its
+   terminals join nets only through the wires drawn to them, so it never
+   conducts, and compilation reports it as information (`OC-SEM-011`).
 5. **Static checks**: required terminals, devices without symbols, loads
    without supply, permanent conductor conflicts (only always-closed switches
    conduct, the table below applied with sections), unused supplies, floating nets (with every

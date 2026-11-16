@@ -166,6 +166,9 @@ diagnostic_codes! {
     /// A transformer whose secondary supply profile is not single-phase, is
     /// named by another transformer, or is also tapped by a supply terminal.
     InvalidTransformer = "OC-SEM-010", Semantic, Error, latches = false;
+    /// A device of the symbol-only class: it is drawn and wired, but it has
+    /// no behaviour in the simulation (ADR-0013).
+    NotSimulated = "OC-SEM-011", Semantic, Info, latches = false;
     /// Incompatible conductors meet in one group, including any AC/DC mix.
     ShortCircuit = "OC-ELEC-001", Electrical, Error, latches = true;
     /// Protective earth meets a live conductor.
@@ -415,6 +418,7 @@ mod tests {
         ("OC-SEM-008", "UnusedSupply", "info", false),
         ("OC-SEM-009", "InvalidInterlock", "error", false),
         ("OC-SEM-010", "InvalidTransformer", "error", false),
+        ("OC-SEM-011", "NotSimulated", "info", false),
         ("OC-ELEC-001", "ShortCircuit", "error", true),
         ("OC-ELEC-002", "ProtectiveEarthFault", "error", true),
         ("OC-ELEC-003", "NeutralEarthBond", "warning", false),

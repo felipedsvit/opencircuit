@@ -565,7 +565,8 @@ const fn signal_kind(class: DeviceClass) -> Option<SignalKind> {
         | DeviceClass::Lamp
         | DeviceClass::Buzzer
         | DeviceClass::PowerSupply
-        | DeviceClass::MechanicalInterlock => None,
+        | DeviceClass::MechanicalInterlock
+        | DeviceClass::Symbolic => None,
     }
 }
 
@@ -910,6 +911,9 @@ fn build(
             }
             // A mark on the drawing; the pair is compiled from the device.
             SymbolKind::InterlockLink => {}
+            // Not simulated (ADR-0013): no switch, source or load. The
+            // terminals join nets only through the wires drawn to them.
+            SymbolKind::Block2 | SymbolKind::Block4 | SymbolKind::Block8 => {}
             SymbolKind::SupplyTerminal => {
                 let (Some(net), Some(conductor), Some(supply)) = (
                     terminal_net(0),
@@ -972,6 +976,19 @@ fn build(
                     format!("terminal `{}` must be connected", terminal.key.0),
                 ));
             }
+        }
+    }
+
+    for owner in &resolved.devices {
+        if owner.model.class() == DeviceClass::Symbolic {
+            out.push(Diagnostic::new(
+                DiagnosticCode::NotSimulated,
+                Subject::Device(owner.device.id),
+                format!(
+                    "device `{}` is drawn and wired but has no behaviour in the simulation",
+                    owner.device.reference.0
+                ),
+            ));
         }
     }
 
@@ -1335,6 +1352,7 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             DeviceClass::PowerSupply => 12,
             DeviceClass::MechanicalInterlock => 13,
             DeviceClass::Transformer => 14,
+            DeviceClass::Symbolic => 15,
         });
         hash.u32(device.signal.map_or(u32::MAX, |sig| sig.0));
         hash.u32(device.coil.map_or(u32::MAX, |load| load.0));
