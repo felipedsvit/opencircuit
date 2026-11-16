@@ -9,8 +9,8 @@
 //! Nothing in a library is executed.
 
 use circuit_model::catalog::{
-    ComponentModel, DeviceClass, Operator, ParamDefinition, ParamType, Provenance,
-    SymbolDefinition, SymbolKind, TimerMode,
+    Category, ComponentModel, DeviceClass, MAX_NOTE_BYTES, Operator, ParamDefinition, ParamType,
+    Provenance, SymbolDefinition, SymbolKind, TimerMode,
 };
 use circuit_model::library::{
     ArtPoint, ArtPrimitive, Artwork, Library, MAX_LIBRARY_BYTES, MAX_LIBRARY_MODELS,
@@ -20,8 +20,15 @@ use circuit_model::limits::{MAX_PARAMS_PER_DEVICE, MAX_TEXT_BYTES};
 use circuit_model::schematic::ParamValue;
 use serde::Deserialize;
 
-/// The library schema version this build reads.
-pub const LIBRARY_SCHEMA_VERSION: u32 = 1;
+/// The newest library schema version this build reads.
+///
+/// Version 2 adds the optional model fields `category`, `title` and `note`;
+/// version 1 files keep loading, and their models take the category of their
+/// class and the identifier as title.
+pub const LIBRARY_SCHEMA_VERSION: u32 = 2;
+
+/// The first library schema version.
+const FIRST_LIBRARY_SCHEMA_VERSION: u32 = 1;
 
 /// Why a library could not be read.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
@@ -81,6 +88,9 @@ struct ModelFile {
     version: u32,
     class: ClassFile,
     operator: Option<OperatorFile>,
+    category: Option<String>,
+    title: Option<String>,
+    note: Option<String>,
     params: Vec<ParamFile>,
     symbols: Vec<SymbolFile>,
 }
@@ -200,7 +210,7 @@ pub fn from_str(text: &str) -> Result<Library, LibraryError> {
     }
     let file: LibraryFile =
         serde_json::from_str(text).map_err(|error| LibraryError::Schema(error.to_string()))?;
-    if file.schema_version != LIBRARY_SCHEMA_VERSION {
+    if !(FIRST_LIBRARY_SCHEMA_VERSION..=LIBRARY_SCHEMA_VERSION).contains(&file.schema_version) {
         return Err(LibraryError::UnsupportedVersion {
             found: file.schema_version,
             supported: LIBRARY_SCHEMA_VERSION,
@@ -223,6 +233,17 @@ pub fn from_str(text: &str) -> Result<Library, LibraryError> {
         license: file.provenance.license,
         standard_reference: file.provenance.standard_reference,
     };
+    let has_v2_fields = |model: &ModelFile| {
+        model.category.is_some() || model.title.is_some() || model.note.is_some()
+    };
+    if file.schema_version < 2 {
+        if let Some(model) = file.models.iter().find(|model| has_v2_fields(model)) {
+            return Err(LibraryError::Schema(format!(
+                "model `{}`: `category`, `title` and `note` need schema version 2",
+                model.id
+            )));
+        }
+    }
     let models = file
         .models
         .into_iter()
@@ -283,7 +304,7 @@ fn to_model(model: ModelFile, provenance: &Provenance) -> Result<ComponentModel,
         .into_iter()
         .map(to_symbol)
         .collect::<Result<Vec<_>, _>>()?;
-    let built = ComponentModel::new(
+    let mut built = ComponentModel::new(
         &model.id,
         model.version,
         class,
@@ -291,16 +312,30 @@ fn to_model(model: ModelFile, provenance: &Provenance) -> Result<ComponentModel,
         symbols,
         provenance.clone(),
     );
-    Ok(match model.operator {
-        None => built,
-        Some(operator) => built.with_operator(match operator {
+    if let Some(operator) = model.operator {
+        built = built.with_operator(match operator {
             OperatorFile::None => Operator::None,
             OperatorFile::Push => Operator::Push,
             OperatorFile::Latch => Operator::Latch,
             OperatorFile::Emergency => Operator::Emergency,
             OperatorFile::Position => Operator::Position,
-        }),
-    })
+        });
+    }
+    if let Some(key) = &model.category {
+        let category = Category::from_key(key).ok_or_else(|| {
+            LibraryError::Schema(format!("model `{}`: `{key}` is not a category", model.id))
+        })?;
+        built = built.with_category(category);
+    }
+    if let Some(title) = &model.title {
+        limit("bytes in a text", title.len(), MAX_TEXT_BYTES)?;
+        built = built.with_title(title);
+    }
+    if let Some(note) = &model.note {
+        limit("bytes in a note", note.len(), MAX_NOTE_BYTES)?;
+        built = built.with_note(note);
+    }
+    Ok(built)
 }
 
 fn to_param(param: ParamFile) -> Result<ParamDefinition, LibraryError> {
@@ -440,7 +475,8 @@ mod tests {
         let unknown = text.replacen("\"version\": 1,", "\"version\": 1, \"extra\": 0,", 1);
         let float = text.replacen("\"min\": 0,", "\"min\": 0.0,", 1);
         let repeated = text.replacen("\"name\":", "\"name\": \"x\", \"name\":", 1);
-        let newer = text.replacen("\"schema_version\": 1", "\"schema_version\": 2", 1);
+        let newer = text.replacen("\"schema_version\": 2", "\"schema_version\": 3", 1);
+        let older = text.replacen("\"schema_version\": 2", "\"schema_version\": 0", 1);
 
         for broken in [&unknown, &float, &repeated] {
             assert!(
@@ -451,10 +487,89 @@ mod tests {
         assert_eq!(
             from_str(&newer),
             Err(LibraryError::UnsupportedVersion {
-                found: 2,
-                supported: 1
+                found: 3,
+                supported: 2
             })
         );
+        assert_eq!(
+            from_str(&older),
+            Err(LibraryError::UnsupportedVersion {
+                found: 0,
+                supported: 2
+            })
+        );
+    }
+
+    const V2_LINE: &str =
+        "\"category\": \"automation\", \"title\": \"ACME relay R2\", \"note\": \"Example only\",";
+
+    fn model_named<'a>(
+        catalog: &'a ComponentCatalog,
+        id: &str,
+    ) -> &'a circuit_model::ComponentModel {
+        catalog
+            .model(&ModelRef {
+                id: id.to_owned(),
+                version: 1,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_version_2_library_gives_its_models_a_category_a_title_and_a_note() {
+        let library = from_str(example()).unwrap();
+        let catalog = ComponentCatalog::builtin().with_library(library).unwrap();
+        let model = model_named(&catalog, "acme.relay_r2");
+
+        assert_eq!(model.category(), Category::Automation);
+        assert_eq!(model.title(), "ACME relay R2");
+        assert_eq!(model.note(), Some("Example only"));
+    }
+
+    #[test]
+    fn a_version_1_library_still_loads_with_the_defaults_of_its_class() {
+        let v1 = example()
+            .replacen("\"schema_version\": 2", "\"schema_version\": 1", 1)
+            .replacen(V2_LINE, "", 1);
+        assert!(!v1.contains("category"));
+
+        let library = from_str(&v1).unwrap();
+        let catalog = ComponentCatalog::builtin().with_library(library).unwrap();
+        let model = model_named(&catalog, "acme.relay_r2");
+
+        assert_eq!(model.category(), Category::default_for(DeviceClass::Relay));
+        assert_eq!(model.title(), "acme.relay_r2");
+        assert_eq!(model.note(), None);
+    }
+
+    #[test]
+    fn a_version_1_library_may_not_use_the_version_2_fields() {
+        let v1 = example().replacen("\"schema_version\": 2", "\"schema_version\": 1", 1);
+
+        assert!(matches!(from_str(&v1), Err(LibraryError::Schema(_))));
+    }
+
+    #[test]
+    fn an_unknown_category_and_oversized_texts_are_refused() {
+        let unknown = example().replacen("\"automation\"", "\"hydraulics\"", 1);
+        let long_title = example().replacen("ACME relay R2", &"t".repeat(300), 1);
+        let long_note = example().replacen("Example only", &"n".repeat(600), 1);
+
+        assert!(matches!(from_str(&unknown), Err(LibraryError::Schema(_))));
+        for broken in [&long_title, &long_note] {
+            assert!(matches!(
+                from_str(broken),
+                Err(LibraryError::LimitExceeded { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn an_empty_title_is_refused_when_the_library_is_added_to_a_catalog() {
+        let empty = example().replacen("ACME relay R2", "", 1);
+        let library = from_str(&empty).unwrap();
+
+        assert!(ComponentCatalog::builtin().with_library(library).is_err());
     }
 
     #[test]

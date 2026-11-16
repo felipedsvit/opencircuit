@@ -41,7 +41,7 @@ pub mod xref;
 
 pub use builder::SchematicBuilder;
 pub use catalog::{
-    CatalogError, ComponentCatalog, ComponentModel, Connection, DeviceClass, Operator,
+    CatalogError, Category, ComponentCatalog, ComponentModel, Connection, DeviceClass, Operator,
     ParamDefinition, ParamType, Provenance, SymbolDefinition, SymbolKind, TerminalDefinition,
     TimerMode,
 };
