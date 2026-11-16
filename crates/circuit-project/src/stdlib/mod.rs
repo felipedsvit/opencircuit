@@ -338,6 +338,19 @@ mod tests {
     }
 
     #[test]
+    fn the_standard_library_has_43_simulated_and_20_symbol_only_parts() {
+        let by_class = |symbolic: bool| {
+            library()
+                .models
+                .iter()
+                .filter(|model| (model.class() == DeviceClass::Symbolic) == symbolic)
+                .count()
+        };
+
+        assert_eq!((by_class(false), by_class(true)), (43, 20));
+    }
+
+    #[test]
     fn every_tab_of_the_palette_has_a_standard_part() {
         let library = library();
         for category in Category::ALL {
