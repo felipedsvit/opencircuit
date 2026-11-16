@@ -27,7 +27,8 @@ fn file_error(path: &Path, source: io::Error) -> CliError {
     }
 }
 
-/// The built-in catalog with the given libraries added in order. A
+/// The built-in catalog and the standard library, with the given libraries
+/// added in order. A
 /// directory stands for its `*.oclib` files, sorted by name, without
 /// descending into subdirectories.
 pub(crate) fn load_catalog(paths: &[PathBuf]) -> Result<ComponentCatalog, CliError> {
@@ -58,7 +59,7 @@ pub(crate) fn load_catalog(paths: &[PathBuf]) -> Result<ComponentCatalog, CliErr
             files.push(path.clone());
         }
     }
-    let mut catalog = ComponentCatalog::builtin();
+    let mut catalog = circuit_project::stdlib::catalog();
     for file in files {
         let text = read_text(&file, MAX_LIBRARY_BYTES)?;
         let library = circuit_project::library::from_str(&text)

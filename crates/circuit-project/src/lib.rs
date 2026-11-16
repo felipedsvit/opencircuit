@@ -36,6 +36,7 @@
 pub mod library;
 mod limits;
 mod migrate;
+pub mod stdlib;
 
 use circuit_model::{CURRENT_SCHEMA_VERSION, Schematic};
 use serde_json::Value;

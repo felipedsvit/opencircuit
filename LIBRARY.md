@@ -20,7 +20,8 @@ and, optionally, artwork. Nothing in a library is executed.
   file may not use them, and its models take the category of their class and
   their identifier as title.
 - `id` is the namespace of the library: a lowercase letter followed by 1 to
-  31 lowercase letters, digits or underscores. It may not be `opencircuit`,
+  31 lowercase letters, digits or underscores. It may not be `opencircuit` or
+  `std` (the standard library),
   nor the first segment of a built-in model identifier (`relay`,
   `contactor`, `pushbutton_no`, …), nor the namespace of a library already
   loaded.
@@ -38,6 +39,34 @@ and, optionally, artwork. Nothing in a library is executed.
 - A project refers to a library model by its identifier and version, like any
   model. When the library is not loaded, compilation reports `OC-STR-003`
   (`UnknownModel`).
+
+## The standard library
+
+OpenCircuit ships one library of its own, namespace `std`
+(`circuit_project::stdlib`). It is built in code, so it is not a file, and
+the command line adds it to the built-in catalog before any library of yours:
+a project may use `std.*` models with no `--library`. The namespace is
+therefore taken, like `opencircuit`. Its parts follow the eight palette
+tabs (`category`):
+
+| Tab (`category`) | Parts |
+| --- | --- |
+| Supplies and sources (`supplies`) | terminals of each conductor (L1, L2, L3, N, PE, DC +, DC −, DC ground), battery terminals, socket contacts; symbol-only: diode, bridge rectifier, three-phase transformer, autotransformer |
+| Protection (`protection`) | cartridge, Diazed, NH and glass fuses; circuit breakers of 1 to 4 poles; a motor protection breaker; symbol-only: SPD, RCD (2 and 4 poles) |
+| Controls (`controls`) | contactors of 1, 2 and 4 poles, two-position selector, phase monitoring relay (approximation) |
+| Motors and power (`motors`) | single-phase and DC motors and a resistive heater (energized or not), a three-phase heater, soft starter and frequency inverter as a RUN-driven pass-through (approximation); symbol-only: servo and stepper motors |
+| Contacts and terminals (`contacts`) | square, round and stacked terminals, connection point |
+| Automation and logic (`automation`) | solenoid or valve coil, inductive, capacitive, optical and ultrasonic sensors with a contact output; symbol-only: PLC, AND/OR/NOT blocks, GRAFCET step, initial step and transition |
+| Mechanical actuators (`actuators`) | symbol-only: single and double-acting cylinders, directional valves |
+| Lines and connections (`lines`) | busbar or through link |
+
+A part that is only a symbol says so in its `note`
+([ADR-0013](docs/adr/0013-symbolic-devices.md)); so does one that
+approximates a behaviour the discrete model does not have. What is missing
+on purpose (multi-conductor supply symbols, a simulated three-phase
+transformer or rectifier, selectors with a middle position, switch
+interlocks, static wire colours) needs a change of the simulator and is
+tracked separately.
 
 ## Example
 
