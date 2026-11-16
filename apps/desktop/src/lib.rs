@@ -23,6 +23,7 @@ mod canvas;
 pub mod clock;
 mod dialogs;
 pub mod files;
+mod icons;
 mod inspector;
 mod palette;
 pub mod session;
