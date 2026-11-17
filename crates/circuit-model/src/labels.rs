@@ -22,8 +22,31 @@
 //! 11/12. Slots above 9 have no single-digit marking and get no label, and
 //! neither does a supply terminal: its designator names it.
 
-use crate::catalog::{DeviceClass, SymbolKind};
-use crate::schematic::TerminalKey;
+use crate::catalog::{ComponentCatalog, DeviceClass, SymbolKind};
+use crate::schematic::{PinRef, Schematic, TerminalKey};
+
+/// A terminal named for a person: `K1:A1`, the designator of its device and the
+/// printed number of the terminal, or its key when it has none (`P24:out`).
+/// A terminal whose symbol or device is not in the document is `?:key`.
+#[must_use]
+pub fn pin_name(doc: &Schematic, catalog: &ComponentCatalog, pin: &PinRef) -> String {
+    let symbol = doc.symbols.iter().find(|symbol| symbol.id == pin.symbol_id);
+    let device = symbol.and_then(|symbol| {
+        doc.devices
+            .iter()
+            .find(|device| device.id == symbol.device_id)
+    });
+    let label = symbol.zip(device).and_then(|(symbol, device)| {
+        let model = catalog.model(&device.model)?;
+        let definition = model.symbol(&symbol.symbol_key)?;
+        terminal_label(model.class(), definition.kind(), symbol.slot, &pin.terminal)
+    });
+    format!(
+        "{}:{}",
+        device.map_or("?", |device| device.reference.0.as_str()),
+        label.unwrap_or_else(|| pin.terminal.0.clone())
+    )
+}
 
 /// The label printed next to `terminal` of a symbol of `kind` that belongs
 /// to a device of `class`, in `slot`; `None` when the terminal has no
@@ -89,6 +112,34 @@ pub fn terminal_label(
             .filter(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
             .map(str::to_owned),
         SymbolKind::SupplyTerminal | SymbolKind::InterlockLink => None,
+    }
+}
+
+#[cfg(test)]
+mod pin_name_tests {
+    use super::*;
+    use crate::builder::SchematicBuilder;
+    use crate::geometry::GridPoint;
+
+    #[test]
+    fn a_terminal_is_named_with_its_designator_and_its_printed_number() {
+        let mut b = SchematicBuilder::new("names");
+        let k1 = b.device("K1", "contactor.generic", &[]).unwrap();
+        let coil = b.symbol(k1, "coil", None, GridPoint::new(0, 0)).unwrap();
+        let doc = b.finish();
+        let catalog = ComponentCatalog::builtin();
+        let pin = |symbol, key: &str| PinRef {
+            symbol_id: symbol,
+            terminal: TerminalKey(key.to_owned()),
+        };
+
+        assert_eq!(pin_name(&doc, &catalog, &pin(coil, "a1")), "K1:A1");
+        // No printed number for a key the symbol does not mark.
+        assert_eq!(pin_name(&doc, &catalog, &pin(coil, "zz")), "K1:zz");
+        assert_eq!(
+            pin_name(&doc, &catalog, &pin(crate::ids::SymbolId(99), "a1")),
+            "?:a1"
+        );
     }
 }
 

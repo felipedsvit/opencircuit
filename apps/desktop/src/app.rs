@@ -26,6 +26,7 @@ use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
 use crate::cmdline::CommandLine;
 use crate::dialogs;
+use crate::documentation;
 use crate::icons::{self, Icon};
 use crate::inspector::{self, InspectorState};
 use crate::palette;
@@ -1630,6 +1631,11 @@ impl DesktopApp {
             .inner;
         if let Some(request) = request {
             self.commit(request);
+        }
+        match self.inspector.take_goto() {
+            Some(documentation::Goto::Subject(subject)) => self.select(subject),
+            Some(documentation::Goto::Sheet(sheet)) => self.fit_sheet = Some(sheet),
+            None => {}
         }
     }
 
