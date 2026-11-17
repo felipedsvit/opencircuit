@@ -28,6 +28,11 @@ in [`SIMULATION.md`](SIMULATION.md). [`LIBRARY.md`](LIBRARY.md) is the
 normative format; [`examples/library`](examples/library) holds a library, a
 project that uses it, a scenario with its golden trace and its drawings.
 
+The standard parts of OpenCircuit are a library of their own, `std`, which
+is built in and needs no file: see "The standard library" in
+[`LIBRARY.md`](LIBRARY.md). A library may use the class `symbolic` for a
+part that the simulator does not model.
+
 Loading a library:
 
 - **Command line:** `--library <file or directory>` on `validate`,

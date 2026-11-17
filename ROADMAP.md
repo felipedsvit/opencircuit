@@ -154,6 +154,48 @@ connectors (it would supersede ADR-0011), DXF and DWG, and a cache of the
 scene for documents beyond about 5,000 devices (`docs/benchmarks.md`). New
 work starts with an issue.
 
+## M6 — Drawing-program workspace and device catalog (done)
+
+Tracking issue #73. Clean room: the layout of another open-source editor
+shaped the structure of the window only; the colours, the icons (painted in
+code) and every string are this project's own.
+
+Catalog (library schema version 2, ADR-0013):
+
+- [x] Palette categories (eight tabs), titles and notes on component models.
+- [x] Symbol-only devices: class `symbolic`, block kinds of 2, 4 and 8
+  terminals, informational `OC-SEM-011`; they never conduct and never latch.
+- [x] The standard library `std` (`circuit_project::stdlib`): 63 parts, 43
+  simulated and 20 symbol-only, for the eight tabs; the command line starts
+  from it.
+
+Window (`apps/desktop`, no new dependency):
+
+- [x] Theme tokens for a dark and a light theme, and 44 icons drawn in code.
+- [x] Menu bar, quick-access bar, document tab, status bar (pointer, sheet
+  tabs, grid and snap, problems), zoom buttons, Help windows.
+- [x] Palette with a tab per kind of part, search and symbol drawings.
+- [x] Inspector in folding sections with a summary of the selection.
+- [x] A command line over the drawing, read by `circuit_commands::commandline`.
+- [x] Selection by window or crossing, a context menu and a cross cursor.
+
+**Exit criterion:** a project is drawn with parts from the eight tabs,
+including symbol-only ones that are marked as such, through the palette, the
+context menu and the command line; the same project validates and simulates
+from the command line with no library file. The tests are in
+`apps/desktop/tests/` (`palette.rs`, `commandline.rs`, `canvas.rs`,
+`chrome.rs`, `properties.rs`), `circuit-commands` (`commandline`), `circuit-project`
+(`stdlib`) and `apps/cli/tests/cli.rs`
+(`the_standard_parts_are_available_to_every_command_without_a_library_file`).
+
+Considered and not done in M6 (each needs a change of the simulator or of
+the format, and starts with an issue): supply symbols with several
+conductors, a simulated three-phase transformer and rectifier, selectors
+with a middle position, interlocks between switches, a static colour for a
+wire (schema version 3), layers, a text and annotation entity (ladder and
+GRAFCET as diagrams), clicking for the points of a command, an ORTHO switch
+(wires are always orthogonal), tabs for several documents, localisation.
+
 ## Out of scope for the MVP
 
 Analog simulation, rigorous voltage/current/impedance calculation, transients,

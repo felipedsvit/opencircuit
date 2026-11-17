@@ -151,3 +151,19 @@ and not implemented (ADR-0010). `apps/desktop` builds for
 `wasm32-unknown-unknown`, with `eframe::WebRunner` and file drop and
 download in place of the native dialogs; CI lints and builds it. The
 interfaces and their safety limits are summarised in `EXTENDING.md`.
+
+M5 added sheets as frames, terminal numbers and the embedded PDF font
+(ADR-0011, ADR-0012) and the editing commands of the command line.
+
+M6 is implemented. The catalog gives every model a category (the tab of the
+palette), a title and a note; library schema 2 carries them. The class
+`symbolic` and the block kinds (ADR-0013) let a part that the discrete model
+cannot simulate be drawn and wired without behaviour: the compiler adds
+nothing for it and reports it as information (`OC-SEM-011`). The standard
+library `std` is assembled in code by `circuit_project::stdlib` and is part
+of the catalog every front end starts from. The desktop window has its own
+theme tokens and icons, a menu bar, a status bar, a palette in tabs with
+drawings from `circuit_renderer::symbol_preview`, and a command line whose
+meaning is `circuit_commands::commandline`: the window holds no logic of its
+own, it shows requests that the core computes. The editor selects by window
+or by crossing (`Preview::crossing`).
