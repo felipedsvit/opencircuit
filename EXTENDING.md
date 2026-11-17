@@ -161,7 +161,7 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 | `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
 | `new` | `file` |
 | `edit` | `operations`, `created` (each named element with `kind` and `id`), `wrote` (the file, or `null` for a dry run), `errors`, `warnings`, `diagnostics` |
-| `report` | `reports`: a list of `kind`, `title`, `columns` and `rows` (every cell is text); with `--output`, `file`, `kind` (`csv`, `json` or `txt`) and `reports` (how many tables) |
+| `report` | `reports`: a list of `kind`, `title`, `columns` and `rows` (every cell is text); with `--output`, `file`, `kind` (`csv`, `json`, `txt` or `pdf`) and `reports` (how many tables) |
 | `serve --print-map` | `map`: a list of `table` (`coil`, `discrete_input` or `input_register`), `address`, `words`, `name`, `meaning`; the same lines as the text map |
 
 `diagnostics` are the structured diagnostics of `FORMAT.md` (`code`,
@@ -239,8 +239,8 @@ canvas. Text is set in Liberation Mono, embedded in the PDF as a subset
 `opencircuit report <project> --kind bom|wires|terminals|xref|io|problems|all`
 derives tables from the project, and writes them as text, JSON (`--format`)
 or, for one table, CSV. With `--output <file>` the extension picks the format
-(`.csv`, `.json` or `.txt`) and `--format` says how the confirmation is
-written. Nothing is stored in the project: the tables are a function of it
+(`.csv`, `.json`, `.txt` or `.pdf`) and `--format` says how the
+confirmation is written. Nothing is stored in the project: the tables are a function of it
 (ADR-0014).
 
 | Kind | One row per |
@@ -251,6 +251,12 @@ written. Nothing is stored in the project: the tables are a function of it
 | `xref` | exception: a coil with no contact, contacts whose coil is not drawn, a symbol outside every sheet |
 | `io` | address of the Modbus map |
 | `problems` | diagnostic of the project, compiled |
+
+A PDF sets each table on A4 landscape pages in the embedded font (ADR-0012):
+the title, the headings (repeated on every page), a rule, one line per row and
+the page number. A cell longer than 40 characters is cut and ends in `~`, and
+a character outside printable ASCII is written as `?`. The bytes depend only
+on the tables.
 
 Designators sort in natural order (`K2` before `K10`). A terminal is written
 `K1:A1`, with the printed number of the terminal. A CSV cell that a

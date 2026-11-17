@@ -104,6 +104,7 @@ pub(crate) enum FileFormat {
     Text,
     Json,
     Csv,
+    Pdf,
 }
 
 /// Address `serve` listens on unless `--listen` says otherwise: loopback
@@ -409,7 +410,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
 }
 
 /// `report <project> --kind <name>|all [--format text|json|csv]
-/// [--output <file.csv|json|txt>] [--library ...]`.
+/// [--output <file.csv|json|txt|pdf>] [--library ...]`.
 fn parse_report(rest: &[String]) -> Result<Command, String> {
     let words = Words::split(rest, &["--kind", "--format", "--output", "--library"], &[])?;
     let names = circuit_report::Kind::ALL
@@ -444,9 +445,10 @@ fn parse_report(rest: &[String]) -> Result<Command, String> {
                 Some("csv") => FileFormat::Csv,
                 Some("json") => FileFormat::Json,
                 Some("txt") => FileFormat::Text,
+                Some("pdf") => FileFormat::Pdf,
                 _ => {
                     return Err(format!(
-                        "cannot tell the format of `{}`; the output must end in `.csv`, `.json` or `.txt`",
+                        "cannot tell the format of `{}`; the output must end in `.csv`, `.json`, `.txt` or `.pdf`",
                         path.display()
                     ));
                 }

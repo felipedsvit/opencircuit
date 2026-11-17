@@ -5,7 +5,8 @@
 //! so a file written by the command line and one written by the desktop
 //! application are the same. [`svg`] writes SVG text directly; [`pdf`]
 //! writes a PDF with `pdf-writer` (ADR-0006), one page for a scene or one
-//! page per sheet through [`pdf_pages`].
+//! page per sheet through [`pdf_pages`]. A report [`Table`](circuit_model::Table) is
+//! set as pages of text by [`table_pdf`].
 //!
 //! Output is deterministic: the same scene and theme give the same bytes on
 //! every platform. Coordinates are written as integers in scene subunits,
@@ -31,10 +32,12 @@ mod font;
 mod pdf;
 mod sfnt;
 mod svg;
+mod table;
 mod theme;
 
 pub use pdf::{pdf, pdf_pages};
 pub use svg::{MARGIN, svg};
+pub use table::{MAX_CELL_CHARS, table_pdf};
 pub use theme::{Look, Rgb, Theme};
 
 /// The scene type every exporter reads, re-exported for convenience.
