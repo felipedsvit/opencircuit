@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Windows installer (.msi), built with the WiX Toolset v5 from the release
+  build and the files of the repository. Built by the workflow
+  .github/workflows/release.yml (the Windows job); to build it by hand, from the
+  root of the repository after a release build of opencircuit-desktop and
+  opencircuit-cli, with a README.txt in build/:
+
+    wix build packaging/windows/opencircuit.wxs -arch x64 \
+      -pdbtype none -d Version=0.0.2 -d Root=<the root of the repository> \
+      -o OpenCircuit-0.0.2-dev-windows-x86_64.msi
+
+  `Version` is the numeric version (a.b.c): an installer version has no
+  pre-release part, so 0.0.2-dev and 0.0.2 are both 0.0.2, and the installer
+  allows an upgrade to the same version.
+
+  It installs for every user in C:\Program Files\OpenCircuit: the window, the
+  command line (added to the PATH), the licences, the README and the examples,
+  a Start menu entry, and the association of .ocircuit files with the window.
+  UpgradeCode never changes: it is what makes a newer installer replace an older
+  one.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="OpenCircuit"
+      Manufacturer="OpenCircuit project"
+      Version="$(Version)"
+      UpgradeCode="749c0424-9db9-47a3-b88e-731b8386c94f"
+      Scope="perMachine"
+      Compressed="yes">
+
+    <SummaryInformation Description="OpenCircuit: an editor and simulator for industrial control circuits" />
+
+    <MajorUpgrade
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of OpenCircuit is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="OpenCircuit.ico" SourceFile="$(Root)\assets\icons\opencircuit.ico" />
+    <Property Id="ARPPRODUCTICON" Value="OpenCircuit.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/felipedsvit/opencircuit" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="OpenCircuit">
+        <Directory Id="ExamplesFolder" Name="examples" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Everything" Title="OpenCircuit" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="Programs" />
+      <ComponentGroupRef Id="Documents" />
+      <ComponentGroupRef Id="Examples" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="Programs" Directory="INSTALLFOLDER">
+      <!-- The window: a Start menu entry and the association with .ocircuit. -->
+      <Component Id="Window">
+        <File Id="WindowProgram" Source="$(Root)\target\release\opencircuit-desktop.exe" KeyPath="yes">
+          <Shortcut
+              Id="StartMenuEntry"
+              Name="OpenCircuit"
+              Description="Editor and simulator for industrial control circuits"
+              Directory="ProgramMenuFolder"
+              WorkingDirectory="INSTALLFOLDER"
+              Icon="OpenCircuit.ico" />
+        </File>
+        <ProgId Id="OpenCircuit.Project" Description="OpenCircuit project" Icon="OpenCircuitIcon">
+          <Extension Id="ocircuit" ContentType="application/json">
+            <Verb Id="open" Command="Open" TargetFile="WindowProgram" Argument="&quot;%1&quot;" />
+          </Extension>
+        </ProgId>
+      </Component>
+      <!-- The command line, on the PATH of every user. -->
+      <Component Id="CommandLine">
+        <File Id="CommandLineProgram" Source="$(Root)\target\release\opencircuit.exe" KeyPath="yes" />
+        <Environment Id="OpenCircuitPath" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="yes" Permanent="no" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="Documents" Directory="INSTALLFOLDER">
+      <!-- The icon of the .ocircuit files names an installed file (the shortcut and the entry in Programs and Features name the Icon above). -->
+      <Component Id="IconFile"><File Id="OpenCircuitIcon" Source="$(Root)\assets\icons\opencircuit.ico" /></Component>
+      <Component Id="LicenseMit"><File Source="$(Root)\LICENSE-MIT" /></Component>
+      <Component Id="LicenseApache"><File Source="$(Root)\LICENSE-APACHE" /></Component>
+      <Component Id="LicenseFont">
+        <File Name="LICENSE-LiberationMono" Source="$(Root)\assets\fonts\liberation-mono\LICENSE" />
+      </Component>
+      <Component Id="Readme"><File Name="README.txt" Source="$(Root)\build\README.txt" /></Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <!-- Every file under examples\, in the same folders. -->
+    <ComponentGroup Id="Examples" Directory="ExamplesFolder">
+      <Files Include="$(Root)\examples\**" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>
