@@ -1,0 +1,14 @@
+[package]
+name = "circuit-report"
+description = "OpenCircuit reports: bill of materials, wires, terminals, cross-reference exceptions, I/O map and problems, derived as tables"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+circuit-io = { workspace = true }
+circuit-model = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

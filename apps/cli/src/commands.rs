@@ -1,4 +1,5 @@
-//! The commands: `validate`, `simulate`, `test`, `export` and `serve`.
+//! The commands: `validate`, `simulate`, `test`, `new`, `edit`, `export`, `report` and
+//! `serve`.
 
 use std::io::{self, Write};
 use std::path::Path;
@@ -11,7 +12,9 @@ use circuit_sim::{
 };
 use serde::Serialize;
 
-use crate::args::{Command, ExportFormat, OutputFormat, SheetChoice};
+use crate::args::{
+    Command, ExportFormat, FileFormat, OutputFormat, ReportChoice, SheetChoice, TableFormat,
+};
 use crate::fsio::{find_scenarios, load_catalog, read_text, write_atomic};
 use crate::scenario::{ActionName, MAX_SCENARIO_BYTES, PolicyName, Scenario};
 use crate::{CliError, EXIT_FAILED, EXIT_OK, Env};
@@ -126,6 +129,22 @@ pub(crate) fn execute(
                 out,
                 err,
             )
+        }
+        Command::Report {
+            project,
+            which,
+            format,
+            output,
+            library,
+        } => {
+            let catalog = load_catalog(library.as_slice())?;
+            let request = ReportRequest {
+                project,
+                which: *which,
+                format: *format,
+                output: output.as_ref().map(|(path, file)| (path.as_path(), *file)),
+            };
+            report(&request, &catalog, out, err)
         }
         Command::Serve {
             project,
@@ -532,6 +551,153 @@ fn export(
                 pages,
             },
         )?,
+    }
+    Ok(EXIT_OK)
+}
+
+/// What `report` makes and where it goes.
+struct ReportRequest<'a> {
+    project: &'a Path,
+    which: ReportChoice,
+    format: TableFormat,
+    output: Option<(&'a Path, FileFormat)>,
+}
+
+/// One table in the JSON of `report`.
+#[derive(Serialize)]
+struct TableEntry<'a> {
+    kind: &'static str,
+    title: &'a str,
+    columns: &'a [String],
+    rows: &'a [Vec<String>],
+}
+
+#[derive(Serialize)]
+struct TablesReport<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    reports: Vec<TableEntry<'a>>,
+}
+
+#[derive(Serialize)]
+struct ReportFileReport {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    file: String,
+    kind: &'static str,
+    reports: usize,
+}
+
+/// Derive the reports of a project and write them: on standard output in the
+/// requested format, or in a file whose extension picks the format. A project
+/// that loads is reported even when it does not compile.
+fn report(
+    request: &ReportRequest<'_>,
+    catalog: &ComponentCatalog,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<u8, CliError> {
+    let console = match request.format {
+        TableFormat::Json => OutputFormat::Json,
+        TableFormat::Text | TableFormat::Csv => OutputFormat::Text,
+    };
+    let text = read_text(request.project, MAX_PROJECT_BYTES)?;
+    let doc = match circuit_project::from_str(&text) {
+        Ok(doc) => doc,
+        Err(error) => {
+            let message = format!("{}: {error}", request.project.display());
+            return fail(console, "report", &message, &[], out, err);
+        }
+    };
+    let kinds: Vec<circuit_report::Kind> = match request.which {
+        ReportChoice::One(kind) => vec![kind],
+        ReportChoice::All => circuit_report::Kind::ALL.to_vec(),
+    };
+    let tables: Vec<(circuit_report::Kind, circuit_model::Table)> = kinds
+        .into_iter()
+        .map(|kind| {
+            let table = match kind {
+                circuit_report::Kind::Bom => circuit_report::bom(&doc, catalog),
+                circuit_report::Kind::Wires => circuit_report::wires(&doc, catalog),
+                circuit_report::Kind::Terminals => circuit_report::terminals(&doc, catalog),
+                circuit_report::Kind::Xref => circuit_report::xref(&doc, catalog),
+                circuit_report::Kind::Io => circuit_report::io(&doc, catalog),
+                circuit_report::Kind::Problems => {
+                    circuit_report::problems(&compile(&doc, catalog).diagnostics)
+                }
+            };
+            (kind, table)
+        })
+        .collect();
+
+    let as_json = || -> Result<String, CliError> {
+        let document = TablesReport {
+            format: JSON_FORMAT,
+            command: "report",
+            ok: true,
+            reports: tables
+                .iter()
+                .map(|(kind, table)| TableEntry {
+                    kind: kind.name(),
+                    title: &table.title,
+                    columns: &table.columns,
+                    rows: &table.rows,
+                })
+                .collect(),
+        };
+        Ok(serde_json::to_string_pretty(&document).map_err(io::Error::from)? + "\n")
+    };
+    let as_text = || -> String {
+        tables
+            .iter()
+            .map(|(_, table)| table.to_text())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let as_csv = || -> String {
+        tables
+            .first()
+            .map(|(_, table)| table.to_csv())
+            .unwrap_or_default()
+    };
+
+    match request.output {
+        None => {
+            let body = match request.format {
+                TableFormat::Text => as_text(),
+                TableFormat::Json => as_json()?,
+                TableFormat::Csv => as_csv(),
+            };
+            out.write_all(body.as_bytes())?;
+        }
+        Some((path, file)) => {
+            let body = match file {
+                FileFormat::Text => as_text(),
+                FileFormat::Json => as_json()?,
+                FileFormat::Csv => as_csv(),
+            };
+            write_atomic(path, body.as_bytes())?;
+            match console {
+                OutputFormat::Text => writeln!(out, "wrote  {}", path.display())?,
+                OutputFormat::Json => emit(
+                    out,
+                    &ReportFileReport {
+                        format: JSON_FORMAT,
+                        command: "report",
+                        ok: true,
+                        file: path.display().to_string(),
+                        kind: match file {
+                            FileFormat::Text => "txt",
+                            FileFormat::Json => "json",
+                            FileFormat::Csv => "csv",
+                        },
+                        reports: tables.len(),
+                    },
+                )?,
+            }
+        }
     }
     Ok(EXIT_OK)
 }

@@ -25,6 +25,7 @@ use crate::sheet::sheet_at;
 pub struct WireNumbers {
     by_net: BTreeMap<NetId, String>,
     by_wire: BTreeMap<WireId, String>,
+    sequence: Vec<(NetId, Option<u32>)>,
 }
 
 /// Where a net starts, for ordering: sheet number, zone row, zone column,
@@ -129,7 +130,23 @@ impl WireNumbers {
                 }
             }
         }
-        Self { by_net, by_wire }
+        let sequence = sequence
+            .iter()
+            .map(|(_, id, sheet)| (*id, *sheet))
+            .collect();
+        Self {
+            by_net,
+            by_wire,
+            sequence,
+        }
+    }
+
+    /// The nets that have a wire, in the order they are numbered, each with
+    /// the number of the sheet it starts on (`None` outside every sheet).
+    /// Reports list nets in this order.
+    #[must_use]
+    pub fn sequence(&self) -> &[(NetId, Option<u32>)] {
+        &self.sequence
     }
 
     /// The number of a net; `None` for a net without a wire, or when the
