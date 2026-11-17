@@ -24,7 +24,7 @@ fn harness() -> Harness<'static, DesktopApp> {
         |ui, app: &mut DesktopApp| app.show(ui),
         DesktopApp::default(),
     );
-    harness.set_size(egui::Vec2::new(1400.0, 900.0));
+    harness.set_size(egui::Vec2::new(1400.0, 1100.0));
     harness.run();
     harness
 }

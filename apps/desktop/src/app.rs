@@ -8,21 +8,24 @@ use std::path::{Path, PathBuf};
 use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
-    CatalogError, ComponentCatalog, Control, DeviceId, GridPoint, InputAction, LayoutIndex, Subject,
+    CatalogError, ComponentCatalog, Control, DeviceId, GridPoint, InputAction, LayoutIndex,
+    SheetId, Subject,
 };
 use circuit_renderer::{
     SUBUNITS_PER_GRID, Scene, SceneItem, SceneOptions, ScenePoint, SceneRect, Shape, StyleKey,
     build_scene,
 };
-use eframe::egui::{self, KeyboardShortcut, RichText, Ui};
+use eframe::egui::{self, Align, KeyboardShortcut, Layout, RichText, Ui};
 
 use crate::camera::Camera;
 use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
 use crate::dialogs;
+use crate::icons::{self, Icon};
 use crate::inspector::{self, InspectorState};
 use crate::palette;
 use crate::session::{SaveError, Session};
+use crate::theme::{self, Tokens};
 
 /// Radius of the ring marking the pin under the pointer, in subunits.
 const PIN_RING: i64 = SUBUNITS_PER_GRID / 2;
@@ -100,6 +103,22 @@ pub struct DesktopApp {
     close_now: bool,
     /// The window title last sent.
     title: String,
+    /// The colours and sizes of the window have been given to egui.
+    styled: bool,
+    /// The grid dots are hidden (edit mode only).
+    grid_off: bool,
+    /// The wire tool does not snap to pins, junctions and wires.
+    snap_off: bool,
+    /// The list of diagnostics under the drawing is collapsed.
+    diagnostics_hidden: bool,
+    /// The grid point under the pointer, as of the last frame.
+    cursor: Option<GridPoint>,
+    /// Frame this sheet at the next frame.
+    fit_sheet: Option<SheetId>,
+    /// The window that lists the keys is open.
+    show_keys: bool,
+    /// The window about the program is open.
+    show_about: bool,
 }
 
 impl DesktopApp {
@@ -162,6 +181,30 @@ impl DesktopApp {
     #[must_use]
     pub const fn is_asking(&self) -> bool {
         self.confirm.is_some()
+    }
+
+    /// Whether the grid dots are shown while editing.
+    #[must_use]
+    pub const fn grid_shown(&self) -> bool {
+        !self.grid_off
+    }
+
+    /// Whether the wire tool snaps to pins, junctions and wires.
+    #[must_use]
+    pub const fn snapping(&self) -> bool {
+        !self.snap_off
+    }
+
+    /// Whether the list of problems is shown under the drawing.
+    #[must_use]
+    pub const fn problems_shown(&self) -> bool {
+        !self.diagnostics_hidden
+    }
+
+    /// The grid point under the pointer, as of the last frame.
+    #[must_use]
+    pub const fn cursor(&self) -> Option<GridPoint> {
+        self.cursor
     }
 
     /// Save the project to its file; a project never saved asks where.
@@ -567,11 +610,36 @@ impl DesktopApp {
         }
         self.view_keys(ui);
 
+        if !self.styled {
+            theme::apply_style(ui.ctx());
+            self.styled = true;
+        }
+        let tokens = Tokens::of(ui);
+        self.menu_bar(ui);
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
-        egui::Panel::bottom("diagnostics")
-            .resizable(true)
-            .default_size(140.0)
-            .show(ui, |ui| self.diagnostics(ui));
+        if self.session.is_some() {
+            egui::Panel::top("document")
+                .frame(
+                    egui::Frame::new()
+                        .fill(tokens.chrome_dark)
+                        .inner_margin(egui::Margin::symmetric(8, 3)),
+                )
+                .show(ui, |ui| self.document_tab(ui));
+        }
+        egui::Panel::bottom("status")
+            .frame(
+                egui::Frame::new()
+                    .fill(tokens.chrome_dark)
+                    .inner_margin(egui::Margin::symmetric(8, 2)),
+            )
+            .show(ui, |ui| self.status_bar(ui));
+        if !self.diagnostics_hidden || self.session.is_none() {
+            egui::Panel::bottom("diagnostics")
+                .resizable(true)
+                .default_size(140.0)
+                .show(ui, |ui| self.diagnostics(ui));
+        }
+        self.help_windows(ui);
         match self.mode {
             Mode::Edit if self.session.is_some() => {
                 egui::Panel::left("palette")
@@ -595,7 +663,9 @@ impl DesktopApp {
             }
             Mode::Edit | Mode::Simulate => {}
         }
-        egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(tokens.canvas))
+            .show(ui, |ui| self.canvas(ui));
     }
 
     /// Undo, redo and the editor keys, unless a text field has the keyboard.
@@ -757,35 +827,248 @@ impl DesktopApp {
         }
     }
 
+    /// Apply an editor key as if it had been pressed, in edit mode.
+    fn press(&mut self, key: Key) {
+        if self.mode != Mode::Edit {
+            return;
+        }
+        if let Some(session) = &self.session {
+            let outcome = self.editor.key(session.document(), session.catalog(), key);
+            self.apply(outcome);
+        }
+    }
+
+    /// The menu bar: every action of the window, by name.
+    fn menu_bar(&mut self, ui: &mut Ui) {
+        egui::Panel::top("menubar").show(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                let has_session = self.session.is_some();
+                let editing = has_session && self.mode == Mode::Edit;
+                ui.menu_button("File", |ui| {
+                    if ui.button("New project").clicked() {
+                        ui.close();
+                        self.new_project();
+                    }
+                    if ui.button("Open project…").clicked() {
+                        ui.close();
+                        self.guard(Pending::OpenDialog);
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(has_session, egui::Button::new("Save project"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.save();
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new("Save project as…"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.save_as_dialog();
+                    }
+                    ui.separator();
+                    if ui.button("Load library…").clicked() {
+                        ui.close();
+                        self.library_dialog();
+                    }
+                    ui.add_enabled_ui(has_session, |ui| {
+                        ui.menu_button("Export drawing", |ui| {
+                            for (label, extension) in [("As SVG…", "svg"), ("As PDF…", "pdf")] {
+                                if ui.button(label).clicked() {
+                                    ui.close();
+                                    self.export_dialog(extension);
+                                }
+                            }
+                        });
+                    });
+                });
+                ui.menu_button("Modify", |ui| {
+                    let (can_undo, can_redo) = self.session.as_ref().map_or((false, false), |s| {
+                        (s.history().can_undo(), s.history().can_redo())
+                    });
+                    if ui
+                        .add_enabled(editing && can_undo, egui::Button::new("Undo last change"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.undo();
+                    }
+                    if ui
+                        .add_enabled(editing && can_redo, egui::Button::new("Redo change"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.redo();
+                    }
+                    ui.separator();
+                    for (label, key) in [
+                        ("Select everything", Key::SelectAll),
+                        ("Copy selection", Key::Copy),
+                        ("Paste", Key::Paste),
+                        ("Duplicate selection", Key::Duplicate),
+                        ("Rotate selection", Key::Rotate),
+                        ("Delete selection", Key::Delete),
+                    ] {
+                        if ui.add_enabled(editing, egui::Button::new(label)).clicked() {
+                            ui.close();
+                            self.press(key);
+                        }
+                    }
+                });
+                ui.menu_button("View", |ui| {
+                    if ui
+                        .add_enabled(has_session, egui::Button::new("Zoom to the whole drawing"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.fit_pending = true;
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new("Zoom in"))
+                        .clicked()
+                    {
+                        self.zoom_request = Some(KEY_ZOOM);
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new("Zoom out"))
+                        .clicked()
+                    {
+                        self.zoom_request = Some(1.0 / KEY_ZOOM);
+                    }
+                    ui.separator();
+                    let mut grid = !self.grid_off;
+                    if ui.checkbox(&mut grid, "Show the grid").changed() {
+                        self.grid_off = !grid;
+                    }
+                    let mut snap = !self.snap_off;
+                    if ui.checkbox(&mut snap, "Snap wires to pins").changed() {
+                        self.snap_off = !snap;
+                    }
+                    let mut problems = !self.diagnostics_hidden;
+                    if ui
+                        .checkbox(&mut problems, "Show the problems list")
+                        .changed()
+                    {
+                        self.diagnostics_hidden = !problems;
+                    }
+                });
+                ui.menu_button("Run", |ui| {
+                    let mut mode = self.mode;
+                    ui.add_enabled_ui(has_session, |ui| {
+                        ui.radio_value(&mut mode, Mode::Simulate, "Simulation mode");
+                        ui.radio_value(&mut mode, Mode::Edit, "Drawing mode");
+                    });
+                    self.set_mode(mode);
+                    ui.separator();
+                    let mode = self.mode;
+                    if let Some(session) = &mut self.session {
+                        let simulating = mode == Mode::Simulate && session.can_simulate();
+                        let running = session.is_running();
+                        let label = if running {
+                            "Pause simulation"
+                        } else {
+                            "Start simulation"
+                        };
+                        if ui
+                            .add_enabled(simulating, egui::Button::new(label))
+                            .clicked()
+                        {
+                            ui.close();
+                            if running {
+                                session.pause();
+                            } else {
+                                session.play();
+                            }
+                        }
+                        if ui
+                            .add_enabled(simulating, egui::Button::new("Advance one tick"))
+                            .clicked()
+                        {
+                            session.step();
+                        }
+                        if ui
+                            .add_enabled(simulating, egui::Button::new("Restart simulation"))
+                            .clicked()
+                        {
+                            ui.close();
+                            session.reset();
+                        }
+                    }
+                });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("Keyboard shortcuts").clicked() {
+                        ui.close();
+                        self.show_keys = true;
+                    }
+                    if ui.button("About OpenCircuit").clicked() {
+                        ui.close();
+                        self.show_about = true;
+                    }
+                });
+            });
+        });
+    }
+
+    /// The windows of the Help menu.
+    fn help_windows(&mut self, ui: &Ui) {
+        let ctx = ui.ctx().clone();
+        egui::Window::new("Keyboard shortcuts")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_keys)
+            .collapsible(false)
+            .resizable(false)
+            .show(&ctx, |ui| {
+                egui::Grid::new("keys").num_columns(2).show(ui, |ui| {
+                    for (keys, action) in palette::KEYS {
+                        ui.monospace(*keys);
+                        ui.label(*action);
+                        ui.end_row();
+                    }
+                });
+            });
+        egui::Window::new("About OpenCircuit")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut self.show_about)
+            .collapsible(false)
+            .resizable(false)
+            .show(&ctx, |ui| {
+                ui.strong(format!("OpenCircuit {}", env!("CARGO_PKG_VERSION")));
+                ui.label("An open-source editor and simulator for industrial control circuits.");
+                ui.label("Licensed under MIT or Apache-2.0.");
+            });
+    }
+
+    /// The quick-access bar: files, undo and redo, the path of the project
+    /// and the mode.
     fn toolbar(&mut self, ui: &mut Ui) {
         // Wrapped, so that a narrow window shows every control on a second
         // row instead of cutting the last ones off.
         ui.horizontal_wrapped(|ui| {
-            if ui.button("New").clicked() {
+            let has_session = self.session.is_some();
+            if icons::button(ui, Icon::New, "New", false).clicked() {
                 self.new_project();
             }
-            if ui.button("Open…").clicked() {
+            if icons::button(ui, Icon::Open, "Open…", false).clicked() {
                 self.guard(Pending::OpenDialog);
             }
-            let has_session = self.session.is_some();
-            if ui
-                .add_enabled(has_session, egui::Button::new("Save"))
-                .clicked()
-            {
-                self.save();
-            }
-            if ui
-                .add_enabled(has_session, egui::Button::new("Save as…"))
-                .clicked()
-            {
-                self.save_as_dialog();
-            }
-            if ui
-                .button("Library…")
-                .on_hover_text(
-                    "Load an extension library (.oclib): more components for this window",
-                )
-                .clicked()
+            ui.add_enabled_ui(has_session, |ui| {
+                if icons::button(ui, Icon::Save, "Save", false).clicked() {
+                    self.save();
+                }
+                if icons::button(ui, Icon::SaveAs, "Save as…", false).clicked() {
+                    self.save_as_dialog();
+                }
+            });
+            if icons::button_hint(
+                ui,
+                Icon::Library,
+                "Library…",
+                "Load an extension library (.oclib): more components for this window",
+                false,
+            )
+            .clicked()
             {
                 self.library_dialog();
             }
@@ -807,7 +1090,7 @@ impl DesktopApp {
                 .add(
                     egui::TextEdit::singleline(&mut self.path_input)
                         .hint_text("path to a .ocircuit file")
-                        .desired_width(300.0),
+                        .desired_width(260.0),
                 )
                 .labelled_by(name.id);
             let entered =
@@ -823,16 +1106,10 @@ impl DesktopApp {
                 let path = PathBuf::from(self.path_input.trim());
                 self.save_to(path);
             }
-            if has_session && ui.button("Fit").clicked() {
-                self.fit_pending = true;
-            }
-            if let Some(session) = &self.session {
-                ui.separator();
-                let mut name = session.document().project.name.clone();
-                if session.is_dirty() {
-                    name.push_str(" (unsaved)");
+            if has_session {
+                if icons::button(ui, Icon::Fit, "Fit", false).clicked() {
+                    self.fit_pending = true;
                 }
-                ui.label(RichText::new(name).strong());
                 ui.separator();
                 let mut mode = self.mode;
                 ui.selectable_value(&mut mode, Mode::Simulate, "Simulate");
@@ -859,6 +1136,135 @@ impl DesktopApp {
         }
     }
 
+    /// The tab of the open project: its name, and whether it has unsaved
+    /// changes.
+    fn document_tab(&mut self, ui: &mut Ui) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let tokens = Tokens::of(ui);
+        let mut name = session.document().project.name.clone();
+        if session.is_dirty() {
+            name.push_str(" (unsaved)");
+        }
+        egui::Frame::new()
+            .fill(tokens.tab_active)
+            .corner_radius(egui::CornerRadius {
+                nw: 5,
+                ne: 5,
+                sw: 0,
+                se: 0,
+            })
+            .inner_margin(egui::Margin::symmetric(12, 3))
+            .show(ui, |ui| {
+                ui.label(RichText::new(name).strong());
+            });
+    }
+
+    /// The status bar: the position of the pointer, one tab per sheet, and
+    /// the switches of the view.
+    fn status_bar(&mut self, ui: &mut Ui) {
+        let tokens = Tokens::of(ui);
+        ui.horizontal(|ui| {
+            let position = self.cursor.map_or_else(
+                || "      ,      ".to_owned(),
+                |point| format!("{:>5}, {:<5}", point.x, point.y),
+            );
+            ui.label(RichText::new(position).monospace().color(tokens.text_dim));
+            if let Some(session) = &self.session {
+                ui.separator();
+                let mut sheets: Vec<(SheetId, u32, String)> = session
+                    .document()
+                    .sheets
+                    .iter()
+                    .map(|sheet| (sheet.id, sheet.number, sheet.title.clone()))
+                    .collect();
+                sheets.sort_by_key(|(_, number, _)| *number);
+                for (id, number, title) in sheets {
+                    let label = format!("{number}: {title}");
+                    if ui
+                        .selectable_label(false, label)
+                        .on_hover_text("Frame this sheet")
+                        .clicked()
+                    {
+                        self.fit_sheet = Some(id);
+                    }
+                }
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let problems = self.session.as_ref().map_or(0, |session| {
+                    session
+                        .diagnostics()
+                        .len()
+                        .saturating_add(session.snapshot().map_or(0, |s| s.faults.len()))
+                });
+                if icons::button_hint(
+                    ui,
+                    Icon::Warning,
+                    "Problems",
+                    "Show or hide the list of problems",
+                    !self.diagnostics_hidden,
+                )
+                .clicked()
+                {
+                    self.diagnostics_hidden = !self.diagnostics_hidden;
+                }
+                ui.label(RichText::new(problems.to_string()).color(tokens.text_dim));
+                ui.separator();
+                if icons::button_hint(
+                    ui,
+                    Icon::Snap,
+                    "Snap",
+                    "Snap wires to pins, junctions and wires",
+                    !self.snap_off,
+                )
+                .clicked()
+                {
+                    self.snap_off = !self.snap_off;
+                }
+                if icons::button_hint(
+                    ui,
+                    Icon::Grid,
+                    "Grid",
+                    "Show the grid (edit mode)",
+                    !self.grid_off,
+                )
+                .clicked()
+                {
+                    self.grid_off = !self.grid_off;
+                }
+            });
+        });
+    }
+
+    /// Zoom buttons over the top right corner of the drawing.
+    fn navigation(&mut self, ui: &Ui, origin: [f32; 2], size: [f32; 2]) {
+        let tokens = Tokens::of(ui);
+        let at = egui::pos2(origin[0] + size[0] - 38.0, origin[1] + 10.0);
+        egui::Area::new(ui.scope_id().with(egui::IdSalt::new("navigation")))
+            .order(egui::Order::Foreground)
+            .fixed_pos(at)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::new()
+                    .fill(tokens.chrome.gamma_multiply(0.92))
+                    .corner_radius(6)
+                    .inner_margin(egui::Margin::same(2))
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            if icons::button(ui, Icon::ZoomIn, "Zoom in", false).clicked() {
+                                self.zoom_request = Some(KEY_ZOOM);
+                            }
+                            if icons::button(ui, Icon::ZoomOut, "Zoom out", false).clicked() {
+                                self.zoom_request = Some(1.0 / KEY_ZOOM);
+                            }
+                            if icons::button(ui, Icon::Fit, "Zoom extents", false).clicked() {
+                                self.fit_pending = true;
+                            }
+                        });
+                    });
+            });
+    }
+
     fn edit_controls(&mut self, ui: &mut Ui) {
         let (can_undo, can_redo, undo_label, redo_label) = match &self.session {
             Some(session) => {
@@ -872,20 +1278,20 @@ impl DesktopApp {
             }
             None => (false, false, None, None),
         };
-        let undo = ui.add_enabled(can_undo, egui::Button::new("Undo"));
-        if undo.clicked() {
-            self.undo();
-        }
-        if let Some(label) = undo_label {
-            undo.on_hover_text(label);
-        }
-        let redo = ui.add_enabled(can_redo, egui::Button::new("Redo"));
-        if redo.clicked() {
-            self.redo();
-        }
-        if let Some(label) = redo_label {
-            redo.on_hover_text(label);
-        }
+        ui.add_enabled_ui(can_undo, |ui| {
+            let hint =
+                undo_label.map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"));
+            if icons::button_hint(ui, Icon::Undo, "Undo", &hint, false).clicked() {
+                self.undo();
+            }
+        });
+        ui.add_enabled_ui(can_redo, |ui| {
+            let hint =
+                redo_label.map_or_else(|| "Redo".to_owned(), |label| format!("Redo: {label}"));
+            if icons::button_hint(ui, Icon::Redo, "Redo", &hint, false).clicked() {
+                self.redo();
+            }
+        });
         ui.separator();
         let hint = match self.editor.tool() {
             Tool::Select => "Click to select, drag to move, R to rotate, Delete to remove.",
@@ -1084,9 +1490,10 @@ impl DesktopApp {
         };
         let scene = self.scene(session);
         let fit = std::mem::take(&mut self.fit_pending);
-        let grid = self.mode == Mode::Edit;
+        let grid = self.mode == Mode::Edit && !self.grid_off;
         let events = canvas::show(ui, &scene, &mut self.camera, fit, grid);
         self.canvas_origin = Some(events.origin);
+        self.cursor = events.hover.and_then(|at| self.camera.to_grid(at));
 
         if let Some(factor) = self.zoom_request.take() {
             let [width, height] = events.size;
@@ -1110,6 +1517,21 @@ impl DesktopApp {
         {
             self.camera.center_on(bounds, events.size);
         }
+        if let Some(id) = self.fit_sheet.take()
+            && let Some(frame) = session
+                .document()
+                .sheets
+                .iter()
+                .find(|sheet| sheet.id == id)
+                .and_then(circuit_model::Sheet::frame)
+        {
+            let corners = SceneRect::from_corners(
+                ScenePoint::from_grid(frame.min),
+                ScenePoint::from_grid(frame.max),
+            );
+            self.camera.fit(corners, events.size, canvas::FIT_MARGIN);
+        }
+        self.navigation(ui, events.origin, events.size);
         match self.mode {
             Mode::Edit => self.edit_on_canvas(ui, events),
             Mode::Simulate => self.operate_on_canvas(events),
@@ -1128,7 +1550,7 @@ impl DesktopApp {
         let mut outcomes = Vec::new();
         // The wire tool snaps to what a wire can end on; the other tools work
         // on the nearest grid point, so a drag never jumps to a pin.
-        let wiring = matches!(self.editor.tool(), Tool::Wire);
+        let wiring = matches!(self.editor.tool(), Tool::Wire) && !self.snap_off;
         let radius = self
             .camera
             .to_scene_length(SNAP_POINTS)
@@ -1240,19 +1662,20 @@ fn control_label(reference: &str, control: Control, engaged: bool) -> String {
 /// Play, pause, step, reset, fault reset, speed and time.
 fn simulation_controls(ui: &mut Ui, session: &mut Session) {
     if session.is_running() {
-        if ui.button("Pause").clicked() {
+        if icons::button(ui, Icon::Pause, "Pause", false).clicked() {
             session.pause();
         }
-    } else if ui
-        .add_enabled(!session.is_faulted(), egui::Button::new("Play"))
-        .clicked()
-    {
-        session.play();
+    } else {
+        ui.add_enabled_ui(!session.is_faulted(), |ui| {
+            if icons::button(ui, Icon::Play, "Play", false).clicked() {
+                session.play();
+            }
+        });
     }
-    if ui.button("Step").clicked() {
+    if icons::button(ui, Icon::Step, "Step", false).clicked() {
         session.step();
     }
-    if ui.button("Reset").clicked() {
+    if icons::button(ui, Icon::Reset, "Reset", false).clicked() {
         session.reset();
     }
     if ui

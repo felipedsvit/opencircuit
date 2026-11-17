@@ -4,7 +4,7 @@ use circuit_renderer::{Anchor, SUBUNITS_PER_GRID, Scene, ScenePoint, SceneRect, 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, StrokeKind, Ui, Vec2};
 
 use crate::camera::Camera;
-use crate::theme;
+use crate::theme::{self, Tokens};
 
 /// Free space kept around the scene when fitting it.
 pub const FIT_MARGIN: f32 = 24.0;
@@ -96,13 +96,7 @@ pub fn show(
     let visible = camera.visible(size);
     let dark = ui.visuals().dark_mode;
     if grid {
-        paint_grid(
-            &painter,
-            camera,
-            visible,
-            to_screen,
-            ui.visuals().weak_text_color(),
-        );
+        paint_grid(&painter, camera, visible, to_screen, Tokens::of(ui).grid);
     }
     let text_points = (TEXT_HEIGHT * camera.zoom).min(MAX_TEXT_POINTS);
 
@@ -200,7 +194,6 @@ fn paint_grid(
         return;
     };
     let first = |value: i64| value.div_euclid(step).saturating_mul(step);
-    let color = color.gamma_multiply(0.5);
     let mut y = first(visible.min.y);
     while y <= visible.max.y {
         let mut x = first(visible.min.x);

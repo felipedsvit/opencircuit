@@ -6,7 +6,9 @@
 
 use circuit_model::{Conductor, ConductorSet, MotorState};
 use circuit_renderer::StyleKey;
-use eframe::egui::{Color32, Stroke};
+use eframe::egui::{
+    self, Color32, CornerRadius, FontFamily, FontId, Shadow, Stroke, TextStyle, Theme, Visuals,
+};
 
 /// How one item is drawn, at zoom 1.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -55,6 +57,195 @@ fn live_color(conductors: ConductorSet, foreground: Color32, dead: Color32) -> C
             .single()
             .map_or(CONFLICT, |conductor| conductor_color(conductor, foreground))
     }
+}
+
+/// The colours of the window, apart from the drawing itself (those are
+/// [`look`]). Every widget of the chrome reads them from here, so a theme is
+/// one table. The values are this project's own.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tokens {
+    /// Menu bar, tool bar and panels.
+    pub chrome: Color32,
+    /// Tab bars, the status bar and the start of the window.
+    pub chrome_dark: Color32,
+    /// Inside of the side panels.
+    pub panel: Color32,
+    /// The tab that is selected.
+    pub tab_active: Color32,
+    /// Buttons and fields at rest.
+    pub control: Color32,
+    /// Buttons under the pointer.
+    pub control_hover: Color32,
+    /// Lines between areas.
+    pub border: Color32,
+    /// The drawing area.
+    pub canvas: Color32,
+    /// The dots of the grid.
+    pub grid: Color32,
+    /// Text.
+    pub text: Color32,
+    /// Secondary text.
+    pub text_dim: Color32,
+    /// Hints and disabled text.
+    pub text_faint: Color32,
+    /// Icon strokes.
+    pub icon: Color32,
+    /// What is selected, on and focused.
+    pub accent: Color32,
+    /// A message to read twice.
+    pub warn: Color32,
+    /// The cursor cross over the drawing.
+    pub crosshair: Color32,
+    /// Selecting by a box that must contain the elements.
+    pub window_select: Color32,
+    /// Selecting by a box that only has to touch them.
+    pub crossing_select: Color32,
+    /// The command line.
+    pub command: Color32,
+}
+
+impl Tokens {
+    /// The dark theme, the default: graphite chrome and a deep drawing area.
+    pub const DARK: Self = Self {
+        chrome: Color32::from_rgb(0x2b, 0x2f, 0x36),
+        chrome_dark: Color32::from_rgb(0x22, 0x25, 0x2b),
+        panel: Color32::from_rgb(0x2f, 0x33, 0x3b),
+        tab_active: Color32::from_rgb(0x3d, 0x44, 0x50),
+        control: Color32::from_rgb(0x38, 0x3d, 0x47),
+        control_hover: Color32::from_rgb(0x48, 0x4f, 0x5c),
+        border: Color32::from_rgb(0x1a, 0x1c, 0x21),
+        canvas: Color32::from_rgb(0x1b, 0x1e, 0x24),
+        grid: Color32::from_rgb(0x3a, 0x40, 0x4a),
+        text: Color32::from_rgb(0xe1, 0xe5, 0xea),
+        text_dim: Color32::from_rgb(0xa8, 0xb0, 0xbb),
+        text_faint: Color32::from_rgb(0x7b, 0x84, 0x90),
+        icon: Color32::from_rgb(0xd2, 0xd8, 0xe0),
+        accent: Color32::from_rgb(0x36, 0x9c, 0xd8),
+        warn: Color32::from_rgb(0xf2, 0xc5, 0x6b),
+        crosshair: Color32::from_rgb(0xe9, 0xec, 0xf0),
+        window_select: Color32::from_rgb(0x5f, 0xa8, 0xf5),
+        crossing_select: Color32::from_rgb(0x6f, 0xcf, 0x8a),
+        command: Color32::from_rgb(0x25, 0x29, 0x2f),
+    };
+
+    /// The light theme: pale chrome and a white drawing area.
+    pub const LIGHT: Self = Self {
+        chrome: Color32::from_rgb(0xe8, 0xea, 0xee),
+        chrome_dark: Color32::from_rgb(0xd9, 0xdc, 0xe2),
+        panel: Color32::from_rgb(0xf1, 0xf2, 0xf5),
+        tab_active: Color32::from_rgb(0xff, 0xff, 0xff),
+        control: Color32::from_rgb(0xdd, 0xe1, 0xe7),
+        control_hover: Color32::from_rgb(0xcb, 0xd2, 0xdc),
+        border: Color32::from_rgb(0xb4, 0xba, 0xc4),
+        canvas: Color32::from_rgb(0xfa, 0xfb, 0xfc),
+        grid: Color32::from_rgb(0xc9, 0xce, 0xd6),
+        text: Color32::from_rgb(0x1f, 0x24, 0x2b),
+        text_dim: Color32::from_rgb(0x46, 0x4e, 0x5a),
+        text_faint: Color32::from_rgb(0x6b, 0x73, 0x7f),
+        icon: Color32::from_rgb(0x34, 0x3b, 0x46),
+        accent: Color32::from_rgb(0x1f, 0x7f, 0xc0),
+        warn: Color32::from_rgb(0xa8, 0x6a, 0x00),
+        crosshair: Color32::from_rgb(0x2a, 0x2f, 0x36),
+        window_select: Color32::from_rgb(0x1d, 0x6f, 0xd1),
+        crossing_select: Color32::from_rgb(0x1f, 0x8f, 0x4a),
+        command: Color32::from_rgb(0xf7, 0xf8, 0xfa),
+    };
+
+    /// The tokens of a dark or a light background.
+    #[must_use]
+    pub const fn for_mode(dark_mode: bool) -> Self {
+        if dark_mode { Self::DARK } else { Self::LIGHT }
+    }
+
+    /// The tokens of the theme `ui` is drawn in.
+    #[must_use]
+    pub fn of(ui: &egui::Ui) -> Self {
+        Self::for_mode(ui.visuals().dark_mode)
+    }
+
+    fn visuals(self, dark_mode: bool) -> Visuals {
+        let mut visuals = if dark_mode {
+            Visuals::dark()
+        } else {
+            Visuals::light()
+        };
+        visuals.panel_fill = self.chrome;
+        visuals.window_fill = self.panel;
+        visuals.extreme_bg_color = self.canvas;
+        visuals.faint_bg_color = self.chrome_dark;
+        visuals.override_text_color = Some(self.text);
+        visuals.window_stroke = Stroke::new(1.0, self.border);
+        visuals.window_corner_radius = CornerRadius::same(6);
+        visuals.menu_corner_radius = CornerRadius::same(5);
+        visuals.popup_shadow = Shadow {
+            offset: [0, 4],
+            blur: 12,
+            spread: 0,
+            color: Color32::from_black_alpha(if dark_mode { 90 } else { 40 }),
+        };
+        visuals.selection.bg_fill = self.accent.gamma_multiply(0.45);
+        visuals.selection.stroke = Stroke::new(1.0, self.accent);
+        visuals.hyperlink_color = self.accent;
+        let widgets = &mut visuals.widgets;
+        widgets.noninteractive.bg_fill = self.panel;
+        widgets.noninteractive.weak_bg_fill = self.panel;
+        widgets.noninteractive.bg_stroke = Stroke::new(1.0, self.border);
+        widgets.noninteractive.fg_stroke = Stroke::new(1.0, self.text_dim);
+        widgets.inactive.bg_fill = self.control;
+        widgets.inactive.weak_bg_fill = self.control;
+        widgets.inactive.bg_stroke = Stroke::NONE;
+        widgets.inactive.fg_stroke = Stroke::new(1.0, self.text);
+        widgets.hovered.bg_fill = self.control_hover;
+        widgets.hovered.weak_bg_fill = self.control_hover;
+        widgets.hovered.bg_stroke = Stroke::new(1.0, self.accent);
+        widgets.hovered.fg_stroke = Stroke::new(1.5, self.text);
+        widgets.active.bg_fill = self.accent;
+        widgets.active.weak_bg_fill = self.accent;
+        widgets.active.bg_stroke = Stroke::new(1.0, self.accent);
+        widgets.active.fg_stroke = Stroke::new(1.5, self.text);
+        widgets.open.bg_fill = self.tab_active;
+        widgets.open.weak_bg_fill = self.tab_active;
+        for state in [
+            &mut widgets.noninteractive,
+            &mut widgets.inactive,
+            &mut widgets.hovered,
+            &mut widgets.active,
+            &mut widgets.open,
+        ] {
+            state.corner_radius = CornerRadius::same(4);
+        }
+        visuals
+    }
+}
+
+/// Give both themes of `ctx` the colours, the spacing and the text sizes of
+/// the window. The one that is in use follows the system, as before.
+pub fn apply_style(ctx: &egui::Context) {
+    for (theme, dark_mode) in [(Theme::Dark, true), (Theme::Light, false)] {
+        ctx.set_visuals_of(theme, Tokens::for_mode(dark_mode).visuals(dark_mode));
+    }
+    ctx.all_styles_mut(|style| {
+        style.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        style.spacing.button_padding = egui::vec2(7.0, 3.0);
+        style.spacing.interact_size.y = 22.0;
+        style.spacing.menu_margin = egui::Margin::same(6);
+        for (text_style, size) in [
+            (TextStyle::Body, 13.0),
+            (TextStyle::Button, 13.0),
+            (TextStyle::Small, 11.0),
+            (TextStyle::Heading, 15.0),
+            (TextStyle::Monospace, 12.5),
+        ] {
+            let family = if text_style == TextStyle::Monospace {
+                FontFamily::Monospace
+            } else {
+                FontFamily::Proportional
+            };
+            style
+                .text_styles
+                .insert(text_style, FontId::new(size, family));
+        }
+    });
 }
 
 /// The look of a style on a background that is dark or light.
@@ -147,5 +338,62 @@ mod tests {
         );
 
         assert_eq!(l2.color, Color32::from_gray(220));
+    }
+
+    fn luminance(color: Color32) -> f32 {
+        let [r, g, b, _] = color.to_array();
+        0.2126 * f32::from(r) + 0.7152 * f32::from(g) + 0.0722 * f32::from(b)
+    }
+
+    #[test]
+    fn the_dark_theme_is_dark_and_the_light_theme_is_light() {
+        for tokens in [Tokens::DARK, Tokens::LIGHT] {
+            let dark = tokens == Tokens::DARK;
+
+            assert_eq!(luminance(tokens.canvas) < 128.0, dark);
+            assert_eq!(luminance(tokens.chrome) < 128.0, dark);
+            assert_eq!(luminance(tokens.text) > 128.0, dark);
+        }
+        assert_eq!(Tokens::for_mode(true), Tokens::DARK);
+        assert_eq!(Tokens::for_mode(false), Tokens::LIGHT);
+    }
+
+    #[test]
+    fn text_is_readable_on_the_chrome_in_both_themes() {
+        for tokens in [Tokens::DARK, Tokens::LIGHT] {
+            for (text, background) in [
+                (tokens.text, tokens.chrome),
+                (tokens.text, tokens.panel),
+                (tokens.text, tokens.control),
+                (tokens.text_dim, tokens.chrome),
+            ] {
+                let difference = (luminance(text) - luminance(background)).abs();
+
+                assert!(
+                    difference > 70.0,
+                    "{text:?} on {background:?}: {difference}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn applying_the_style_gives_each_theme_its_own_colours() {
+        let ctx = egui::Context::default();
+
+        apply_style(&ctx);
+
+        let dark = ctx.style_of(Theme::Dark).visuals.clone();
+        let light = ctx.style_of(Theme::Light).visuals.clone();
+        assert_eq!(dark.panel_fill, Tokens::DARK.chrome);
+        assert_eq!(light.panel_fill, Tokens::LIGHT.chrome);
+        assert_eq!(dark.widgets.active.bg_fill, Tokens::DARK.accent);
+        assert_eq!(
+            ctx.style_of(Theme::Dark)
+                .text_styles
+                .get(&TextStyle::Body)
+                .map(|font| font.size),
+            Some(13.0)
+        );
     }
 }
