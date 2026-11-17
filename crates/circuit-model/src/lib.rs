@@ -25,6 +25,7 @@
 pub mod builder;
 pub mod catalog;
 pub mod diagnostics;
+pub mod documentation;
 pub mod geometry;
 pub mod ids;
 pub mod input;
@@ -48,6 +49,7 @@ pub use catalog::{
 pub use diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticCode, Severity, Subject, has_errors, sort_diagnostics,
 };
+pub use documentation::{DeviceInfo, Waiver, WireNumbering};
 pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
     DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SheetId, SupplyId, SymbolId,

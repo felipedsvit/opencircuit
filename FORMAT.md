@@ -8,7 +8,7 @@ is fixed in the same change.
 ## Rules
 
 - The file is JSON (UTF-8) with the `.ocircuit` extension.
-- `schema_version` is mandatory. The current version is 2.
+- `schema_version` is mandatory. The current version is 3.
 - `next_id` is mandatory. Every entity of every collection draws its ID from
   this one counter: IDs start at 1, are unique across collections, are below
   `next_id`, are at most `2^53 - 1`, and are never reused.
@@ -22,11 +22,11 @@ is fixed in the same change.
 - Unknown fields, repeated fields and repeated parameter keys are rejected.
   Unknown fields are not preserved.
 
-## Shape (schema version 2)
+## Shape (schema version 3)
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "next_id": 6,
   "project": {
     "name": "demo",
@@ -110,6 +110,22 @@ This text is the canonical form of a small document. Unit tests of
 `circuit-project` compare it with the test document byte for byte, and compare
 the catalog table below with the built-in catalog (every model, symbol key and
 parameter key must appear in its row). Complete projects are in `examples/`.
+
+Documentation fields (ADR-0014) are optional, and a file omits each one that
+is empty, so the document above is also the shape of a project that uses
+none of them:
+
+| Field | Meaning |
+| --- | --- |
+| `wires[].number` | text of at most 256 bytes that replaces the generated number of the wire's net |
+| `devices[].info` | object with the optional text fields `manufacturer`, `part_no`, `description` and `location`, each at most 256 bytes |
+| `project.wire_numbering` | `{ "prefix": <text of at most 16 bytes>, "start": <integer>, "step": <integer, at least 1>, "per_sheet": <boolean> }`; absent: wires are not numbered |
+| `waivers` | list of `{ "code": "OC-STR-018", "subject": <subject>, "reason": <text> }`, sorted by code and then subject, at most 10 000 |
+
+A subject is the tagged form the command line prints: `"document"`,
+`{ "supply": 1 }`, `{ "device": 2 }`, `{ "symbol": 3 }`, `{ "wire": 5 }`,
+`{ "junction": 4 }`, `{ "sheet": 7 }` or
+`{ "pin": { "symbol_id": 3, "terminal": "out" } }`.
 
 Field values:
 
@@ -295,7 +311,7 @@ absent `null` fields) is accepted and saves canonically. The repository keeps
 2. **Phase 2:** deserialize the current schema strictly.
 3. **Limits:** text at most 16 MiB; at most 100 000 entities per collection,
    1 024 route points per wire, 64 parameters per device, 256 bytes per text
-   value.
+   value, 10 000 waivers.
 
 Loading checks syntax, schema and limits only. Whether the document makes
 sense (ID ranges and uniqueness, references, designators, models, terminals,
@@ -326,3 +342,4 @@ migration and an entry below.
 | --- | --- |
 | 1 | First schema. |
 | 2 | `sheets`, and `author`, `company`, `revision` and `date` in `project` (ADR-0011). The migration adds no sheet and sets the four fields to `null`. |
+| 3 | `wires[].number`, `devices[].info`, `project.wire_numbering` and `waivers` (ADR-0014). All are optional and omitted when empty, so the migration only raises the version. |

@@ -15,6 +15,7 @@ use serde::de::{Deserializer, Error as _, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::Diagnostic;
+use crate::documentation::{DeviceInfo, Waiver, WireNumbering};
 use crate::geometry::{GridPoint, QuarterTurn};
 use crate::ids::{DeviceId, JunctionId, SymbolId, WireId};
 use crate::sheet::Sheet;
@@ -22,7 +23,7 @@ use crate::supply::SupplyProfile;
 use crate::validate;
 
 /// Schema version written by this build.
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
 
 /// User-visible label of a device, such as `K1` or `S2`.
 ///
@@ -107,6 +108,10 @@ pub struct Device {
     /// Parameter values, validated against the model.
     #[serde(deserialize_with = "unique_params")]
     pub params: BTreeMap<String, ParamValue>,
+    /// Catalog data of the physical device (ADR-0014); absent when none is
+    /// set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub info: Option<DeviceInfo>,
 }
 
 /// Deserialize device parameters, refusing a key that appears twice. A plain
@@ -206,6 +211,10 @@ pub struct Wire {
     /// Intermediate waypoints only; the two ends are derived from the
     /// endpoints, so moving a symbol never invalidates stored geometry.
     pub route: Vec<GridPoint>,
+    /// Override of the generated wire number (ADR-0014); absent when the
+    /// number is generated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub number: Option<String>,
 }
 
 /// Document metadata without electrical meaning.
@@ -225,6 +234,10 @@ pub struct ProjectMeta {
     /// Date as the author writes it, for the title block; the core has no
     /// clock and never fills it in.
     pub date: Option<String>,
+    /// The rule that numbers the wires (ADR-0014); absent: wires are not
+    /// numbered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wire_numbering: Option<WireNumbering>,
 }
 
 /// The schematic document.
@@ -250,6 +263,10 @@ pub struct Schematic {
     pub junctions: Vec<Junction>,
     /// Wires.
     pub wires: Vec<Wire>,
+    /// Warnings and informational diagnostics a person accepted, with the
+    /// reason (ADR-0014), sorted by code and subject.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub waivers: Vec<Waiver>,
 }
 
 impl Schematic {
@@ -266,6 +283,7 @@ impl Schematic {
                 company: None,
                 revision: None,
                 date: None,
+                wire_numbering: None,
             },
             sheets: Vec::new(),
             supplies: Vec::new(),
@@ -273,6 +291,7 @@ impl Schematic {
             symbols: Vec::new(),
             junctions: Vec::new(),
             wires: Vec::new(),
+            waivers: Vec::new(),
         }
     }
 
@@ -286,6 +305,9 @@ impl Schematic {
             && self.symbols.is_sorted_by_key(|symbol| symbol.id)
             && self.junctions.is_sorted_by_key(|junction| junction.id)
             && self.wires.is_sorted_by_key(|wire| wire.id)
+            && self
+                .waivers
+                .is_sorted_by(|a, b| a.sort_key() <= b.sort_key())
     }
 
     /// Sort every collection by ID, the canonical order of a saved file.
@@ -296,6 +318,7 @@ impl Schematic {
         self.symbols.sort_by_key(|symbol| symbol.id);
         self.junctions.sort_by_key(|junction| junction.id);
         self.wires.sort_by_key(|wire| wire.id);
+        self.waivers.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
     }
 
     /// Check every structural rule that needs no component catalog.
@@ -385,6 +408,7 @@ mod tests {
                 from: Endpoint::Junction(JunctionId(1)),
                 to: Endpoint::Junction(JunctionId(2)),
                 route: Vec::new(),
+                number: None,
             })
             .to_vec();
 

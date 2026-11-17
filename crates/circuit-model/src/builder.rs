@@ -123,6 +123,7 @@ impl SchematicBuilder {
                 .iter()
                 .map(|(key, value)| ((*key).to_owned(), value.clone()))
                 .collect(),
+            info: None,
         });
         Ok(id)
     }
@@ -209,6 +210,7 @@ impl SchematicBuilder {
             from: from.into(),
             to: to.into(),
             route: route.to_vec(),
+            number: None,
         });
         Ok(id)
     }

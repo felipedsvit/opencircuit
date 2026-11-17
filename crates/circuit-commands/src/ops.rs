@@ -227,6 +227,7 @@ pub fn place(
         reference,
         model: model.clone(),
         params: BTreeMap::new(),
+        info: None,
     }));
     tx.edits.push(Edit::InsertSymbol(SymbolInstance {
         id: symbol_id,
@@ -372,12 +373,14 @@ fn resolve(
                 from: split.from.clone(),
                 to: Endpoint::Junction(junction),
                 route: before,
+                number: split.number.clone(),
             }));
             edits.push(Edit::InsertWire(Wire {
                 id: second,
                 from: Endpoint::Junction(junction),
                 to: split.to.clone(),
                 route: after,
+                number: split.number.clone(),
             }));
             Ok((Endpoint::Junction(junction), *at))
         }
@@ -423,6 +426,7 @@ pub fn connect(
         from: start,
         to: end,
         route,
+        number: None,
     }));
     let mut tx = Transaction::new("Connect", ids.next_id());
     tx.edits = edits;

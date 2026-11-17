@@ -75,7 +75,11 @@ impl Transaction {
                 | Edit::RemoveJunction(_)
                 | Edit::MoveJunction { .. }
                 | Edit::RemoveWire(_)
-                | Edit::SetRoute { .. } => None,
+                | Edit::SetRoute { .. }
+                | Edit::SetWireNumber { .. }
+                | Edit::SetDeviceInfo { .. }
+                | Edit::InsertWaiver(_)
+                | Edit::RemoveWaiver { .. } => None,
             })
             .collect()
     }
@@ -177,6 +181,7 @@ mod tests {
                 version: 1,
             },
             params: Default::default(),
+            info: None,
         }
     }
 
@@ -268,6 +273,7 @@ mod tests {
             from: Endpoint::Junction(JunctionId(500)),
             to: Endpoint::Junction(broken.junctions[0].id),
             route: Vec::new(),
+            number: None,
         });
         broken.next_id += 1;
         let mut tx = Transaction::new("move", broken.next_id);

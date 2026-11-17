@@ -525,6 +525,65 @@ fn connecting_to_the_middle_of_a_wire_splits_it_with_a_junction() {
 }
 
 #[test]
+fn splitting_a_wire_keeps_its_number_on_both_halves() {
+    let (mut doc, mut history, [a, b, coil]) = three_parts();
+    let catalog = ComponentCatalog::builtin();
+    run(&mut doc, &mut history, |doc| {
+        ops::connect(
+            doc,
+            &catalog,
+            &Anchor::Endpoint(pin(a, "p2")),
+            &Anchor::Endpoint(pin(coil, "a1")),
+            &[],
+        )
+    });
+    let trunk = doc.wires[0].id;
+    let mut numbered = Transaction::new("number", doc.next_id);
+    numbered.edits.push(Edit::SetWireNumber {
+        wire: trunk,
+        number: Some("W7".to_owned()),
+    });
+    history.execute(&mut doc, numbered).unwrap();
+
+    run(&mut doc, &mut history, |doc| {
+        ops::connect(
+            doc,
+            &catalog,
+            &Anchor::Endpoint(pin(b, "p2")),
+            &Anchor::OnWire {
+                wire: trunk,
+                at: point(0, 5),
+            },
+            &[],
+        )
+    });
+
+    let numbers: Vec<Option<&str>> = doc.wires.iter().map(|w| w.number.as_deref()).collect();
+    assert_eq!(numbers.iter().filter(|n| **n == Some("W7")).count(), 2);
+    assert_eq!(numbers.iter().filter(|n| n.is_none()).count(), 1);
+}
+
+#[test]
+fn editing_the_title_block_keeps_the_wire_numbering_rule() {
+    let mut doc = Schematic::new("project");
+    let rule = circuit_model::WireNumbering {
+        prefix: "W".to_owned(),
+        start: 1,
+        step: std::num::NonZeroU32::MIN,
+        per_sheet: false,
+    };
+    doc.project.wire_numbering = Some(rule.clone());
+    let mut history = History::new();
+
+    run(&mut doc, &mut history, |doc| {
+        sheets::set_project_info(doc, "Pump", Some("Ana"), None, None, None)
+    });
+
+    assert_eq!(doc.project.author.as_deref(), Some("Ana"));
+    assert_eq!(doc.project.wire_numbering, Some(rule));
+}
+
+#[test]
 fn connecting_a_point_to_itself_or_off_the_wire_is_refused() {
     let (mut doc, mut history, [a, _, coil]) = three_parts();
     let catalog = ComponentCatalog::builtin();
@@ -1444,6 +1503,7 @@ fn arbitrary_edit() -> impl Strategy<Value = Edit> {
                 reference: ReferenceDesignator(r.to_owned()),
                 model: model("pushbutton_no"),
                 params: Default::default(),
+                info: None,
             })
         }),
         id().prop_map(|i| Edit::RemoveDevice(DeviceId(i))),
@@ -1480,6 +1540,7 @@ fn arbitrary_edit() -> impl Strategy<Value = Edit> {
             from,
             to,
             route: Vec::new(),
+            number: None,
         })),
         id().prop_map(|i| Edit::RemoveWire(WireId(i))),
         (id(), prop::collection::vec(at(), 0..3)).prop_map(|(i, route)| Edit::SetRoute {
@@ -1593,6 +1654,38 @@ fn duplicating_a_whole_device_makes_the_next_designator_with_its_wire() {
     assert_eq!(doc.devices, before.devices);
     assert_eq!(doc.symbols, before.symbols);
     assert_eq!(doc.wires, before.wires);
+}
+
+#[test]
+fn duplicating_a_device_copies_its_catalog_data_and_not_its_wire_numbers() {
+    let (mut doc, mut history, [coil, contact, _]) = contactor_with_contact();
+    let catalog = ComponentCatalog::builtin();
+    let info = circuit_model::DeviceInfo {
+        part_no: Some("A-1".to_owned()),
+        ..circuit_model::DeviceInfo::default()
+    };
+    let k1 = device_of(&doc, coil);
+    let mut tx = Transaction::new("info", doc.next_id);
+    tx.edits.push(Edit::SetDeviceInfo {
+        device: k1,
+        info: Some(info.clone()),
+    });
+    for wire in &doc.wires {
+        tx.edits.push(Edit::SetWireNumber {
+            wire: wire.id,
+            number: Some("W1".to_owned()),
+        });
+    }
+    history.execute(&mut doc, tx).unwrap();
+    let selection: BTreeSet<Subject> = [Subject::Symbol(coil), Subject::Symbol(contact)].into();
+
+    run(&mut doc, &mut history, |doc| {
+        crate::copy::duplicate(doc, &catalog, &selection, point(0, 10))
+    });
+
+    let k2 = doc.devices.iter().find(|d| d.reference.0 == "K2").unwrap();
+    assert_eq!(k2.info, Some(info));
+    assert_eq!(doc.wires.iter().filter(|w| w.number.is_some()).count(), 1);
 }
 
 #[test]

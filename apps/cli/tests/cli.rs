@@ -1145,7 +1145,7 @@ fn m5_exit_a_project_made_only_through_the_command_line_validates_simulates_and_
     // Two sheets with the title block filled in.
     let text = fs::read_to_string(&project).expect("written");
     let doc: serde_json::Value = serde_json::from_str(&text).expect("JSON");
-    assert_eq!(doc["schema_version"], 2);
+    assert_eq!(doc["schema_version"], 3);
     assert_eq!(doc["sheets"].as_array().expect("sheets").len(), 2);
     assert_eq!(doc["project"]["author"], "OpenCircuit");
 

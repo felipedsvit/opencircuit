@@ -6,6 +6,7 @@
 //! the editor refuses an edit that would exceed them, so a document that was
 //! edited can always be saved and read back.
 
+use crate::documentation::MAX_WIRE_NUMBER_PREFIX_BYTES;
 use crate::schematic::{Endpoint, ParamValue, Schematic};
 
 /// Largest accepted project text, in bytes.
@@ -20,6 +21,8 @@ pub const MAX_PARAMS_PER_DEVICE: usize = 64;
 pub const MAX_TEXT_BYTES: usize = 256;
 /// Most sheets in one document.
 pub const MAX_SHEETS: usize = 1_000;
+/// Most waivers in one document.
+pub const MAX_WAIVERS: usize = 10_000;
 
 /// A document beyond one of the limits.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -60,6 +63,7 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
         MAX_ENTITIES_PER_COLLECTION,
     )?;
     count("wires", doc.wires.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    count("waivers", doc.waivers.len(), MAX_WAIVERS)?;
 
     text("project name", &doc.project.name)?;
     for (what, value) in [
@@ -71,6 +75,13 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
         if let Some(value) = value {
             text(what, value)?;
         }
+    }
+    if let Some(numbering) = &doc.project.wire_numbering {
+        count(
+            "wire number prefix",
+            numbering.prefix.len(),
+            MAX_WIRE_NUMBER_PREFIX_BYTES,
+        )?;
     }
     for sheet in &doc.sheets {
         text("sheet title", &sheet.title)?;
@@ -89,12 +100,31 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
                 text("parameter value", value)?;
             }
         }
+        if let Some(info) = &device.info {
+            for (what, value) in [
+                ("device manufacturer", &info.manufacturer),
+                ("device part number", &info.part_no),
+                ("device description", &info.description),
+                ("device location", &info.location),
+            ] {
+                if let Some(value) = value {
+                    text(what, value)?;
+                }
+            }
+        }
+    }
+    for waiver in &doc.waivers {
+        text("waiver code", &waiver.code)?;
+        text("waiver reason", &waiver.reason)?;
     }
     for symbol in &doc.symbols {
         text("symbol key", &symbol.symbol_key.0)?;
     }
     for wire in &doc.wires {
         count("wire route points", wire.route.len(), MAX_ROUTE_POINTS)?;
+        if let Some(number) = &wire.number {
+            text("wire number", number)?;
+        }
         for endpoint in [&wire.from, &wire.to] {
             if let Endpoint::Terminal(pin) = endpoint {
                 text("terminal key", &pin.terminal.0)?;
@@ -170,6 +200,7 @@ mod tests {
             from: Endpoint::Junction(JunctionId(2)),
             to: Endpoint::Junction(JunctionId(3)),
             route: vec![GridPoint::default(); MAX_ROUTE_POINTS + 1],
+            number: None,
         });
 
         assert_eq!(check(&doc).map_err(|e| e.what), Err("wire route points"));

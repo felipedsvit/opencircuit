@@ -174,6 +174,7 @@ pub fn paste(
             reference,
             model: device.model.clone(),
             params: device.params.clone(),
+            info: device.info.clone(),
         });
     }
     // A device reference to a copied device follows the copy.
@@ -286,6 +287,7 @@ pub fn paste(
             from: endpoint(&wire.from)?,
             to: endpoint(&wire.to)?,
             route,
+            number: None,
         }));
     }
 
