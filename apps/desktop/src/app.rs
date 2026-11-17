@@ -239,6 +239,8 @@ pub struct DesktopApp {
     /// The projects opened or saved last; off unless `main` turns it on.
     #[cfg(not(target_arch = "wasm32"))]
     recent: Option<crate::recent::RecentProjects>,
+    /// The command palette (Ctrl+K).
+    command_palette: crate::command_palette::PaletteState,
 }
 
 impl DesktopApp {
@@ -325,6 +327,75 @@ impl DesktopApp {
         };
         // Best effort: a list that cannot be written only loses an entry.
         let _ = recent.record(path);
+    }
+
+    /// Open the command palette, as Ctrl+K does.
+    pub fn open_command_palette(&mut self) {
+        self.command_palette.open();
+    }
+
+    /// Whether the command palette is open.
+    #[must_use]
+    pub const fn command_palette_open(&self) -> bool {
+        self.command_palette.is_open()
+    }
+
+    /// The palette over the drawing, and what was chosen in it.
+    fn command_palette(&mut self, ui: &Ui) {
+        let choice = self.command_palette.show(
+            ui,
+            self.session.as_ref().map(Session::document),
+            self.session.as_ref().map(Session::catalog),
+        );
+        match choice {
+            None => {}
+            Some(crate::command_palette::Choice::Element(subject)) => self.go_to(subject),
+            Some(crate::command_palette::Choice::Command(command)) => {
+                use crate::command_palette::Command;
+                match command {
+                    Command::New => self.new_project(),
+                    Command::Open => self.guard(Pending::OpenDialog),
+                    Command::Save => {
+                        self.save();
+                    }
+                    Command::SaveAs => {
+                        self.save_as_dialog();
+                    }
+                    Command::SaveCopy => self.save_copy_dialog(),
+                    Command::Undo => self.undo(),
+                    Command::Redo => self.redo(),
+                    Command::Fit => self.fit_pending = true,
+                    Command::Edit => self.set_mode(Mode::Edit),
+                    Command::Simulate => self.set_mode(Mode::Simulate),
+                    Command::ExportSvg => self.export_dialog("svg"),
+                    Command::ExportPdf => self.export_dialog("pdf"),
+                    Command::Library => self.library_dialog(),
+                    Command::Keys => self.show_keys = true,
+                }
+            }
+        }
+    }
+
+    /// Select an element and bring it into view: a device by its first
+    /// symbol, a sheet by its frame.
+    fn go_to(&mut self, subject: Subject) {
+        match subject {
+            Subject::Sheet(id) => self.fit_sheet = Some(id),
+            Subject::Device(id) => {
+                let first = self.session.as_ref().and_then(|session| {
+                    session
+                        .document()
+                        .symbols
+                        .iter()
+                        .filter(|symbol| symbol.device_id == id)
+                        .map(|symbol| symbol.id)
+                        .min()
+                });
+                self.editor.set_selection(BTreeSet::from([subject]));
+                self.focus = first.map(Subject::Symbol);
+            }
+            other => self.select(other),
+        }
     }
 
     /// Start a new project from a template, asking first when the open
@@ -1253,6 +1324,7 @@ impl DesktopApp {
             self.save();
         }
         self.confirm_dialog(ui);
+        self.command_palette(ui);
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.recovery_dialog(ui);
@@ -1442,6 +1514,15 @@ impl DesktopApp {
     fn view_keys(&mut self, ui: &mut Ui) {
         if ui.ctx().egui_wants_keyboard_input() {
             return;
+        }
+        // The command palette, in both modes.
+        if ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::COMMAND,
+                egui::Key::K,
+            ))
+        }) {
+            self.command_palette.open();
         }
         let pressed = |ui: &mut Ui, key: egui::Key| {
             ui.input_mut(|input| {
@@ -1786,6 +1867,14 @@ impl DesktopApp {
                     if ui.button(tr("Keyboard shortcuts")).clicked() {
                         ui.close();
                         self.show_keys = true;
+                    }
+                    if ui
+                        .button(tr("Command palette"))
+                        .on_hover_text("Ctrl+K")
+                        .clicked()
+                    {
+                        ui.close();
+                        self.command_palette.open();
                     }
                     if ui.button(tr("About OpenCircuit")).clicked() {
                         ui.close();

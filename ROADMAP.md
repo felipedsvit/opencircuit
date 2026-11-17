@@ -387,7 +387,8 @@ Decisions, to be confirmed in #118:
 
 - [x] Recent projects, project templates (File > New from template) and a
   saved copy of a project (`apps/desktop/tests/files_m9.rs`).
-- [ ] Command palette (Ctrl+K) and search over the whole project.
+- [x] Command palette (Ctrl+K) and search over the whole project
+  (`circuit_commands::find`, `apps/desktop/tests/command_palette.rs`).
 - [x] Reports: `devices` (one row per device) and renumbering of sheets
   (`renumber_sheets` in edit files, `sheets renumber` on the command line of
   the window).

@@ -136,7 +136,8 @@ cargo run -p opencircuit-desktop -- examples/direct-starter/starter.ocircuit
 A project can also be dropped on the window or typed in the path field.
 While a project has unsaved changes, the window keeps a recovery copy in the
 user's data folder every 30 seconds; after a crash, the next window offers it.
-File > New from template starts from one of the example starters, and File >
+Ctrl+K opens a command palette that runs commands and finds devices, wires,
+sheets and notes. File > New from template starts from one of the example starters, and File >
 Open recent lists the last projects. A second window on the same project says
 so in its status bar. Every save
 keeps a version (File > Version history), and `opencircuit diff before.ocircuit

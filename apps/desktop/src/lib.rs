@@ -22,6 +22,7 @@ pub mod camera;
 mod canvas;
 pub mod clock;
 mod cmdline;
+mod command_palette;
 mod dialogs;
 mod documentation;
 pub mod files;

@@ -42,6 +42,12 @@ here when it lands.
   folder; a file that is gone is taken off the list) and Save a copy (writes
   the project to another file and keeps working on this one, unsaved changes
   included).
+- **Command palette** (Ctrl+K, or Help > Command palette, in both modes): a
+  field that runs a command of the window by name (new, open, save, save a
+  copy, undo, redo, fit, edit, simulate, export, load library, keys) or finds
+  an element of the project (devices by designator, model, catalog data or
+  parameter; wires by number; sheets; text notes) and selects it. Arrows move,
+  Enter chooses, Esc closes.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.
