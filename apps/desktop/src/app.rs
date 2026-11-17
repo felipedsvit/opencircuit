@@ -20,7 +20,7 @@ use circuit_renderer::{
 };
 use eframe::egui::{self, Align, KeyboardShortcut, Layout, RichText, Ui};
 
-use crate::camera::Camera;
+use crate::camera::{Camera, DEFAULT_ZOOM};
 use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
 use crate::cmdline::CommandLine;
@@ -127,6 +127,10 @@ pub struct DesktopApp {
     show_keys: bool,
     /// The window about the program is open.
     show_about: bool,
+    /// The cursor cross over the drawing is not drawn.
+    crosshair_off: bool,
+    /// Where the context menu of the drawing is open, in screen points.
+    context_menu: Option<egui::Pos2>,
 }
 
 impl DesktopApp {
@@ -207,6 +211,18 @@ impl DesktopApp {
     #[must_use]
     pub const fn problems_shown(&self) -> bool {
         !self.diagnostics_hidden
+    }
+
+    /// Whether the cursor over the drawing is a cross while editing.
+    #[must_use]
+    pub const fn crosshair_shown(&self) -> bool {
+        !self.crosshair_off
+    }
+
+    /// Whether the context menu of the drawing is open.
+    #[must_use]
+    pub const fn context_menu_open(&self) -> bool {
+        self.context_menu.is_some()
     }
 
     /// What the command line has said, oldest first.
@@ -986,6 +1002,10 @@ impl DesktopApp {
                     if ui.checkbox(&mut snap, "Snap wires to pins").changed() {
                         self.snap_off = !snap;
                     }
+                    let mut cross = !self.crosshair_off;
+                    if ui.checkbox(&mut cross, "Cross-shaped cursor").changed() {
+                        self.crosshair_off = !cross;
+                    }
                     let mut problems = !self.diagnostics_hidden;
                     if ui
                         .checkbox(&mut problems, "Show the problems list")
@@ -1277,6 +1297,146 @@ impl DesktopApp {
         });
     }
 
+    /// What is drawn over the drawing itself: the box of a selection (solid
+    /// when it takes what it contains, dashed when it takes what it
+    /// touches), the cross that replaces the cursor and a line about the
+    /// view.
+    fn paint_over_canvas(
+        &self,
+        ui: &Ui,
+        events: &canvas::CanvasEvents,
+        selecting: Option<(circuit_model::GridRect, bool)>,
+    ) {
+        let tokens = Tokens::of(ui);
+        let [left, top] = events.origin;
+        let area = egui::Rect::from_min_size(
+            egui::pos2(left, top),
+            egui::vec2(events.size[0], events.size[1]),
+        );
+        let painter = ui.painter().with_clip_rect(area);
+        let screen = |point: GridPoint| {
+            let [x, y] = self.camera.to_screen(ScenePoint::from_grid(point));
+            egui::pos2(left + x, top + y)
+        };
+        if let Some((rect, crossing)) = selecting {
+            let corners = [
+                screen(rect.min),
+                screen(GridPoint::new(rect.max.x, rect.min.y)),
+                screen(rect.max),
+                screen(GridPoint::new(rect.min.x, rect.max.y)),
+            ];
+            let color = if crossing {
+                tokens.crossing_select
+            } else {
+                tokens.window_select
+            };
+            let outline = egui::Rect::from_two_pos(corners[0], corners[2]);
+            painter.rect_filled(outline, 0.0, color.gamma_multiply(0.12));
+            let stroke = egui::Stroke::new(1.2, color);
+            let path = [corners[0], corners[1], corners[2], corners[3], corners[0]];
+            if crossing {
+                painter.extend(egui::Shape::dashed_line(&path, stroke, 6.0, 4.0));
+            } else {
+                painter.add(egui::Shape::line(path.to_vec(), stroke));
+            }
+        }
+        let on_drawing = !ui.ctx().is_pointer_over_egui();
+        if self.mode == Mode::Edit
+            && !self.crosshair_off
+            && on_drawing
+            && let Some(hover) = events.hover
+        {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::None);
+            let at = egui::pos2(left + hover[0], top + hover[1]);
+            let stroke = egui::Stroke::new(1.0, tokens.crosshair);
+            for (from, to) in [
+                (egui::vec2(-16.0, 0.0), egui::vec2(-3.0, 0.0)),
+                (egui::vec2(3.0, 0.0), egui::vec2(16.0, 0.0)),
+                (egui::vec2(0.0, -16.0), egui::vec2(0.0, -3.0)),
+                (egui::vec2(0.0, 3.0), egui::vec2(0.0, 16.0)),
+            ] {
+                painter.line_segment([at + from, at + to], stroke);
+            }
+        }
+        let mode = match self.mode {
+            Mode::Edit => "Drawing",
+            Mode::Simulate => "Simulating",
+        };
+        let zoom = (self.camera.zoom / DEFAULT_ZOOM * 100.0).round();
+        painter.text(
+            egui::pos2(left + 10.0, top + 8.0),
+            egui::Align2::LEFT_TOP,
+            format!("{mode} · {zoom}%"),
+            egui::FontId::proportional(11.0),
+            tokens.text_faint,
+        );
+    }
+
+    /// The menu of a secondary click on the drawing: what can be done to the
+    /// selection, and the view.
+    fn context_menu(&mut self, ui: &mut Ui, events: &canvas::CanvasEvents) {
+        if let Some(at) = events.context {
+            let [left, top] = events.origin;
+            self.context_menu = Some(egui::pos2(left + at[0], top + at[1]));
+            // A click on something that is not selected selects it, so the
+            // menu acts on what was clicked.
+            if self.mode == Mode::Edit
+                && let Some(session) = &self.session
+                && let Some(point) = self.camera.to_grid(at)
+                && let Some(hit) =
+                    circuit_editor::hit_test(session.document(), session.catalog(), point)
+                && !self.editor.selection().contains(&hit.subject())
+            {
+                self.editor.set_selection(BTreeSet::from([hit.subject()]));
+            }
+        }
+        let Some(at) = self.context_menu else {
+            return;
+        };
+        let editing = self.mode == Mode::Edit && !self.editor.selection().is_empty();
+        let mut chosen: Option<Key> = None;
+        let mut fit = false;
+        let area = egui::Area::new(ui.scope_id().with(egui::IdSalt::new("context menu")))
+            .order(egui::Order::Foreground)
+            .fixed_pos(at)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::menu(ui.style()).show(ui, |ui| {
+                    ui.set_min_width(150.0);
+                    for (label, key) in [
+                        ("Rotate selection", Key::Rotate),
+                        ("Duplicate selection", Key::Duplicate),
+                        ("Copy selection", Key::Copy),
+                        ("Delete selection", Key::Delete),
+                    ] {
+                        if ui.add_enabled(editing, egui::Button::new(label)).clicked() {
+                            chosen = Some(key);
+                        }
+                    }
+                    if ui
+                        .add_enabled(self.mode == Mode::Edit, egui::Button::new("Paste"))
+                        .clicked()
+                    {
+                        chosen = Some(Key::Paste);
+                    }
+                    ui.separator();
+                    if ui.button("Zoom to the whole drawing").clicked() {
+                        fit = true;
+                    }
+                });
+            });
+        // The click that opened the menu is not one that closes it.
+        let outside = events.context.is_none() && area.response.clicked_elsewhere();
+        if chosen.is_some() || fit || outside {
+            self.context_menu = None;
+        }
+        if fit {
+            self.fit_pending = true;
+        }
+        if let Some(key) = chosen {
+            self.press(key);
+        }
+    }
+
     /// The command line over the bottom of the drawing.
     fn command_line_overlay(&mut self, ui: &mut Ui, origin: [f32; 2], size: [f32; 2]) {
         let width = 480.0_f32.min(size[0] - 20.0);
@@ -1563,12 +1723,12 @@ impl DesktopApp {
     /// The scene to draw: in edit mode the preview of the gesture in
     /// progress, with its guide, its selection box and the pin under the
     /// pointer.
-    fn scene(&self, session: &Session) -> Scene {
+    fn scene(&self, session: &Session) -> (Scene, Option<(circuit_model::GridRect, bool)>) {
         let options = SceneOptions {
             selected: self.editor.selection().clone(),
         };
         if self.mode == Mode::Simulate {
-            return session.scene(&options);
+            return (session.scene(&options), None);
         }
         let preview = self.editor.preview(session.document(), session.catalog());
         let shown = preview.document.as_ref().unwrap_or(session.document());
@@ -1595,15 +1755,7 @@ impl DesktopApp {
                 ),
             );
         }
-        if let Some(area) = preview.selection_box {
-            overlay(
-                &mut scene,
-                Shape::Rect(SceneRect::from_corners(
-                    ScenePoint::from_grid(area.min),
-                    ScenePoint::from_grid(area.max),
-                )),
-            );
-        }
+        let selecting = preview.selection_box.map(|area| (area, preview.crossing));
         let wiring = matches!(self.editor.tool(), Tool::Wire);
         if let Some(found) = self.snapped.as_ref().filter(|_| wiring) {
             for shape in snap_marker(found) {
@@ -1621,7 +1773,7 @@ impl DesktopApp {
                 );
             }
         }
-        scene
+        (scene, selecting)
     }
 
     fn canvas(&mut self, ui: &mut Ui) {
@@ -1634,7 +1786,7 @@ impl DesktopApp {
             });
             return;
         };
-        let scene = self.scene(session);
+        let (scene, selecting) = self.scene(session);
         let fit = std::mem::take(&mut self.fit_pending);
         let grid = self.mode == Mode::Edit && !self.grid_off;
         let events = canvas::show(ui, &scene, &mut self.camera, fit, grid);
@@ -1677,8 +1829,10 @@ impl DesktopApp {
             );
             self.camera.fit(corners, events.size, canvas::FIT_MARGIN);
         }
+        self.paint_over_canvas(ui, &events, selecting);
         self.navigation(ui, events.origin, events.size);
         self.command_line_overlay(ui, events.origin, events.size);
+        self.context_menu(ui, &events);
         match self.mode {
             Mode::Edit => self.edit_on_canvas(ui, events),
             Mode::Simulate => self.operate_on_canvas(events),

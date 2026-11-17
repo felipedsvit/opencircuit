@@ -12,7 +12,7 @@ pub const MIN_ZOOM: f32 = 0.05;
 /// Largest zoom, in screen points per subunit.
 pub const MAX_ZOOM: f32 = 40.0;
 /// Zoom of a new camera: one grid unit is 20 points.
-const DEFAULT_ZOOM: f32 = 2.0;
+pub const DEFAULT_ZOOM: f32 = 2.0;
 /// Largest scene coordinate a screen point is converted back to. Beyond it a
 /// conversion is refused instead of saturating.
 const SCENE_LIMIT: f32 = 1.0e15;
