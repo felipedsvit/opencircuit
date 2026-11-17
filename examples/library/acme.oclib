@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "acme",
   "version": 1,
   "name": "ACME control relays",
@@ -14,6 +14,7 @@
       "version": 1,
       "class": "relay",
       "operator": null,
+      "category": "automation", "title": "ACME relay R2", "note": "Example only",
       "params": [
         { "key": "rated_voltage_mv", "type": { "int": { "min": 1, "max": 4294967295 } }, "default": 24000 },
         { "key": "connection", "type": { "enum": ["dc"] }, "default": "dc" }

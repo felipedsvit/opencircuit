@@ -18,6 +18,7 @@ use crate::library::{
     Artwork, Library, MAX_LIBRARY_MODELS, MAX_LIBRARY_SYMBOLS, check_artwork, is_valid_library_id,
     is_valid_model_name,
 };
+use crate::limits::MAX_TEXT_BYTES;
 use crate::schematic::{ModelRef, ParamValue, SymbolKey, TerminalKey};
 use crate::supply::Conductor;
 
@@ -560,6 +561,101 @@ impl Provenance {
     }
 }
 
+/// Longest note of a model, in bytes.
+pub const MAX_NOTE_BYTES: usize = 512;
+
+/// The palette tab a model is listed under. It is a catalog property for
+/// the user interface only: it changes nothing in the simulation and is
+/// never persisted in a document.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Category {
+    /// Supplies and sources: conductors, batteries, transformers, sockets.
+    Supplies,
+    /// Fuses, circuit breakers and other protective devices.
+    Protection,
+    /// Commands and actuation: contactors, pushbuttons, selectors, limit
+    /// switches, thermal relays, signalling.
+    Controls,
+    /// Motors and power loads.
+    Motors,
+    /// Auxiliary contacts and terminal blocks.
+    Contacts,
+    /// Coils, timers, electronic relays, sensors and logic.
+    Automation,
+    /// Pneumatic and hydraulic actuators.
+    Actuators,
+    /// Lines, busbars and connections.
+    Lines,
+}
+
+impl Category {
+    /// Every category, in the order of the palette tabs.
+    pub const ALL: [Self; 8] = [
+        Self::Supplies,
+        Self::Protection,
+        Self::Controls,
+        Self::Motors,
+        Self::Contacts,
+        Self::Automation,
+        Self::Actuators,
+        Self::Lines,
+    ];
+
+    /// The key used in library files.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Supplies => "supplies",
+            Self::Protection => "protection",
+            Self::Controls => "controls",
+            Self::Motors => "motors",
+            Self::Contacts => "contacts",
+            Self::Automation => "automation",
+            Self::Actuators => "actuators",
+            Self::Lines => "lines",
+        }
+    }
+
+    /// The category whose [`key`](Self::key) is `key`.
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|category| category.key() == key)
+    }
+
+    /// The name shown on the palette tab.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Supplies => "Supplies and sources",
+            Self::Protection => "Protection",
+            Self::Controls => "Controls and actuation",
+            Self::Motors => "Motors and power",
+            Self::Contacts => "Contacts and terminals",
+            Self::Automation => "Automation and logic",
+            Self::Actuators => "Mechanical actuators",
+            Self::Lines => "Lines and connections",
+        }
+    }
+
+    /// The category a model of `class` has unless it says otherwise.
+    #[must_use]
+    pub const fn default_for(class: DeviceClass) -> Self {
+        match class {
+            DeviceClass::PowerSupply | DeviceClass::Transformer => Self::Supplies,
+            DeviceClass::Fuse => Self::Protection,
+            DeviceClass::Contactor
+            | DeviceClass::ThermalOverload
+            | DeviceClass::Pushbutton
+            | DeviceClass::LatchingSwitch
+            | DeviceClass::Lamp
+            | DeviceClass::Buzzer
+            | DeviceClass::MechanicalInterlock => Self::Controls,
+            DeviceClass::Motor => Self::Motors,
+            DeviceClass::Relay | DeviceClass::Timer(_) => Self::Automation,
+        }
+    }
+}
+
 /// A versioned component model. A published `(id, version)` never changes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentModel {
@@ -567,6 +663,9 @@ pub struct ComponentModel {
     version: u32,
     class: DeviceClass,
     operator: Operator,
+    category: Category,
+    title: String,
+    note: Option<String>,
     params: Vec<ParamDefinition>,
     symbols: Vec<SymbolDefinition>,
     provenance: Provenance,
@@ -574,6 +673,9 @@ pub struct ComponentModel {
 
 impl ComponentModel {
     /// Define a model. Consistency is checked by [`ComponentCatalog::new`].
+    /// The category follows the class and the title is the identifier until
+    /// [`with_category`](Self::with_category) and
+    /// [`with_title`](Self::with_title) say otherwise.
     #[must_use]
     pub fn new(
         id: &str,
@@ -588,10 +690,54 @@ impl ComponentModel {
             version,
             class,
             operator: Operator::default_for(class),
+            category: Category::default_for(class),
+            title: id.to_owned(),
+            note: None,
             params,
             symbols,
             provenance,
         }
+    }
+
+    /// The same model under another palette tab.
+    #[must_use]
+    pub const fn with_category(mut self, category: Category) -> Self {
+        self.category = category;
+        self
+    }
+
+    /// The same model with a human-readable title. Checked by
+    /// [`ComponentCatalog::new`].
+    #[must_use]
+    pub fn with_title(mut self, title: &str) -> Self {
+        title.clone_into(&mut self.title);
+        self
+    }
+
+    /// The same model with a note for the user, such as the limits of an
+    /// approximation. Checked by [`ComponentCatalog::new`].
+    #[must_use]
+    pub fn with_note(mut self, note: &str) -> Self {
+        self.note = Some(note.to_owned());
+        self
+    }
+
+    /// The palette tab of the model.
+    #[must_use]
+    pub const fn category(&self) -> Category {
+        self.category
+    }
+
+    /// Human-readable title; the identifier when the model has none.
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// A note for the user, when the model has one.
+    #[must_use]
+    pub fn note(&self) -> Option<&str> {
+        self.note.as_deref()
     }
 
     /// The same model with another operator. Checked against the class by
@@ -946,12 +1092,31 @@ fn keeps_keys(source: &ComponentModel, target: &ComponentModel) -> bool {
             .all(|new| source.symbol(new.key()).is_some() || new.min_instances == 0)
 }
 
+/// A title or note: not empty, within `max` bytes, and without control
+/// characters, so that it can be shown on one line.
+fn check_text(what: &str, text: &str, max: usize) -> Result<(), String> {
+    if text.is_empty() {
+        return Err(format!("the {what} is empty"));
+    }
+    if text.len() > max {
+        return Err(format!("the {what} is longer than {max} bytes"));
+    }
+    if text.chars().any(char::is_control) {
+        return Err(format!("the {what} has a control character"));
+    }
+    Ok(())
+}
+
 fn check_model(model: &ComponentModel) -> Result<(), String> {
     if !model.operator.fits(model.class) {
         return Err(format!(
             "operator {:?} is not valid for class {:?}",
             model.operator, model.class
         ));
+    }
+    check_text("title", &model.title, MAX_TEXT_BYTES)?;
+    if let Some(note) = &model.note {
+        check_text("note", note, MAX_NOTE_BYTES)?;
     }
     let mut symbol_keys = BTreeSet::new();
     let mut coils = 0_u32;
@@ -1210,7 +1375,7 @@ fn builtin_models() -> Vec<ComponentModel> {
         ComponentModel::new(id, 2, class, params, symbols, Provenance::project_owned())
     };
 
-    vec![
+    let models = vec![
         model(
             "supply.terminal",
             DeviceClass::PowerSupply,
@@ -1474,7 +1639,42 @@ fn builtin_models() -> Vec<ComponentModel> {
                 false,
             )],
         ),
-    ]
+    ];
+    models
+        .into_iter()
+        .map(|model| match builtin_title(model.id()) {
+            Some(title) => model.with_title(title),
+            None => model,
+        })
+        .collect()
+}
+
+/// The title of a built-in model. A model without an entry keeps its
+/// identifier as title; a test requires every built-in model to have one.
+fn builtin_title(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "supply.terminal" => "Supply terminal",
+        "pushbutton_no" => "Pushbutton, normally open",
+        "pushbutton_nc" => "Pushbutton, normally closed",
+        "pushbutton.combined" => "Pushbutton, NO and NC",
+        "interlock.mechanical" => "Mechanical interlock",
+        "estop.latching" => "Emergency stop, latching",
+        "limit_switch" => "Limit switch",
+        "selector.latching" => "Selector switch, maintained",
+        "main_switch.3p" => "Main switch, three-pole",
+        "contactor.generic" => "Contactor",
+        "relay.generic" => "Relay",
+        "thermal_overload.generic" => "Thermal overload relay",
+        "timer_on.generic" => "Timer, on-delay",
+        "timer_off.generic" => "Timer, off-delay",
+        "fuse.generic" => "Fuse",
+        "motor.3ph" => "Three-phase motor",
+        "motor.3ph.6t" => "Three-phase motor, six terminals",
+        "transformer.control" => "Control transformer",
+        "lamp.generic" => "Indicator lamp",
+        "buzzer.generic" => "Buzzer",
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -2174,5 +2374,112 @@ mod tests {
             ComponentCatalog::new(vec![model]),
             Err(CatalogError::InvalidModel { .. })
         ));
+    }
+
+    #[test]
+    fn every_builtin_model_has_a_title_of_its_own() {
+        for model in ComponentCatalog::builtin().models() {
+            assert_ne!(model.title(), model.id(), "{}", model.id());
+        }
+    }
+
+    #[test]
+    fn builtin_models_follow_the_category_of_their_class() {
+        for model in ComponentCatalog::builtin().models() {
+            assert_eq!(
+                model.category(),
+                Category::default_for(model.class()),
+                "{}",
+                model.id()
+            );
+        }
+        assert_eq!(
+            builtin_model("fuse.generic").category(),
+            Category::Protection
+        );
+        assert_eq!(builtin_model("motor.3ph").category(), Category::Motors);
+        assert_eq!(
+            builtin_model("supply.terminal").category(),
+            Category::Supplies
+        );
+    }
+
+    #[test]
+    fn category_keys_round_trip_and_are_unique() {
+        let keys: BTreeSet<&str> = Category::ALL.into_iter().map(Category::key).collect();
+
+        assert_eq!(keys.len(), Category::ALL.len());
+        for category in Category::ALL {
+            assert_eq!(Category::from_key(category.key()), Some(category));
+            assert!(!category.label().is_empty());
+        }
+        assert_eq!(Category::from_key("Supplies"), None);
+        assert_eq!(Category::from_key(""), None);
+    }
+
+    fn fuse_with(title: &str, note: Option<&str>) -> ComponentModel {
+        let model = ComponentModel::new(
+            "text.fuse",
+            1,
+            DeviceClass::Fuse,
+            Vec::new(),
+            vec![SymbolDefinition::new(
+                "link",
+                SymbolKind::FuseLink,
+                1,
+                1,
+                false,
+            )],
+            Provenance::project_owned(),
+        )
+        .with_title(title);
+        match note {
+            Some(note) => model.with_note(note),
+            None => model,
+        }
+    }
+
+    #[test]
+    fn title_and_note_are_kept_and_checked() {
+        let catalog = ComponentCatalog::new(vec![fuse_with("Cartridge fuse", Some("Never melts"))]);
+        let catalog = catalog.unwrap_or_else(|error| panic!("{error}"));
+        let model = builtin_model_in(&catalog, "text.fuse");
+
+        assert_eq!(model.title(), "Cartridge fuse");
+        assert_eq!(model.note(), Some("Never melts"));
+        assert_eq!(builtin_model("fuse.generic").note(), None);
+    }
+
+    fn builtin_model_in<'a>(catalog: &'a ComponentCatalog, id: &str) -> &'a ComponentModel {
+        catalog
+            .models()
+            .iter()
+            .find(|model| model.id() == id)
+            .unwrap_or_else(|| panic!("model {id} is missing"))
+    }
+
+    #[test]
+    fn catalog_rejects_empty_oversized_and_multiline_texts() {
+        let long_title = "t".repeat(MAX_TEXT_BYTES + 1);
+        let long_note = "n".repeat(MAX_NOTE_BYTES + 1);
+        for model in [
+            fuse_with("", None),
+            fuse_with(&long_title, None),
+            fuse_with("two\nlines", None),
+            fuse_with("Fuse", Some("")),
+            fuse_with("Fuse", Some(&long_note)),
+            fuse_with("Fuse", Some("a\u{7}bell")),
+        ] {
+            assert!(
+                matches!(
+                    ComponentCatalog::new(vec![model]),
+                    Err(CatalogError::InvalidModel { .. })
+                ),
+                "a bad text was accepted"
+            );
+        }
+        let at_the_limit = "t".repeat(MAX_TEXT_BYTES);
+
+        assert!(ComponentCatalog::new(vec![fuse_with(&at_the_limit, None)]).is_ok());
     }
 }
