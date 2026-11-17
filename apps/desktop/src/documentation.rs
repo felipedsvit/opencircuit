@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 use std::num::NonZeroU32;
 
 use circuit_commands::documentation as edits;
+use circuit_commands::layers;
 use circuit_model::{
     DeviceInfo, LayoutIndex, PinRef, SheetId, StaticNets, Subject, SymbolId, SymbolKind, WireId,
     WireNumbering, WireNumbers, links, pin_name, project_tree, terminal_label,
@@ -280,6 +281,58 @@ pub fn text_section(
                 request = Some(edits::set_text(doc, text, &words));
             }
         });
+    request
+}
+
+/// The layers (ADR-0015), at the end of the inspector: a switch to show and
+/// one to lock each layer, a button to put the selection on it, a field for a
+/// new one, and a way to put the selection back on the default layer.
+pub fn layers_section(
+    ui: &mut Ui,
+    session: &Session,
+    selection: &BTreeSet<Subject>,
+    state: &mut InspectorState,
+) -> Option<Request> {
+    let doc = session.document();
+    let mut request = None;
+    if doc.layers.is_empty() {
+        ui.label("No layers: every element is on the default layer.");
+    }
+    for layer in &doc.layers {
+        ui.horizontal(|ui| {
+            ui.label(&layer.name);
+            let mut visible = layer.visible;
+            if ui
+                .checkbox(&mut visible, format!("Show {}", layer.name))
+                .changed()
+            {
+                request = Some(layers::set_layer(doc, layer.id, None, Some(visible), None));
+            }
+            let mut locked = layer.locked;
+            if ui
+                .checkbox(&mut locked, format!("Lock {}", layer.name))
+                .changed()
+            {
+                request = Some(layers::set_layer(doc, layer.id, None, None, Some(locked)));
+            }
+        });
+        if !selection.is_empty()
+            && ui
+                .button(format!("Put selection on {}", layer.name))
+                .clicked()
+        {
+            request = Some(layers::assign_layer(doc, selection, Some(layer.id)));
+        }
+    }
+    if !selection.is_empty()
+        && !doc.layers.is_empty()
+        && ui.button("Put selection on the default layer").clicked()
+    {
+        request = Some(layers::assign_layer(doc, selection, None));
+    }
+    if let Some(name) = state.text_field(ui, "layers:new".to_owned(), "New layer", "") {
+        request = Some(layers::add_layer(doc, &name, true, false));
+    }
     request
 }
 

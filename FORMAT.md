@@ -122,6 +122,8 @@ none of them:
 | `project.wire_numbering` | `{ "prefix": <text of at most 16 bytes>, "start": <integer>, "step": <integer, at least 1>, "per_sheet": <boolean> }`; absent: wires are not numbered |
 | `waivers` | list of `{ "code": "OC-STR-018", "subject": <subject>, "reason": <text> }`, sorted by code and then subject, at most 10 000 |
 | `texts` | list of text notes (ADR-0015), sorted by `id`: `{ "id": <id>, "position": { "x", "y" }, "text": <one line, 1 to 120 characters and at most 256 bytes, no control character>, "anchor": "left" or "center" }`; absent: no notes |
+| `layers` | list of layers (ADR-0015), sorted by `id`: `{ "id": <id>, "name": <1 to 32 characters>, "visible": <boolean>, "locked": <boolean> }`, at most 256; absent: no layers |
+| `symbols[].layer`, `wires[].layer`, `texts[].layer` | the `id` of a layer; absent: the default layer, which always shows and edits |
 
 Wire numbers are derived from the nets and are never stored (ADR-0014): one
 number per net, in the order of the first point of the net (sheet, then zone
@@ -327,7 +329,7 @@ absent `null` fields) is accepted and saves canonically. The repository keeps
 2. **Phase 2:** deserialize the current schema strictly.
 3. **Limits:** text at most 16 MiB; at most 100 000 entities per collection,
    1 024 route points per wire, 64 parameters per device, 256 bytes per text
-   value, 10 000 waivers. A text note longer than 256 bytes is refused as any
+   value, 10 000 waivers, 256 layers. A text note longer than 256 bytes is refused as any
    text is; one with more than 120 characters, no characters or a control
    character loads and is the warning `OC-STR-021`.
 
@@ -361,4 +363,4 @@ migration and an entry below.
 | 1 | First schema. |
 | 2 | `sheets`, and `author`, `company`, `revision` and `date` in `project` (ADR-0011). The migration adds no sheet and sets the four fields to `null`. |
 | 3 | `wires[].number`, `devices[].info`, `project.wire_numbering` and `waivers` (ADR-0014). All are optional and omitted when empty, so the migration only raises the version. |
-| 4 | `texts` (ADR-0015). Optional and omitted when empty, so the migration only raises the version. |
+| 4 | `texts`, `layers` and the `layer` of symbols, wires and texts (ADR-0015). All are optional and omitted when empty, so the migration only raises the version. |

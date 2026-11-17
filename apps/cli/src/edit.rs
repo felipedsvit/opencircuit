@@ -16,11 +16,11 @@ use std::fmt;
 
 use circuit_commands::sheets::{self, SheetSpec};
 use circuit_commands::{Anchor, CommandError, Edit, SupplyPreset, Transaction, ops};
-use circuit_commands::{designators, documentation, waivers};
+use circuit_commands::{designators, documentation, layers, waivers};
 use circuit_model::{
-    ComponentCatalog, DeviceId, Endpoint, GridPoint, JunctionId, ModelRef, Orientation, ParamValue,
-    PinRef, QuarterTurn, Schematic, SheetSize, Subject, SupplyId, SymbolId, SymbolKey, TerminalKey,
-    TextId, WireId, Zones,
+    ComponentCatalog, DeviceId, Endpoint, GridPoint, JunctionId, LayerId, ModelRef, Orientation,
+    ParamValue, PinRef, QuarterTurn, Schematic, SheetSize, Subject, SupplyId, SymbolId, SymbolKey,
+    TerminalKey, TextId, WireId, Zones,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -208,6 +208,26 @@ enum Operation {
     },
     /// Change the words of a text note, by name or ID.
     SetText { text: Value, to: String },
+    /// Add a layer (ADR-0015), visible and unlocked unless said otherwise.
+    AddLayer {
+        name: String,
+        visible: Option<bool>,
+        locked: Option<bool>,
+        #[serde(rename = "as")]
+        alias: Option<String>,
+    },
+    /// Rename, show, hide, lock or unlock a layer; what is left out stays.
+    SetLayer {
+        layer: Value,
+        name: Option<String>,
+        visible: Option<bool>,
+        locked: Option<bool>,
+    },
+    /// Remove a layer nothing is on.
+    RemoveLayer { layer: Value },
+    /// Put symbols, wires, text notes and the symbols of devices on a layer;
+    /// `null` is the default layer.
+    AssignLayer { layer: Value, elements: Vec<Value> },
 }
 
 impl Operation {
@@ -234,6 +254,10 @@ impl Operation {
             Self::Renumber { .. } => "renumber",
             Self::AddText { .. } => "add_text",
             Self::SetText { .. } => "set_text",
+            Self::AddLayer { .. } => "add_layer",
+            Self::SetLayer { .. } => "set_layer",
+            Self::RemoveLayer { .. } => "remove_layer",
+            Self::AssignLayer { .. } => "assign_layer",
         }
     }
 }
@@ -251,6 +275,8 @@ pub enum Created {
     Wire(WireId),
     /// A text note.
     Text(TextId),
+    /// A layer.
+    Layer(LayerId),
 }
 
 impl Created {
@@ -263,6 +289,7 @@ impl Created {
             Self::Junction(_) => "junction",
             Self::Wire(_) => "wire",
             Self::Text(_) => "text",
+            Self::Layer(_) => "layer",
         }
     }
 
@@ -275,6 +302,7 @@ impl Created {
             Self::Junction(id) => id.0,
             Self::Wire(id) => id.0,
             Self::Text(id) => id.0,
+            Self::Layer(id) => id.0,
         }
     }
 }
@@ -758,6 +786,51 @@ impl Run<'_> {
                 let tx = ops::set_text(&self.doc, id, to).map_err(refused)?;
                 self.commit(&tx)
             }
+            Operation::AddLayer {
+                name,
+                visible,
+                locked,
+                alias,
+            } => {
+                let tx = layers::add_layer(
+                    &self.doc,
+                    name,
+                    visible.unwrap_or(true),
+                    locked.unwrap_or(false),
+                )
+                .map_err(refused)?;
+                let id = tx.edits.iter().find_map(|edit| match edit {
+                    Edit::InsertLayer(layer) => Some(layer.id),
+                    _ => None,
+                });
+                self.commit(&tx)?;
+                self.remember(alias.as_deref(), id.map(Created::Layer))
+            }
+            Operation::SetLayer {
+                layer,
+                name,
+                visible,
+                locked,
+            } => {
+                let id = self.layer(layer)?;
+                let tx = layers::set_layer(&self.doc, id, name.as_deref(), *visible, *locked)
+                    .map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::RemoveLayer { layer } => {
+                let id = self.layer(layer)?;
+                let tx = layers::remove_layer(&self.doc, id).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::AssignLayer { layer, elements } => {
+                let target = match layer {
+                    Value::Null => None,
+                    other => Some(self.layer(other)?),
+                };
+                let subjects = self.subjects(elements)?;
+                let tx = layers::assign_layer(&self.doc, &subjects, target).map_err(refused)?;
+                self.commit(&tx)
+            }
             Operation::Renumber { sheet } => {
                 let scope = sheet.map_or(designators::Scope::All, designators::Scope::Sheet);
                 let tx = designators::renumber(&self.doc, scope).map_err(refused)?;
@@ -807,6 +880,29 @@ impl Run<'_> {
             return Err(format!("the name `{name}` is already used"));
         }
         Ok(())
+    }
+
+    /// A layer: a name given with `as`, the name it has in the project, or
+    /// an ID.
+    fn layer(&self, value: &Value) -> Result<LayerId, String> {
+        match value {
+            Value::String(name) => match self.names.get(name) {
+                Some(Created::Layer(id)) => Ok(*id),
+                Some(other) => Err(format!("`{name}` is a {}, not a layer", other.kind())),
+                None => self
+                    .doc
+                    .layers
+                    .iter()
+                    .find(|layer| layer.name == *name)
+                    .map(|layer| layer.id)
+                    .ok_or_else(|| format!("the project has no layer `{name}`")),
+            },
+            Value::Number(number) => number
+                .as_u64()
+                .map(LayerId)
+                .ok_or_else(|| "a layer ID is a whole number".to_owned()),
+            _ => Err("a layer is a name or an ID".to_owned()),
+        }
     }
 
     /// A device by designator.
@@ -936,6 +1032,9 @@ impl Run<'_> {
                     Some(Created::Junction(id)) => Subject::Junction(*id),
                     Some(Created::Wire(id)) => Subject::Wire(*id),
                     Some(Created::Text(id)) => Subject::Text(*id),
+                    Some(Created::Layer(_)) => {
+                        return Err(format!("`{name}` is a layer, which cannot be selected"));
+                    }
                     Some(Created::Supply(_)) => {
                         return Err(format!("`{name}` is a supply, which cannot be selected"));
                     }

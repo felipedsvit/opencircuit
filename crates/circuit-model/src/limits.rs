@@ -65,6 +65,7 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
     count("wires", doc.wires.len(), MAX_ENTITIES_PER_COLLECTION)?;
     count("waivers", doc.waivers.len(), MAX_WAIVERS)?;
     count("texts", doc.texts.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    count("layers", doc.layers.len(), crate::layers::MAX_LAYERS)?;
 
     text("project name", &doc.project.name)?;
     for (what, value) in [
@@ -116,6 +117,9 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
     }
     for note in &doc.texts {
         text("text note", &note.text)?;
+    }
+    for layer in &doc.layers {
+        text("layer name", &layer.name)?;
     }
     for waiver in &doc.waivers {
         text("waiver code", &waiver.code)?;
@@ -205,6 +209,7 @@ mod tests {
             to: Endpoint::Junction(JunctionId(3)),
             route: vec![GridPoint::default(); MAX_ROUTE_POINTS + 1],
             number: None,
+            layer: None,
         });
 
         assert_eq!(check(&doc).map_err(|e| e.what), Err("wire route points"));

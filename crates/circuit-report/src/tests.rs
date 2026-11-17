@@ -166,6 +166,7 @@ fn a_net_of_three_terminals_lists_the_third_under_also() {
         to: circuit_model::Endpoint::Terminal(pin_ref(k1_aux, "p1")),
         route: Vec::new(),
         number: None,
+        layer: None,
     });
     doc.next_id += 1;
 

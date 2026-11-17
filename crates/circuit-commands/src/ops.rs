@@ -19,6 +19,7 @@ use circuit_model::{
 
 use crate::edit::Edit;
 use crate::error::CommandError;
+use crate::layers;
 use crate::transaction::Transaction;
 
 /// Where a new wire ends.
@@ -239,6 +240,7 @@ pub fn place(
         slot: definition.slotted().then_some(1),
         position: at,
         rotation,
+        layer: None,
     }));
     Ok(tx)
 }
@@ -284,6 +286,7 @@ pub fn place_on_wire(
         .iter()
         .find(|candidate| candidate.id == wire)
         .ok_or(CommandError::Missing(Subject::Wire(wire)))?;
+    layers::ensure_wire_unlocked(doc, wire)?;
     let layout = LayoutIndex::new(doc, catalog);
     let path = layout.wire_polyline(old).ok_or_else(not_here)?;
     let index = segment_at(&path, at).ok_or_else(not_here)?;
@@ -366,6 +369,7 @@ pub fn place_on_wire(
         slot: definition.slotted().then_some(1),
         position: at,
         rotation: turn,
+        layer: None,
     }));
     let pin = |terminal: &circuit_model::TerminalDefinition| {
         Endpoint::Terminal(circuit_model::PinRef {
@@ -379,6 +383,7 @@ pub fn place_on_wire(
         to: pin(earlier),
         route: waypoints(1..index.saturating_add(1)),
         number: old.number.clone(),
+        layer: None,
     }));
     tx.edits.push(Edit::InsertWire(Wire {
         id: second_half,
@@ -386,6 +391,7 @@ pub fn place_on_wire(
         to: old.to.clone(),
         route: waypoints(index.saturating_add(1)..last),
         number: None,
+        layer: None,
     }));
     Ok(tx)
 }
@@ -457,6 +463,7 @@ pub fn add_text(
         position: at,
         text: text.to_owned(),
         anchor,
+        layer: None,
     }));
     Ok(tx)
 }
@@ -478,6 +485,7 @@ pub fn set_text(
         .iter()
         .find(|t| t.id == id)
         .ok_or(CommandError::Missing(Subject::Text(id)))?;
+    layers::ensure_unlocked(doc, [&Subject::Text(id)])?;
     let mut tx = Transaction::new("Edit text", doc.next_id);
     if note.text != text {
         tx.edits.push(Edit::SetText {
@@ -560,6 +568,7 @@ pub fn add_symbol(
         slot,
         position: at,
         rotation,
+        layer: None,
     }));
     Ok(tx)
 }
@@ -633,6 +642,7 @@ fn resolve(
                 to: Endpoint::Junction(junction),
                 route: before,
                 number: split.number.clone(),
+                layer: None,
             }));
             edits.push(Edit::InsertWire(Wire {
                 id: second,
@@ -640,6 +650,7 @@ fn resolve(
                 to: split.to.clone(),
                 route: after,
                 number: split.number.clone(),
+                layer: None,
             }));
             Ok((Endpoint::Junction(junction), *at))
         }
@@ -666,6 +677,12 @@ pub fn connect(
             return Err(CommandError::SelfLoop);
         }
     }
+    // Ending at a point of a wire splits it, which changes that wire.
+    for anchor in [from, to] {
+        if let Anchor::OnWire { wire, .. } = anchor {
+            layers::ensure_wire_unlocked(doc, *wire)?;
+        }
+    }
     let layout = LayoutIndex::new(doc, catalog);
     let mut ids = IdAllocator::starting_at(doc.next_id);
     let mut edits = Vec::new();
@@ -686,6 +703,7 @@ pub fn connect(
         to: end,
         route,
         number: None,
+        layer: None,
     }));
     let mut tx = Transaction::new("Connect", ids.next_id());
     tx.edits = edits;
@@ -759,7 +777,11 @@ pub fn delete(
                 doc.texts.iter().find(|t| t.id == *id).ok_or_else(missing)?;
                 texts.insert(*id);
             }
-            Subject::Pin(_) | Subject::Supply(_) | Subject::Sheet(_) | Subject::Document => {}
+            Subject::Pin(_)
+            | Subject::Supply(_)
+            | Subject::Sheet(_)
+            | Subject::Layer(_)
+            | Subject::Document => {}
         }
     }
 
@@ -819,6 +841,16 @@ pub fn delete(
         }
     }
 
+    // What goes with the selection counts too: a wire on a locked layer is not
+    // deleted because a symbol it ends at was.
+    let doomed: Vec<Subject> = wires
+        .iter()
+        .map(|id| Subject::Wire(*id))
+        .chain(symbols.iter().map(|id| Subject::Symbol(*id)))
+        .chain(texts.iter().map(|id| Subject::Text(*id)))
+        .collect();
+    layers::ensure_unlocked(doc, doomed.iter())?;
+
     let count = wires
         .len()
         .saturating_add(junctions.len())
@@ -862,6 +894,7 @@ pub(crate) fn movable(
             | Subject::Supply(_)
             | Subject::Sheet(_)
             | Subject::Text(_)
+            | Subject::Layer(_)
             | Subject::Document => {}
         }
     }
@@ -945,6 +978,7 @@ pub fn move_by(
     if delta == GridPoint::default() {
         return Ok(tx);
     }
+    layers::ensure_movable_unlocked(doc, subjects)?;
     let (symbols, junctions) = movable(doc, subjects);
     let layout = LayoutIndex::new(doc, catalog);
     for id in &symbols {
@@ -1012,6 +1046,7 @@ pub fn rotate(
     catalog: &ComponentCatalog,
     symbols: &BTreeSet<SymbolId>,
 ) -> Result<Transaction, CommandError> {
+    layers::ensure_symbols_unlocked(doc, symbols)?;
     let mut tx = Transaction::new("Rotate", doc.next_id);
     let layout = LayoutIndex::new(doc, catalog);
     for id in symbols {
@@ -1053,6 +1088,7 @@ pub fn set_reference(
         return Err(CommandError::InvalidReference(text.to_owned()));
     }
     let current = device_of(doc, device)?;
+    layers::ensure_unlocked(doc, [&Subject::Device(device)])?;
     let mut tx = Transaction::new(
         format!("Rename {} to {text}", current.reference.0),
         doc.next_id,
@@ -1087,6 +1123,7 @@ pub fn set_param(
     value: Option<ParamValue>,
 ) -> Result<Transaction, CommandError> {
     let current = device_of(doc, device)?;
+    layers::ensure_unlocked(doc, [&Subject::Device(device)])?;
     let model = model_of(catalog, &current.model)?;
     let definition = model
         .params()
@@ -1155,6 +1192,7 @@ pub fn upgrade_model(
     device: DeviceId,
 ) -> Result<Transaction, CommandError> {
     let current = device_of(doc, device)?;
+    layers::ensure_unlocked(doc, [&Subject::Device(device)])?;
     model_of(catalog, &current.model)?;
     let target = catalog
         .upgrade(&current.model)

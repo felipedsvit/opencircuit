@@ -2268,3 +2268,234 @@ fn a_version_3_project_opens_and_is_saved_as_version_4() {
         serde_json::from_str(&fs::read_to_string(&old).expect("saved")).expect("JSON");
     assert_eq!(doc["schema_version"], 4);
 }
+
+/// A project with a note and two layers, made only through an edit file.
+fn layered_project(name: &str) -> (PathBuf, PathBuf) {
+    let directory = scratch(name);
+    let project = directory.join("layers.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let edit = directory.join("setup.json");
+    fs::write(
+        &edit,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "add_text", "at": [5, 5], "text": "Visible note", "as": "shown" },
+            { "op": "add_text", "at": [5, 9], "text": "Secret note", "as": "secret" },
+            { "op": "add_layer", "name": "Notes", "as": "notes" },
+            { "op": "add_layer", "name": "Frozen", "visible": true, "locked": true },
+            { "op": "assign_layer", "layer": "notes", "elements": [ "secret" ] },
+            { "op": "assign_layer", "layer": "Frozen", "elements": [ "shown" ] } ] }"#,
+    )
+    .expect("write");
+    let done = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+    assert_eq!(code(&done), 0, "{}{}", stdout(&done), stderr(&done));
+    (directory, project)
+}
+
+/// The IDs of the two notes of [`layered_project`]: the visible one on the
+/// locked layer, then the secret one on the layer `Notes`.
+fn note_ids(project: &Path) -> (u64, u64) {
+    let doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(project).expect("saved")).expect("JSON");
+    let id = |at: usize| doc["texts"][at]["id"].as_u64().expect("text id");
+    (id(0), id(1))
+}
+
+fn apply_operations(directory: &Path, project: &Path, operations: &str) -> Output {
+    let edit = directory.join("next.json");
+    fs::write(
+        &edit,
+        format!(r#"{{ "schema_version": 1, "operations": {operations} }}"#),
+    )
+    .expect("write");
+    opencircuit(&[
+        "edit",
+        project.to_str().expect("utf-8 path"),
+        "--apply",
+        edit.to_str().expect("utf-8 path"),
+    ])
+}
+
+#[test]
+fn layers_are_made_assigned_hidden_and_a_hidden_layer_is_left_out_of_the_drawing() {
+    let (directory, project) = layered_project("layers-hide");
+    let path = project.to_str().expect("utf-8 path");
+    let doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&project).expect("saved")).expect("JSON");
+    assert_eq!(doc["schema_version"], 4);
+    assert_eq!(doc["layers"].as_array().expect("layers").len(), 2);
+    assert_eq!(
+        code(&opencircuit(&["validate", path, "--deny-warnings"])),
+        0
+    );
+
+    let svg = directory.join("all.svg");
+    assert_eq!(
+        code(&opencircuit(&[
+            "export",
+            path,
+            "--output",
+            svg.to_str().expect("utf-8 path")
+        ])),
+        0
+    );
+    let shown = fs::read_to_string(&svg).expect("svg");
+    assert!(shown.contains("Visible note") && shown.contains("Secret note"));
+
+    let hidden = apply_operations(
+        &directory,
+        &project,
+        r#"[ { "op": "set_layer", "layer": "Notes", "visible": false } ]"#,
+    );
+    assert_eq!(code(&hidden), 0, "{}{}", stdout(&hidden), stderr(&hidden));
+    assert_eq!(
+        code(&opencircuit(&[
+            "export",
+            path,
+            "--output",
+            svg.to_str().expect("utf-8 path")
+        ])),
+        0
+    );
+    let after = fs::read_to_string(&svg).expect("svg");
+    assert!(after.contains("Visible note"));
+    assert!(
+        !after.contains("Secret note"),
+        "a hidden layer is not exported"
+    );
+    // The project still holds the note: hiding is not deleting.
+    assert!(
+        fs::read_to_string(&project)
+            .expect("saved")
+            .contains("Secret note")
+    );
+}
+
+#[test]
+fn a_locked_layer_refuses_edits_and_the_project_stays_as_it_was() {
+    let (directory, project) = layered_project("layers-lock");
+    let before = fs::read_to_string(&project).expect("saved");
+    let (shown, _) = note_ids(&project);
+
+    for operation in [
+        format!(r#"{{ "op": "set_text", "text": {shown}, "to": "changed" }}"#),
+        format!(r#"{{ "op": "move", "elements": [ {{ "text": {shown} }} ], "by": [1, 0] }}"#),
+        format!(r#"{{ "op": "delete", "elements": [ {{ "text": {shown} }} ] }}"#),
+        format!(
+            r#"{{ "op": "assign_layer", "layer": null, "elements": [ {{ "text": {shown} }} ] }}"#
+        ),
+    ] {
+        let refused = apply_operations(&directory, &project, &format!("[ {operation} ]"));
+        assert_eq!(code(&refused), 1, "{operation}");
+        assert!(
+            stderr(&refused).contains("locked") || stdout(&refused).contains("locked"),
+            "{operation}: {}{}",
+            stdout(&refused),
+            stderr(&refused)
+        );
+    }
+    assert_eq!(fs::read_to_string(&project).expect("saved"), before);
+
+    // Unlocked in the same file, the same change goes through.
+    let done = apply_operations(
+        &directory,
+        &project,
+        &format!(
+            r#"[ {{ "op": "set_layer", "layer": "Frozen", "locked": false }},
+                 {{ "op": "set_text", "text": {shown}, "to": "changed" }} ]"#
+        ),
+    );
+    assert_eq!(code(&done), 0, "{}{}", stdout(&done), stderr(&done));
+    assert!(
+        fs::read_to_string(&project)
+            .expect("saved")
+            .contains("changed")
+    );
+}
+
+#[test]
+fn a_layer_in_use_is_not_removed_a_bad_name_is_refused_and_a_name_is_not_used_twice() {
+    let (directory, project) = layered_project("layers-refuse");
+    let before = fs::read_to_string(&project).expect("saved");
+    let (_, secret) = note_ids(&project);
+
+    for operation in [
+        r#"{ "op": "remove_layer", "layer": "Notes" }"#.to_owned(),
+        r#"{ "op": "add_layer", "name": "Notes" }"#.to_owned(),
+        r#"{ "op": "add_layer", "name": "" }"#.to_owned(),
+        r#"{ "op": "add_layer", "name": " padded" }"#.to_owned(),
+        r#"{ "op": "set_layer", "layer": "Nope", "visible": false }"#.to_owned(),
+        format!(
+            r#"{{ "op": "assign_layer", "layer": "Nope", "elements": [ {{ "text": {secret} }} ] }}"#
+        ),
+    ] {
+        let refused = apply_operations(&directory, &project, &format!("[ {operation} ]"));
+        assert_eq!(code(&refused), 1, "{operation}");
+    }
+    assert_eq!(fs::read_to_string(&project).expect("saved"), before);
+
+    // Emptied, the layer goes.
+    let removed = apply_operations(
+        &directory,
+        &project,
+        &format!(
+            r#"[ {{ "op": "assign_layer", "layer": null, "elements": [ {{ "text": {secret} }} ] }},
+                 {{ "op": "remove_layer", "layer": "Notes" }} ]"#
+        ),
+    );
+    assert_eq!(
+        code(&removed),
+        0,
+        "{}{}",
+        stdout(&removed),
+        stderr(&removed)
+    );
+    assert!(
+        !fs::read_to_string(&project)
+            .expect("saved")
+            .contains("Notes")
+    );
+}
+
+#[test]
+fn a_simulation_gives_the_same_trace_with_a_layer_hidden_or_locked() {
+    let directory = scratch("layers-sim");
+    let original = fs::read_to_string(root().join("examples/direct-starter/command.ocircuit"))
+        .expect("example");
+    let layered = directory.join("command.ocircuit");
+    fs::copy(
+        root().join("examples/direct-starter/command.scenario.json"),
+        directory.join("command.scenario.json"),
+    )
+    .expect("scenario");
+    fs::write(&layered, &original).expect("write");
+    let path = layered.to_str().expect("utf-8 path");
+    let edit = directory.join("hide.json");
+    fs::write(
+        &edit,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "add_layer", "name": "Hidden", "visible": false, "locked": true, "as": "h" },
+            { "op": "assign_layer", "layer": "h", "elements": [ { "device": "K1" }, { "device": "S1" } ] } ] }"#,
+    )
+    .expect("write");
+    let done = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+    assert_eq!(code(&done), 0, "{}{}", stdout(&done), stderr(&done));
+
+    let plain = stdout(&opencircuit(&[
+        "simulate",
+        "examples/direct-starter/command.ocircuit",
+        "--scenario",
+        "examples/direct-starter/command.scenario.json",
+    ]));
+    let hidden = stdout(&opencircuit(&[
+        "simulate",
+        path,
+        "--scenario",
+        directory
+            .join("command.scenario.json")
+            .to_str()
+            .expect("utf-8 path"),
+    ]));
+    assert!(!plain.is_empty());
+    assert_eq!(plain, hidden);
+}

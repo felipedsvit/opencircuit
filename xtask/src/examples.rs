@@ -664,6 +664,7 @@ fn documentation() -> Built<Schematic> {
             position: circuit_model::GridPoint::new(at.0, at.1),
             text: text.to_owned(),
             anchor: circuit_model::TextAnchor::Left,
+            layer: None,
         });
     }
     Ok(doc)

@@ -15,7 +15,7 @@ use circuit_model::{
     SymbolId, SymbolKey,
 };
 
-use crate::{CommandError, Transaction, designators, ops};
+use crate::{CommandError, Transaction, designators, layers, ops};
 
 /// Longest line that is read, in bytes.
 pub const MAX_LINE_BYTES: usize = 512;
@@ -52,6 +52,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &["?"],
         usage: "help [command]",
         help: "List the commands, or explain one.",
+    },
+    CommandSpec {
+        name: "layer",
+        aliases: &[],
+        usage: "layer [new|show|hide|lock|unlock|delete|assign name | release]",
+        help: "List the layers, add one, show, hide, lock or delete one, or put the selection on one (release: back on the default layer).",
     },
     CommandSpec {
         name: "mode",
@@ -269,6 +275,9 @@ pub enum CommandLineError {
         /// The symbols it has.
         symbols: String,
     },
+    /// There is no layer with this name.
+    #[error("no layer `{0}`; `layer` lists them")]
+    NoSuchLayer(String),
     /// The command works on the selection and nothing is selected.
     #[error("nothing is selected")]
     NothingSelected,
@@ -330,6 +339,7 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
         "save" => bare(rest, command, Request::Save),
         "wire" => bare(rest, command, Request::Tool(ToolRequest::Wire)),
         "text" => text_note(rest, command, context),
+        "layer" => layer_command(rest, command, context),
         "select" => bare(rest, command, Request::Tool(ToolRequest::Select)),
         "zoom" => zoom(rest, command),
         "mode" => mode(rest, command),
@@ -553,6 +563,89 @@ fn text_note(
         &words.join(" "),
         circuit_model::TextAnchor::Left,
     )?)])
+}
+
+/// The layer a name says: exactly, or without regard to case when only one
+/// layer matches.
+fn layer_named<'a>(
+    doc: &'a Schematic,
+    name: &str,
+) -> Result<&'a circuit_model::Layer, CommandLineError> {
+    if let Some(exact) = doc.layers.iter().find(|layer| layer.name == name) {
+        return Ok(exact);
+    }
+    let lower = name.to_lowercase();
+    let mut found = doc
+        .layers
+        .iter()
+        .filter(|layer| layer.name.to_lowercase() == lower);
+    match (found.next(), found.next()) {
+        (Some(layer), None) => Ok(layer),
+        _ => Err(CommandLineError::NoSuchLayer(name.to_owned())),
+    }
+}
+
+fn layer_command(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    let doc = context.doc;
+    let Some((action, words)) = rest.split_first() else {
+        let lines: Vec<String> = doc
+            .layers
+            .iter()
+            .map(|layer| {
+                format!(
+                    "{}{}{}",
+                    layer.name,
+                    if layer.visible { "" } else { " (hidden)" },
+                    if layer.locked { " (locked)" } else { "" }
+                )
+            })
+            .collect();
+        return Ok(vec![Request::Message(if lines.is_empty() {
+            "no layers; `layer new name` adds one".to_owned()
+        } else {
+            lines.join("\n")
+        })]);
+    };
+    let name = words.join(" ");
+    let action = action.to_lowercase();
+    if action == "release" {
+        if !words.is_empty() {
+            return Err(CommandLineError::Usage(command.usage));
+        }
+        selected(context)?;
+        return Ok(vec![Request::Edit(layers::assign_layer(
+            doc,
+            context.selection,
+            None,
+        )?)]);
+    }
+    if words.is_empty() {
+        return Err(CommandLineError::Usage(command.usage));
+    }
+    let transaction = match action.as_str() {
+        "new" => layers::add_layer(doc, &name, true, false)?,
+        "show" | "hide" | "lock" | "unlock" => {
+            let id = layer_named(doc, &name)?.id;
+            match action.as_str() {
+                "show" => layers::set_layer(doc, id, None, Some(true), None)?,
+                "hide" => layers::set_layer(doc, id, None, Some(false), None)?,
+                "lock" => layers::set_layer(doc, id, None, None, Some(true))?,
+                _ => layers::set_layer(doc, id, None, None, Some(false))?,
+            }
+        }
+        "delete" => layers::remove_layer(doc, layer_named(doc, &name)?.id)?,
+        "assign" => {
+            let id = layer_named(doc, &name)?.id;
+            selected(context)?;
+            layers::assign_layer(doc, context.selection, Some(id))?
+        }
+        _ => return Err(CommandLineError::Usage(command.usage)),
+    };
+    Ok(vec![Request::Edit(transaction)])
 }
 
 fn renumber_designators(
@@ -1090,6 +1183,88 @@ mod tests {
         let long = format!("text 0,0 {}", "x".repeat(121));
         assert!(matches!(
             run(&long, &context),
+            Err(CommandLineError::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn layer_commands_add_show_hide_lock_assign_and_release() {
+        let catalog = ComponentCatalog::builtin();
+        let mut b = circuit_model::SchematicBuilder::new("n");
+        let device = b.device("S1", "pushbutton_no", &[]).unwrap();
+        let symbol = b
+            .symbol(device, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+        let mut doc = b.finish();
+        let none = BTreeSet::new();
+        let apply = |doc: &mut Schematic, line: &str, selection: &BTreeSet<Subject>| {
+            let made = run(line, &context(doc, &catalog, selection)).unwrap();
+            let [Request::Edit(tx)] = made.as_slice() else {
+                panic!("one edit expected for {line}: {made:?}");
+            };
+            *doc = tx.apply_to(doc).unwrap().0;
+        };
+
+        apply(&mut doc, "layer new Power lines", &none);
+        assert_eq!(doc.layers[0].name, "Power lines");
+        apply(&mut doc, "layer hide power lines", &none);
+        assert!(!doc.layers[0].visible);
+        apply(&mut doc, "layer show Power lines", &none);
+        apply(&mut doc, "layer lock Power lines", &none);
+        assert!(doc.layers[0].locked);
+        apply(&mut doc, "layer unlock Power lines", &none);
+
+        let chosen = BTreeSet::from([Subject::Symbol(symbol)]);
+        apply(&mut doc, "layer assign Power lines", &chosen);
+        assert_eq!(doc.symbols[0].layer, Some(doc.layers[0].id));
+        apply(&mut doc, "layer release", &chosen);
+        assert_eq!(doc.symbols[0].layer, None);
+        apply(&mut doc, "layer delete Power lines", &none);
+        assert!(doc.layers.is_empty());
+    }
+
+    #[test]
+    fn layer_alone_lists_them_and_a_bad_layer_command_says_how_it_is_typed() {
+        let catalog = ComponentCatalog::builtin();
+        let mut doc = Schematic::new("n");
+        let none = BTreeSet::new();
+        let listing = |doc: &Schematic| run("layer", &context(doc, &catalog, &none)).unwrap();
+        assert!(
+            matches!(&listing(&doc)[..], [Request::Message(text)] if text.contains("no layers"))
+        );
+
+        doc.layers.push(circuit_model::Layer {
+            id: circuit_model::LayerId(5),
+            name: "Control".to_owned(),
+            visible: false,
+            locked: true,
+        });
+        assert!(matches!(&listing(&doc)[..],
+            [Request::Message(text)] if text == "Control (hidden) (locked)"));
+
+        let run_line = |line: &str| run(line, &context(&doc, &catalog, &none));
+        assert!(matches!(
+            run_line("layer hide"),
+            Err(CommandLineError::Usage(_))
+        ));
+        assert!(matches!(
+            run_line("layer frob x"),
+            Err(CommandLineError::Usage(_))
+        ));
+        assert!(matches!(
+            run_line("layer hide Nope"),
+            Err(CommandLineError::NoSuchLayer(_))
+        ));
+        assert!(matches!(
+            run_line("layer assign Control"),
+            Err(CommandLineError::NothingSelected)
+        ));
+        assert!(matches!(
+            run_line("layer release"),
+            Err(CommandLineError::NothingSelected)
+        ));
+        assert!(matches!(
+            run_line("layer new Control"),
             Err(CommandLineError::Refused(_))
         ));
     }

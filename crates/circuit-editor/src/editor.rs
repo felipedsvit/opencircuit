@@ -11,8 +11,9 @@ use std::collections::BTreeSet;
 use circuit_commands::copy::{self, Fragment};
 use circuit_commands::{Anchor, CommandError, Transaction, ops};
 use circuit_model::{
-    Bend, ComponentCatalog, GridPoint, GridRect, LayoutIndex, ModelRef, QuarterTurn, Schematic,
-    Subject, SymbolId, SymbolKey, TextAnchor, orthogonal_route_bent, text_bounds,
+    Bend, ComponentCatalog, GridPoint, GridRect, LayerStates, LayoutIndex, ModelRef, QuarterTurn,
+    Schematic, Subject, SymbolId, SymbolKey, TextAnchor, hidden_junctions, orthogonal_route_bent,
+    text_bounds,
 };
 
 use crate::hit::{Hit, hit_test};
@@ -267,6 +268,7 @@ impl Editor {
             Subject::Pin(pin) => doc.symbols.iter().any(|s| s.id == pin.symbol_id),
             Subject::Sheet(id) => doc.sheets.iter().any(|s| s.id == *id),
             Subject::Text(id) => doc.texts.iter().any(|t| t.id == *id),
+            Subject::Layer(id) => doc.layers.iter().any(|l| l.id == *id),
             Subject::Document => true,
         };
         let selected = self.selection.len();
@@ -484,8 +486,10 @@ impl Editor {
     /// The symbols, junctions and wires that a rectangle touches.
     fn touching(doc: &Schematic, catalog: &ComponentCatalog, area: GridRect) -> BTreeSet<Subject> {
         let layout = LayoutIndex::new(doc, catalog);
+        let layers = LayerStates::new(doc);
+        let hidden = hidden_junctions(doc, &layers);
         let mut found = BTreeSet::new();
-        for symbol in &doc.symbols {
+        for symbol in doc.symbols.iter().filter(|s| layers.is_visible(s.layer)) {
             let touched = layout
                 .symbol_bounds(symbol.id)
                 .is_some_and(|b| area.overlaps(&b));
@@ -493,17 +497,17 @@ impl Editor {
                 found.insert(Subject::Symbol(symbol.id));
             }
         }
-        for junction in &doc.junctions {
+        for junction in doc.junctions.iter().filter(|j| !hidden.contains(&j.id)) {
             if area.contains(junction.position) {
                 found.insert(Subject::Junction(junction.id));
             }
         }
-        for note in &doc.texts {
+        for note in doc.texts.iter().filter(|t| layers.is_visible(t.layer)) {
             if text_bounds(note).is_some_and(|b| area.overlaps(&b)) {
                 found.insert(Subject::Text(note.id));
             }
         }
-        for wire in &doc.wires {
+        for wire in doc.wires.iter().filter(|w| layers.is_visible(w.layer)) {
             let touched = layout.wire_polyline(wire).is_some_and(|path| {
                 path.iter().any(|p| area.contains(*p))
                     || path.windows(2).any(|pair| match pair {
@@ -521,8 +525,10 @@ impl Editor {
     /// The symbols, junctions and wires entirely inside a rectangle.
     fn inside(doc: &Schematic, catalog: &ComponentCatalog, area: GridRect) -> BTreeSet<Subject> {
         let layout = LayoutIndex::new(doc, catalog);
+        let layers = LayerStates::new(doc);
+        let hidden = hidden_junctions(doc, &layers);
         let mut found = BTreeSet::new();
-        for symbol in &doc.symbols {
+        for symbol in doc.symbols.iter().filter(|s| layers.is_visible(s.layer)) {
             let within = layout
                 .symbol_bounds(symbol.id)
                 .is_some_and(|b| area.contains(b.min) && area.contains(b.max));
@@ -530,19 +536,19 @@ impl Editor {
                 found.insert(Subject::Symbol(symbol.id));
             }
         }
-        for junction in &doc.junctions {
+        for junction in doc.junctions.iter().filter(|j| !hidden.contains(&j.id)) {
             if area.contains(junction.position) {
                 found.insert(Subject::Junction(junction.id));
             }
         }
-        for note in &doc.texts {
+        for note in doc.texts.iter().filter(|t| layers.is_visible(t.layer)) {
             let within =
                 text_bounds(note).is_some_and(|b| area.contains(b.min) && area.contains(b.max));
             if within {
                 found.insert(Subject::Text(note.id));
             }
         }
-        for wire in &doc.wires {
+        for wire in doc.wires.iter().filter(|w| layers.is_visible(w.layer)) {
             let within = layout
                 .wire_polyline(wire)
                 .is_some_and(|path| path.iter().all(|p| area.contains(*p)));
@@ -644,13 +650,31 @@ impl Editor {
             }
             Key::SelectAll => {
                 if !self.is_busy() {
+                    let layers = LayerStates::new(doc);
+                    let hidden = hidden_junctions(doc, &layers);
                     self.selection = doc
                         .symbols
                         .iter()
+                        .filter(|s| layers.is_visible(s.layer))
                         .map(|symbol| Subject::Symbol(symbol.id))
-                        .chain(doc.junctions.iter().map(|j| Subject::Junction(j.id)))
-                        .chain(doc.wires.iter().map(|wire| Subject::Wire(wire.id)))
-                        .chain(doc.texts.iter().map(|note| Subject::Text(note.id)))
+                        .chain(
+                            doc.junctions
+                                .iter()
+                                .filter(|j| !hidden.contains(&j.id))
+                                .map(|j| Subject::Junction(j.id)),
+                        )
+                        .chain(
+                            doc.wires
+                                .iter()
+                                .filter(|w| layers.is_visible(w.layer))
+                                .map(|wire| Subject::Wire(wire.id)),
+                        )
+                        .chain(
+                            doc.texts
+                                .iter()
+                                .filter(|t| layers.is_visible(t.layer))
+                                .map(|note| Subject::Text(note.id)),
+                        )
                         .collect();
                 }
                 Outcome::default()

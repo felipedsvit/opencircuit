@@ -482,6 +482,7 @@ mod tests {
             to: Endpoint::Junction(JunctionId(901)),
             route: Vec::new(),
             number: None,
+            layer: None,
         });
 
         let nets = StaticNets::build(&doc, &ComponentCatalog::builtin());

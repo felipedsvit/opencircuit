@@ -6,9 +6,10 @@
 //! Whole-document rules are checked once per transaction.
 
 use circuit_model::{
-    Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue,
-    ProjectMeta, QuarterTurn, ReferenceDesignator, Schematic, Sheet, SheetId, Subject, SupplyId,
-    SupplyProfile, SymbolId, SymbolInstance, TextId, TextNote, Waiver, Wire, WireId,
+    Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId, Layer, LayerId,
+    ModelRef, ParamValue, ProjectMeta, QuarterTurn, ReferenceDesignator, Schematic, Sheet, SheetId,
+    Subject, SupplyId, SupplyProfile, SymbolId, SymbolInstance, TextId, TextNote, Waiver, Wire,
+    WireId,
 };
 
 use crate::error::CommandError;
@@ -26,6 +27,20 @@ pub enum Edit {
     RemoveSheet(SheetId),
     /// Replace a sheet with one of the same ID.
     SetSheet(Sheet),
+    /// Add a layer.
+    InsertLayer(Layer),
+    /// Remove a layer that no element is on.
+    RemoveLayer(LayerId),
+    /// Replace a layer with one of the same ID.
+    SetLayer(Layer),
+    /// Put a symbol, wire or text note on a layer; `None` is the default
+    /// layer.
+    AssignLayer {
+        /// A symbol, a wire or a text note.
+        subject: Subject,
+        /// The layer.
+        layer: Option<LayerId>,
+    },
     /// Add a text note.
     InsertText(TextNote),
     /// Remove a text note.
@@ -194,6 +209,68 @@ impl Edit {
                 let slot = sorted::find_mut(&mut doc.sheets, &id, |s| s.id)
                     .ok_or_else(|| missing(Subject::Sheet(id)))?;
                 Ok(Self::SetSheet(std::mem::replace(slot, sheet)))
+            }
+            Self::InsertLayer(layer) => {
+                let id = layer.id;
+                if sorted::insert(&mut doc.layers, layer, |l| l.id) {
+                    Ok(Self::RemoveLayer(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Layer(id)))
+                }
+            }
+            Self::RemoveLayer(id) => {
+                let user = doc
+                    .symbols
+                    .iter()
+                    .find(|s| s.layer == Some(id))
+                    .map(|s| Subject::Symbol(s.id))
+                    .or_else(|| {
+                        doc.wires
+                            .iter()
+                            .find(|w| w.layer == Some(id))
+                            .map(|w| Subject::Wire(w.id))
+                    })
+                    .or_else(|| {
+                        doc.texts
+                            .iter()
+                            .find(|t| t.layer == Some(id))
+                            .map(|t| Subject::Text(t.id))
+                    });
+                if let Some(by) = user {
+                    return Err(CommandError::InUse {
+                        subject: Subject::Layer(id),
+                        by,
+                    });
+                }
+                sorted::remove(&mut doc.layers, &id, |l| l.id)
+                    .map(Self::InsertLayer)
+                    .ok_or_else(|| missing(Subject::Layer(id)))
+            }
+            Self::SetLayer(layer) => {
+                let id = layer.id;
+                let slot = sorted::find_mut(&mut doc.layers, &id, |l| l.id)
+                    .ok_or_else(|| missing(Subject::Layer(id)))?;
+                Ok(Self::SetLayer(std::mem::replace(slot, layer)))
+            }
+            Self::AssignLayer { subject, layer } => {
+                let slot = match &subject {
+                    Subject::Symbol(id) => {
+                        sorted::find_mut(&mut doc.symbols, id, |s| s.id).map(|s| &mut s.layer)
+                    }
+                    Subject::Wire(id) => {
+                        sorted::find_mut(&mut doc.wires, id, |w| w.id).map(|w| &mut w.layer)
+                    }
+                    Subject::Text(id) => {
+                        sorted::find_mut(&mut doc.texts, id, |t| t.id).map(|t| &mut t.layer)
+                    }
+                    _ => None,
+                }
+                .ok_or_else(|| missing(subject.clone()))?;
+                let before = std::mem::replace(slot, layer);
+                Ok(Self::AssignLayer {
+                    subject,
+                    layer: before,
+                })
             }
             Self::InsertText(note) => {
                 let id = note.id;
@@ -537,6 +614,7 @@ mod tests {
                 to: Endpoint::Junction(junction.id),
                 route: Vec::new(),
                 number: None,
+                layer: None,
             }),
             Edit::RemoveWire(wire.id),
             Edit::SetRoute {
@@ -783,6 +861,7 @@ mod tests {
                 to: Endpoint::Junction(junction),
                 route: Vec::new(),
                 number: None,
+                layer: None,
             })
             .apply(&mut edited),
             Err(CommandError::SelfLoop)
@@ -801,6 +880,7 @@ mod tests {
                 to: pin(SymbolId(77), "p1"),
                 route: Vec::new(),
                 number: None,
+                layer: None,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Symbol(SymbolId(77))))
@@ -819,6 +899,7 @@ mod tests {
                 slot: None,
                 position: GridPoint::default(),
                 rotation: QuarterTurn::Deg0,
+                layer: None,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Device(DeviceId(77))))

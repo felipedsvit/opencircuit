@@ -133,7 +133,7 @@ elements with their kind and ID.
 | `connect` | `from`, `to`, `via`, `as` | a wire; an end is `{ "symbol": ..., "terminal": "a1" }`, `{ "junction": name or ID }` or `{ "wire": name or ID, "at": [x, y] }` (a branch); `via` are waypoints; without them the route has at most one bend |
 | `move` | `elements`, `by` | moves symbols, junctions or `{ "device": "K1" }` by `[dx, dy]`; wires follow |
 | `rotate` | `symbols` | a quarter turn clockwise |
-| `delete` | `elements` | deletes elements and the wires that hang on them |
+| `delete` | `elements` | deletes elements and the wires that hang on them; a note is `{ "text": name or ID }` here and in `move` |
 | `add_sheet` | `number`, `title`, `origin`, `size`, `orientation`, `zones` | a sheet; the next number unless given; `size` is `a4` (default), `a3`, `a2` or `{ "custom": { "width": w, "height": h } }`; `zones` is `[columns, rows]`, `[8, 6]` by default |
 | `remove_sheet` | `number` | removes a sheet; what was drawn on it stays |
 | `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it |
@@ -142,6 +142,17 @@ elements with their kind and ID.
 | `waive` | `code`, `subject`, `reason` | accepts a warning or informational diagnostic with a reason; `subject` is a name, `{ "device": "K1" }`, `{ "wire": ... }`, `{ "junction": ... }`, `{ "symbol": ..., "terminal": "p2" }` for a terminal, or `"document"`; an error cannot be waived |
 | `unwaive` | `code`, `subject` | takes a waiver away |
 | `renumber` | `sheet` | gives the designators the next numbers in reading order, on every sheet or on the sheet with this number |
+| `add_text` | `at`, `text`, `anchor`, `as` | a text note (ADR-0015): one line of 1 to 120 characters; `anchor` is `left` (default) or `center` |
+| `set_text` | `text` (name or ID), `to` | changes the words of a note |
+| `add_layer` | `name`, `visible`, `locked`, `as` | a layer (ADR-0015), visible and unlocked unless said otherwise; a name of 1 to 32 characters, with no space at either end, not used by another layer |
+| `set_layer` | `layer` (name or ID), `name`, `visible`, `locked` | renames, shows, hides, locks or unlocks a layer; what is left out stays |
+| `remove_layer` | `layer` | removes a layer that nothing is on |
+| `assign_layer` | `layer` (name or ID, or `null` for the default layer), `elements` | puts symbols, wires, notes and the symbols of `{ "device": ... }` on a layer; junctions have no layer |
+
+A name given with `as` lasts for the one file; a later file refers to a note or
+a wire by its ID (the layers also by their own name). An operation that changes
+an element on a locked layer is refused with `locked`, and nothing of the file
+is applied.
 
 Limits: a file of at most 1 MiB, 10 000 operations, 10 000 entries in a list
 and 1 024 waypoints in a wire. Positions are grid units.

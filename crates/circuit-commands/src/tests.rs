@@ -1521,6 +1521,7 @@ fn arbitrary_edit() -> impl Strategy<Value = Edit> {
             slot: None,
             position: p,
             rotation: QuarterTurn::Deg0,
+            layer: None,
         })),
         id().prop_map(|i| Edit::RemoveSymbol(SymbolId(i))),
         (id(), at()).prop_map(|(i, p)| Edit::Place {
@@ -1543,6 +1544,7 @@ fn arbitrary_edit() -> impl Strategy<Value = Edit> {
             to,
             route: Vec::new(),
             number: None,
+            layer: None,
         })),
         id().prop_map(|i| Edit::RemoveWire(WireId(i))),
         (id(), prop::collection::vec(at(), 0..3)).prop_map(|(i, route)| Edit::SetRoute {
@@ -2610,5 +2612,417 @@ mod text_notes {
         let selection = BTreeSet::from([Subject::Text(id)]);
 
         assert!(ops::move_by(&doc, &catalog, &selection, point(i32::MAX, 0)).is_err(),);
+    }
+}
+
+mod layers {
+    use super::*;
+    use crate::layers as layer_ops;
+    use circuit_model::{Layer, LayerId};
+
+    /// Three parts and one wire between two of them, with a layer `Power`.
+    fn with_layer() -> (Schematic, History, [SymbolId; 3], LayerId) {
+        let (mut doc, mut history, parts) = three_parts();
+        let catalog = ComponentCatalog::builtin();
+        run(&mut doc, &mut history, |d| {
+            ops::connect(
+                d,
+                &catalog,
+                &Anchor::Endpoint(pin(parts[0], "p2")),
+                &Anchor::Endpoint(pin(parts[1], "p1")),
+                &[],
+            )
+        });
+        run(&mut doc, &mut history, |d| {
+            layer_ops::add_layer(d, "Power", true, false)
+        });
+        let id = doc.layers[0].id;
+        (doc, history, parts, id)
+    }
+
+    fn subjects(items: &[Subject]) -> BTreeSet<Subject> {
+        items.iter().cloned().collect()
+    }
+
+    fn assign(
+        doc: &mut Schematic,
+        history: &mut History,
+        items: &[Subject],
+        layer: Option<LayerId>,
+    ) {
+        run(doc, history, |d| {
+            layer_ops::assign_layer(d, &subjects(items), layer)
+        });
+    }
+
+    fn lock(doc: &mut Schematic, history: &mut History, layer: LayerId, locked: bool) {
+        run(doc, history, |d| {
+            layer_ops::set_layer(d, layer, None, None, Some(locked))
+        });
+    }
+
+    #[test]
+    fn a_layer_is_added_renamed_hidden_and_locked_and_each_change_is_undone() {
+        let mut doc = Schematic::new("layers");
+        let mut history = History::new();
+
+        run(&mut doc, &mut history, |d| {
+            layer_ops::add_layer(d, "Power", true, false)
+        });
+        let id = doc.layers[0].id;
+        run(&mut doc, &mut history, |d| {
+            layer_ops::set_layer(d, id, Some("Control"), Some(false), Some(true))
+        });
+        assert_eq!(
+            doc.layers[0],
+            Layer {
+                id,
+                name: "Control".to_owned(),
+                visible: false,
+                locked: true
+            }
+        );
+
+        assert!(history.undo(&mut doc).unwrap());
+        assert_eq!(doc.layers[0].name, "Power");
+        assert!(doc.layers[0].visible && !doc.layers[0].locked);
+        assert!(history.undo(&mut doc).unwrap());
+        assert!(doc.layers.is_empty());
+        assert!(integrity(&doc).is_empty());
+    }
+
+    #[test]
+    fn a_name_that_is_bad_or_taken_is_refused_and_a_change_that_changes_nothing_is_empty() {
+        let (doc, _, _, id) = with_layer();
+
+        for name in ["", " Power", "Power ", &"x".repeat(33), "a\nb", "Power"] {
+            assert!(
+                matches!(
+                    layer_ops::add_layer(&doc, name, true, false),
+                    Err(CommandError::InvalidParameter(_))
+                ),
+                "{name:?}"
+            );
+        }
+        let same = layer_ops::set_layer(&doc, id, Some("Power"), Some(true), Some(false)).unwrap();
+        assert!(same.edits.is_empty());
+        assert!(matches!(
+            layer_ops::set_layer(&doc, LayerId(999), None, Some(false), None),
+            Err(CommandError::Missing(Subject::Layer(_)))
+        ));
+    }
+
+    #[test]
+    fn at_most_256_layers() {
+        let mut doc = Schematic::new("layers");
+        let mut history = History::new();
+        for number in 0..circuit_model::MAX_LAYERS {
+            run(&mut doc, &mut history, |d| {
+                layer_ops::add_layer(d, &format!("L{number}"), true, false)
+            });
+        }
+
+        assert!(layer_ops::add_layer(&doc, "one more", true, false).is_err());
+    }
+
+    #[test]
+    fn assigning_puts_symbols_wires_and_texts_on_a_layer_and_undo_puts_them_back() {
+        let (mut doc, mut history, [a, _, coil], layer) = with_layer();
+        run(&mut doc, &mut history, |d| {
+            ops::add_text(d, point(3, 3), "note", TextAnchor::Left)
+        });
+        let wire = doc.wires[0].id;
+        let text = doc.texts[0].id;
+        let chosen = [Subject::Symbol(a), Subject::Wire(wire), Subject::Text(text)];
+
+        assign(&mut doc, &mut history, &chosen, Some(layer));
+
+        assert_eq!(
+            doc.symbols.iter().find(|s| s.id == a).unwrap().layer,
+            Some(layer)
+        );
+        assert_eq!(doc.wires[0].layer, Some(layer));
+        assert_eq!(doc.texts[0].layer, Some(layer));
+        assert_eq!(
+            doc.symbols.iter().find(|s| s.id == coil).unwrap().layer,
+            None
+        );
+        assert!(history.undo(&mut doc).unwrap());
+        assert!(doc.wires[0].layer.is_none() && doc.texts[0].layer.is_none());
+        // A device stands for its symbols; elements already there change nothing.
+        let device = device_of(&doc, a);
+        assign(
+            &mut doc,
+            &mut history,
+            &[Subject::Device(device)],
+            Some(layer),
+        );
+        let again = layer_ops::assign_layer(&doc, &subjects(&[Subject::Symbol(a)]), Some(layer));
+        assert!(again.unwrap().edits.is_empty());
+    }
+
+    #[test]
+    fn assigning_to_a_layer_that_does_not_exist_is_refused() {
+        let (doc, _, [a, _, _], _) = with_layer();
+
+        assert!(matches!(
+            layer_ops::assign_layer(&doc, &subjects(&[Subject::Symbol(a)]), Some(LayerId(999))),
+            Err(CommandError::Missing(Subject::Layer(_)))
+        ));
+    }
+
+    #[test]
+    fn a_layer_in_use_is_not_removed_and_an_empty_one_is() {
+        let (mut doc, mut history, [a, _, _], layer) = with_layer();
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], Some(layer));
+
+        assert!(matches!(
+            layer_ops::remove_layer(&doc, layer),
+            Err(CommandError::InUse {
+                by: Subject::Symbol(_),
+                ..
+            })
+        ));
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], None);
+        run(&mut doc, &mut history, |d| {
+            layer_ops::remove_layer(d, layer)
+        });
+        assert!(doc.layers.is_empty());
+        assert!(history.undo(&mut doc).unwrap());
+        assert_eq!(doc.layers.len(), 1);
+    }
+
+    #[test]
+    fn the_elements_of_a_locked_layer_cannot_be_moved_rotated_or_deleted() {
+        let (mut doc, mut history, [a, b, _], layer) = with_layer();
+        let catalog = ComponentCatalog::builtin();
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], Some(layer));
+        lock(&mut doc, &mut history, layer, true);
+        let chosen = subjects(&[Subject::Symbol(a)]);
+
+        assert!(matches!(
+            ops::move_by(&doc, &catalog, &chosen, point(2, 0)),
+            Err(CommandError::Locked(Subject::Symbol(_)))
+        ));
+        assert!(matches!(
+            ops::rotate(&doc, &catalog, &BTreeSet::from([a])),
+            Err(CommandError::Locked(_))
+        ));
+        assert!(matches!(
+            ops::delete(&doc, &catalog, &chosen),
+            Err(CommandError::Locked(_))
+        ));
+        // Its device stands for its symbols.
+        let device = device_of(&doc, a);
+        assert!(matches!(
+            ops::move_by(
+                &doc,
+                &catalog,
+                &subjects(&[Subject::Device(device)]),
+                point(2, 0)
+            ),
+            Err(CommandError::Locked(_))
+        ));
+        // What is not on the layer still works.
+        assert!(
+            ops::move_by(
+                &doc,
+                &catalog,
+                &subjects(&[Subject::Symbol(b)]),
+                point(2, 0)
+            )
+            .is_ok()
+        );
+        // Nothing changed.
+        assert_eq!(
+            doc.symbols.iter().find(|s| s.id == a).unwrap().position,
+            point(0, 0)
+        );
+    }
+
+    #[test]
+    fn deleting_a_symbol_does_not_take_a_wire_of_a_locked_layer_with_it() {
+        let (mut doc, mut history, [a, _, _], layer) = with_layer();
+        let catalog = ComponentCatalog::builtin();
+        let wire = doc.wires[0].id;
+        assign(&mut doc, &mut history, &[Subject::Wire(wire)], Some(layer));
+        lock(&mut doc, &mut history, layer, true);
+
+        assert!(matches!(
+            ops::delete(&doc, &catalog, &subjects(&[Subject::Symbol(a)])),
+            Err(CommandError::Locked(Subject::Wire(_)))
+        ));
+        // Unlocked, the same delete works.
+        lock(&mut doc, &mut history, layer, false);
+        assert!(ops::delete(&doc, &catalog, &subjects(&[Subject::Symbol(a)])).is_ok());
+    }
+
+    #[test]
+    fn a_wire_follows_a_moved_symbol_even_on_a_locked_layer() {
+        let (mut doc, mut history, [a, _, _], layer) = with_layer();
+        let catalog = ComponentCatalog::builtin();
+        let wire = doc.wires[0].id;
+        assign(&mut doc, &mut history, &[Subject::Wire(wire)], Some(layer));
+        lock(&mut doc, &mut history, layer, true);
+
+        let moved = ops::move_by(
+            &doc,
+            &catalog,
+            &subjects(&[Subject::Symbol(a)]),
+            point(0, -2),
+        );
+
+        assert!(moved.is_ok());
+    }
+
+    #[test]
+    fn the_catalog_data_the_words_the_designator_and_the_parameters_of_locked_elements_are_refused()
+    {
+        let (mut doc, mut history, [a, _, _], layer) = with_layer();
+        let catalog = ComponentCatalog::builtin();
+        run(&mut doc, &mut history, |d| {
+            ops::add_text(d, point(3, 3), "note", TextAnchor::Left)
+        });
+        let (text, wire, device) = (doc.texts[0].id, doc.wires[0].id, device_of(&doc, a));
+        assign(
+            &mut doc,
+            &mut history,
+            &[Subject::Symbol(a), Subject::Text(text), Subject::Wire(wire)],
+            Some(layer),
+        );
+        lock(&mut doc, &mut history, layer, true);
+
+        assert!(matches!(
+            ops::set_text(&doc, text, "other"),
+            Err(CommandError::Locked(_))
+        ));
+        assert!(matches!(
+            ops::set_reference(&doc, device, "S9"),
+            Err(CommandError::Locked(_))
+        ));
+        assert!(matches!(
+            ops::set_param(
+                &doc,
+                &catalog,
+                device,
+                "initial_closed",
+                Some(ParamValue::Bool(true))
+            ),
+            Err(CommandError::Locked(_))
+        ));
+        assert!(matches!(
+            crate::documentation::set_wire_number(&doc, wire, Some("7")),
+            Err(CommandError::Locked(_))
+        ));
+        assert!(matches!(
+            crate::documentation::set_device_info(&doc, device, Default::default()),
+            Err(CommandError::Locked(_))
+        ));
+        // Ending a new wire on the locked wire would split it.
+        assert!(matches!(
+            ops::connect(
+                &doc,
+                &catalog,
+                &Anchor::OnWire {
+                    wire,
+                    at: doc.wires[0].route.first().copied().unwrap_or(point(0, 6))
+                },
+                &Anchor::Endpoint(pin(a, "p1")),
+                &[],
+            ),
+            Err(CommandError::Locked(_))
+        ));
+    }
+
+    #[test]
+    fn unlocking_lets_the_edit_through_and_the_layer_itself_is_never_locked_against_its_switches() {
+        let (mut doc, mut history, [a, _, _], layer) = with_layer();
+        let catalog = ComponentCatalog::builtin();
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], Some(layer));
+        lock(&mut doc, &mut history, layer, true);
+        // Hiding and renaming a locked layer is allowed.
+        run(&mut doc, &mut history, |d| {
+            layer_ops::set_layer(d, layer, Some("Frozen"), Some(false), None)
+        });
+
+        lock(&mut doc, &mut history, layer, false);
+
+        assert!(
+            ops::move_by(
+                &doc,
+                &catalog,
+                &subjects(&[Subject::Symbol(a)]),
+                point(2, 0)
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn an_element_on_a_locked_layer_cannot_be_moved_to_another_and_one_can_be_put_on_it() {
+        let (mut doc, mut history, [a, b, _], layer) = with_layer();
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], Some(layer));
+        lock(&mut doc, &mut history, layer, true);
+
+        assert!(matches!(
+            layer_ops::assign_layer(&doc, &subjects(&[Subject::Symbol(a)]), None),
+            Err(CommandError::Locked(_))
+        ));
+        // Putting another element on the locked layer is fine.
+        assert!(
+            layer_ops::assign_layer(&doc, &subjects(&[Subject::Symbol(b)]), Some(layer)).is_ok()
+        );
+    }
+
+    #[test]
+    fn renumbering_is_refused_when_it_would_rename_a_device_on_a_locked_layer() {
+        let mut doc = Schematic::new("renumber");
+        let mut history = History::new();
+        let a = place(
+            &mut doc,
+            &mut history,
+            "pushbutton_no",
+            "contact",
+            point(0, 20),
+        );
+        let b = place(
+            &mut doc,
+            &mut history,
+            "pushbutton_no",
+            "contact",
+            point(0, 0),
+        );
+        run(&mut doc, &mut history, |d| {
+            layer_ops::add_layer(d, "Frozen", true, false)
+        });
+        let layer = doc.layers[0].id;
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], Some(layer));
+        lock(&mut doc, &mut history, layer, true);
+
+        // S1 is the lower one: reading order wants the two swapped.
+        let result = crate::designators::renumber(&doc, crate::designators::Scope::All);
+
+        assert!(matches!(result, Err(CommandError::Locked(_))), "{result:?}");
+        let _ = b;
+    }
+
+    #[test]
+    fn a_layer_does_not_change_what_a_copy_keeps() {
+        let (mut doc, mut history, [a, _, _], layer) = with_layer();
+        assign(&mut doc, &mut history, &[Subject::Symbol(a)], Some(layer));
+
+        let fragment = crate::copy::copy(&doc, &subjects(&[Subject::Symbol(a)]));
+        let pasted =
+            crate::copy::paste(&doc, &ComponentCatalog::builtin(), &fragment, point(10, 10))
+                .unwrap();
+        let (next, _) = pasted.apply_to(&doc).unwrap();
+
+        // A pasted symbol keeps its layer, and the drawing stays valid.
+        let copy = next
+            .symbols
+            .iter()
+            .find(|s| s.id != a && s.layer == Some(layer));
+        assert!(copy.is_some());
+        assert!(integrity(&next).is_empty());
     }
 }

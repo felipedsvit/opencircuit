@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use circuit_model::builder::pin;
 use circuit_model::{
     ComponentCatalog, Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId,
-    ModelRef, ParamValue, PhaseSequence, PinRef, ProjectMeta, QuarterTurn, ReferenceDesignator,
-    SchematicBuilder, SupplyId, SupplyKind, SupplyProfile, SymbolId, SymbolInstance, SymbolKey,
-    TerminalKey, TextAnchor, TextId, TextNote, Waiver, Wire, WireId, WireNumbering,
+    Layer, LayerId, ModelRef, ParamValue, PhaseSequence, PinRef, ProjectMeta, QuarterTurn,
+    ReferenceDesignator, SchematicBuilder, SupplyId, SupplyKind, SupplyProfile, SymbolId,
+    SymbolInstance, SymbolKey, TerminalKey, TextAnchor, TextId, TextNote, Waiver, Wire, WireId,
+    WireNumbering,
 };
 use proptest::prelude::*;
 
@@ -270,6 +271,7 @@ fn text_notes_survive_a_round_trip_in_canonical_order() {
             } else {
                 TextAnchor::Center
             },
+            layer: None,
         });
     }
     doc.next_id = 1_000;
@@ -284,6 +286,59 @@ fn text_notes_survive_a_round_trip_in_canonical_order() {
     assert_eq!(to_string(&loaded).unwrap(), text);
     // A document without notes does not mention them.
     assert!(!SAMPLE.contains("texts"));
+}
+
+#[test]
+fn layers_and_what_is_on_them_survive_a_round_trip_and_a_drawing_without_them_does_not_mention_them()
+ {
+    let mut doc = sample();
+    doc.layers = vec![
+        Layer {
+            id: LayerId(80),
+            name: "Power".to_owned(),
+            visible: false,
+            locked: true,
+        },
+        Layer {
+            id: LayerId(70),
+            name: "Control".to_owned(),
+            visible: true,
+            locked: false,
+        },
+    ];
+    doc.next_id = 100;
+    doc.symbols[0].layer = Some(LayerId(80));
+    doc.wires[0].layer = Some(LayerId(70));
+    doc.sort_canonical();
+
+    let text = to_string(&doc).unwrap();
+    let loaded = from_str(&text).unwrap();
+
+    assert_eq!(loaded, doc);
+    // Saved in ID order.
+    assert!(text.find("Control").unwrap() < text.find("Power").unwrap());
+    assert_eq!(loaded.layers[0].id, LayerId(70));
+    assert_eq!(to_string(&loaded).unwrap(), text);
+    assert!(!SAMPLE.contains("layer"));
+}
+
+#[test]
+fn a_layer_with_an_unknown_field_or_a_name_over_the_limit_is_refused() {
+    let mut doc = sample();
+    doc.layers = vec![Layer {
+        id: LayerId(80),
+        name: "x".repeat(MAX_TEXT_BYTES + 1),
+        visible: true,
+        locked: false,
+    }];
+    doc.next_id = 100;
+    assert!(to_string(&doc).is_err());
+
+    doc.layers[0].name = "ok".to_owned();
+    let text = to_string(&doc)
+        .unwrap()
+        .replace("\"locked\": false", "\"locked\": false, \"colour\": 1");
+    assert!(matches!(from_str(&text), Err(ProjectError::Schema { .. })));
 }
 
 /// A document that uses every field of ADR-0014.
@@ -776,6 +831,7 @@ fn symbol() -> impl Strategy<Value = SymbolInstance> {
                 slot,
                 position,
                 rotation,
+                layer: None,
             },
         )
 }
@@ -793,6 +849,7 @@ fn wire() -> impl Strategy<Value = Wire> {
             to,
             route,
             number: None,
+            layer: None,
         })
 }
 
@@ -844,6 +901,7 @@ fn schematic() -> impl Strategy<Value = Schematic> {
                     wires,
                     waivers: Vec::new(),
                     texts: Vec::new(),
+                    layers: Vec::new(),
                 }
             },
         )

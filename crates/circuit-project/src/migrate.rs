@@ -8,7 +8,7 @@
 //! | --- | --- | --- |
 //! | 1 | 2 | sheets (ADR-0011) and the title-block fields of `project` |
 //! | 2 | 3 | nothing is added: the new fields of ADR-0014 are all optional |
-//! | 3 | 4 | nothing is added: `texts` of ADR-0015 is optional |
+//! | 3 | 4 | nothing is added: `texts`, `layers` and `layer` of ADR-0015 are optional |
 
 use circuit_model::CURRENT_SCHEMA_VERSION;
 use serde_json::Value;
@@ -80,16 +80,30 @@ fn v2_to_v3(mut value: Value) -> Result<Value, String> {
     Ok(value)
 }
 
-/// Version 4 adds `texts` (ADR-0015), which is optional and omitted when
-/// empty, so a version 3 document is already a valid version 4 document and
-/// only the version changes. A version 3 document that already has `texts` is
-/// refused rather than reinterpreted.
+/// Version 4 adds `texts`, `layers` and the `layer` of symbols, wires and
+/// texts (ADR-0015), all optional and omitted when empty, so a version 3
+/// document is already a valid version 4 document and only the version
+/// changes. A version 3 document that already has one of them is refused
+/// rather than reinterpreted.
 fn v3_to_v4(mut value: Value) -> Result<Value, String> {
     let document = value
         .as_object_mut()
         .ok_or("the document is not a JSON object")?;
-    if document.contains_key("texts") {
-        return Err("a version 3 document has no `texts`".to_owned());
+    if document.contains_key("texts") || document.contains_key("layers") {
+        return Err("a version 3 document has no `texts` or `layers`".to_owned());
+    }
+    for collection in ["symbols", "wires"] {
+        let on_a_layer = document
+            .get(collection)
+            .and_then(Value::as_array)
+            .is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|item| item.as_object().is_some_and(|o| o.contains_key("layer")))
+            });
+        if on_a_layer {
+            return Err(format!("a version 3 {collection} entry has no `layer`"));
+        }
     }
     document.insert("schema_version".to_owned(), Value::from(4_u32));
     Ok(value)
@@ -299,11 +313,21 @@ mod tests {
     }
 
     #[test]
-    fn version_3_with_texts_is_refused() {
-        assert!(matches!(
-            migrate(json!({ "schema_version": 3, "texts": [] })),
-            Err(ProjectError::Migration { from: 3, .. })
-        ));
+    fn version_3_with_a_version_4_field_is_refused() {
+        for document in [
+            json!({ "schema_version": 3, "texts": [] }),
+            json!({ "schema_version": 3, "layers": [] }),
+            json!({ "schema_version": 3, "symbols": [{ "id": 1, "layer": 2 }] }),
+            json!({ "schema_version": 3, "wires": [{ "id": 1, "layer": 2 }] }),
+        ] {
+            assert!(
+                matches!(
+                    migrate(document.clone()),
+                    Err(ProjectError::Migration { from: 3, .. })
+                ),
+                "{document}"
+            );
+        }
     }
 
     #[test]

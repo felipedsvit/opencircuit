@@ -993,7 +993,7 @@ proptest! {
                 from: a.get(&ends).clone(),
                 to: b.get(&ends).clone(),
                 route: Vec::new(),
-                number: None,
+                number: None, layer: None,
             });
         }
 
@@ -1305,6 +1305,7 @@ mod hostile {
                 slot,
                 position: GridPoint::new(x, y),
                 rotation,
+                layer: None,
             })
     }
 
@@ -1355,9 +1356,9 @@ mod hostile {
                         id: WireId(id),
                         from,
                         to,
-                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(), number: None,
+                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(), number: None, layer: None,
                     })
-                    .collect(), waivers: Vec::new(), texts: Vec::new(),
+                    .collect(), waivers: Vec::new(), texts: Vec::new(), layers: Vec::new(),
             }
         }
     }
@@ -1785,5 +1786,100 @@ mod signal_arrows {
         // The first arrow is named like the lamp's designator: nothing joins.
         let lamp_pin = net_of(&circuit, doc.symbols.last().map_or(a, |s| s.id), "x1");
         assert_ne!(net(&circuit, a), lamp_pin);
+    }
+}
+
+mod layers {
+    //! Layers are drawing organisation: the compiler and the simulator never
+    //! read them (ADR-0015).
+
+    use circuit_model::{Layer, LayerId};
+
+    use super::*;
+
+    /// The direct-online circuit with every symbol and wire on layers, one
+    /// hidden and one locked.
+    fn on_layers(doc: &Schematic) -> Schematic {
+        let mut doc = doc.clone();
+        doc.layers = vec![
+            Layer {
+                id: LayerId(9_001),
+                name: "Hidden".to_owned(),
+                visible: false,
+                locked: false,
+            },
+            Layer {
+                id: LayerId(9_002),
+                name: "Frozen".to_owned(),
+                visible: true,
+                locked: true,
+            },
+        ];
+        doc.next_id = doc.next_id.max(9_003);
+        for (index, symbol) in doc.symbols.iter_mut().enumerate() {
+            symbol.layer = Some(LayerId(9_001 + u64::try_from(index % 2).unwrap_or(0)));
+        }
+        for (index, wire) in doc.wires.iter_mut().enumerate() {
+            wire.layer = Some(LayerId(9_002 - u64::try_from(index % 2).unwrap_or(0)));
+        }
+        doc
+    }
+
+    #[test]
+    fn layers_do_not_change_the_compiled_circuit_or_its_fingerprint() {
+        let doc = direct_online_circuit();
+        let layered = on_layers(&doc);
+
+        assert_eq!(
+            compile_ok(&doc).fingerprint(),
+            compile_ok(&layered).fingerprint()
+        );
+        assert!(
+            compile(&layered, &ComponentCatalog::builtin())
+                .diagnostics
+                .iter()
+                .all(|d| d.severity() != circuit_model::Severity::Error)
+        );
+    }
+
+    #[test]
+    fn a_simulation_with_every_layer_hidden_runs_exactly_as_without_layers() {
+        let doc = direct_online_circuit();
+        let mut hidden = on_layers(&doc);
+        for layer in &mut hidden.layers {
+            layer.visible = false;
+        }
+        let run = |doc: &Schematic| {
+            let circuit = compile_ok(doc);
+            let mut sim = crate::Simulator::new(circuit, crate::SimConfig::default()).unwrap();
+            let mut events = Vec::new();
+            for _ in 0..4 {
+                let outcome = sim.step_n(25, &[]).unwrap();
+                events.push((outcome.faulted, sim.snapshot()));
+            }
+            events
+        };
+
+        assert_eq!(run(&doc), run(&hidden));
+    }
+
+    #[test]
+    fn the_static_nets_do_not_depend_on_layers() {
+        let doc = direct_online_circuit();
+        let layered = on_layers(&doc);
+        let catalog = ComponentCatalog::builtin();
+
+        let plain = StaticNets::build(&doc, &catalog);
+        let on_layers = StaticNets::build(&layered, &catalog);
+
+        for symbol in &doc.symbols {
+            for terminal in ["p1", "p2", "a1", "a2", "t1", "t2"] {
+                let pin = PinRef {
+                    symbol_id: symbol.id,
+                    terminal: circuit_model::TerminalKey(terminal.to_owned()),
+                };
+                assert_eq!(plain.net_of_pin(&pin), on_layers.net_of_pin(&pin));
+            }
+        }
     }
 }

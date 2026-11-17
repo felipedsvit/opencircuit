@@ -27,6 +27,7 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     check_wire_numbers(doc, &mut out);
     check_waivers(doc, &mut out);
     check_texts(doc, &mut out);
+    check_layers(doc, &mut out);
 
     sort_diagnostics(&mut out);
     out
@@ -60,6 +61,7 @@ fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
         .map(|j| (j.id.0, Subject::Junction(j.id)));
     let wires = doc.wires.iter().map(|w| (w.id.0, Subject::Wire(w.id)));
     let texts = doc.texts.iter().map(|t| (t.id.0, Subject::Text(t.id)));
+    let layers = doc.layers.iter().map(|l| (l.id.0, Subject::Layer(l.id)));
     sheets
         .chain(supplies)
         .chain(devices)
@@ -67,6 +69,7 @@ fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
         .chain(junctions)
         .chain(wires)
         .chain(texts)
+        .chain(layers)
 }
 
 fn check_schema_version(doc: &Schematic, out: &mut Vec<Diagnostic>) {
@@ -157,6 +160,28 @@ fn check_references(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     let devices: BTreeSet<DeviceId> = doc.devices.iter().map(|d| d.id).collect();
     let symbols: BTreeSet<SymbolId> = doc.symbols.iter().map(|s| s.id).collect();
     let junctions: BTreeSet<JunctionId> = doc.junctions.iter().map(|j| j.id).collect();
+
+    let layers: BTreeSet<crate::ids::LayerId> = doc.layers.iter().map(|l| l.id).collect();
+    let on_missing_layer =
+        |layer: Option<crate::ids::LayerId>| layer.filter(|id| !layers.contains(id));
+    for (subject, layer) in doc
+        .symbols
+        .iter()
+        .map(|s| (Subject::Symbol(s.id), s.layer))
+        .chain(doc.wires.iter().map(|w| (Subject::Wire(w.id), w.layer)))
+        .chain(doc.texts.iter().map(|t| (Subject::Text(t.id), t.layer)))
+    {
+        if let Some(missing) = on_missing_layer(layer) {
+            out.push(
+                Diagnostic::new(
+                    DiagnosticCode::DanglingReference,
+                    subject.clone(),
+                    format!("{subject} is on layer {missing} which does not exist"),
+                )
+                .with_related(vec![Subject::Layer(missing)]),
+            );
+        }
+    }
 
     for symbol in &doc.symbols {
         if !devices.contains(&symbol.device_id) {
@@ -384,6 +409,30 @@ fn check_texts(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Layers with a bad or repeated name (ADR-0015).
+fn check_layers(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    let mut seen = BTreeSet::new();
+    for layer in &doc.layers {
+        if !crate::layers::Layer::is_valid_name(&layer.name) {
+            out.push(Diagnostic::new(
+                DiagnosticCode::InvalidLayer,
+                Subject::Layer(layer.id),
+                format!(
+                    "layer {} needs a name of 1 to {} characters, with no control character or space at either end",
+                    layer.id,
+                    crate::layers::MAX_LAYER_NAME_CHARS
+                ),
+            ));
+        } else if !seen.insert(layer.name.as_str()) {
+            out.push(Diagnostic::new(
+                DiagnosticCode::InvalidLayer,
+                Subject::Layer(layer.id),
+                format!("another layer is already named `{}`", layer.name),
+            ));
+        }
+    }
+}
+
 /// Waivers that cannot work (ADR-0014): a code that is not one, an error or
 /// `OC-STR-020` itself, a subject that is not in the document, or a repeat.
 fn check_waivers(doc: &Schematic, out: &mut Vec<Diagnostic>) {
@@ -556,6 +605,7 @@ mod tests {
             slot: None,
             position: GridPoint::default(),
             rotation: QuarterTurn::Deg0,
+            layer: None,
         }
     }
 
@@ -573,6 +623,7 @@ mod tests {
             to,
             route: Vec::new(),
             number: None,
+            layer: None,
         }
     }
 
@@ -1120,6 +1171,7 @@ mod tests {
                 position: GridPoint::default(),
                 text,
                 anchor: TextAnchor::Left,
+                layer: None,
             });
         }
         doc.next_id = 5;
@@ -1151,6 +1203,7 @@ mod tests {
             position: GridPoint::default(),
             text: "note".to_owned(),
             anchor: TextAnchor::Left,
+            layer: None,
         });
         doc.sheets.push(crate::sheet::Sheet {
             id: crate::ids::SheetId(1),
@@ -1166,6 +1219,75 @@ mod tests {
                 columns: 4,
                 rows: 2,
             },
+        });
+        doc.next_id = 2;
+
+        assert!(
+            doc.validate()
+                .iter()
+                .any(|d| d.code() == DiagnosticCode::DuplicateId)
+        );
+    }
+
+    #[test]
+    fn a_layer_with_a_bad_or_repeated_name_is_a_warning_and_a_missing_layer_is_dangling() {
+        use crate::ids::LayerId;
+        use crate::layers::Layer;
+        let mut doc = Schematic::new("layers");
+        for (id, name) in [
+            (1, "Power"),
+            (2, "Power"),
+            (3, ""),
+            (4, " x"),
+            (5, "Control"),
+        ] {
+            doc.layers.push(Layer {
+                id: LayerId(id),
+                name: name.to_owned(),
+                visible: true,
+                locked: false,
+            });
+        }
+        doc.devices.push(device(10, "S1"));
+        doc.symbols.push(symbol(11, 10));
+        doc.symbols[0].layer = Some(LayerId(99));
+        doc.next_id = 12;
+
+        let found = doc.validate();
+
+        let bad: Vec<_> = found
+            .iter()
+            .filter(|d| d.code() == DiagnosticCode::InvalidLayer)
+            .map(|d| d.subject().clone())
+            .collect();
+        assert_eq!(
+            bad,
+            [
+                Subject::Layer(LayerId(2)),
+                Subject::Layer(LayerId(3)),
+                Subject::Layer(LayerId(4))
+            ]
+        );
+        assert!(
+            found
+                .iter()
+                .any(|d| d.code() == DiagnosticCode::DanglingReference
+                    && d.subject() == &Subject::Symbol(SymbolId(11))
+                    && d.related() == [Subject::Layer(LayerId(99))])
+        );
+    }
+
+    #[test]
+    fn layer_ids_share_the_identifier_space() {
+        use crate::ids::LayerId;
+        use crate::layers::Layer;
+        let mut doc = Schematic::new("layers");
+        doc.devices.push(device(1, "S1"));
+        doc.layers.push(Layer {
+            id: LayerId(1),
+            name: "Power".to_owned(),
+            visible: true,
+            locked: false,
         });
         doc.next_id = 2;
 

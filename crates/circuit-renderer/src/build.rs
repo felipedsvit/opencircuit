@@ -6,9 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ComponentModel, ConductorSet, CrossReferences, DeviceClass, DeviceId,
-    JunctionId, LayoutIndex, Location, MAX_NOTE_CHARS, MotorState, PinRef, Schematic, SheetId,
-    SimSnapshot, StaticNets, Subject, SymbolId, SymbolInstance, SymbolKind, TextAnchor, TextId,
-    TextNote, TimerView, WindingConnection, Wire, WireId, WireNumbers, cross_references,
+    JunctionId, LayerStates, LayoutIndex, Location, MAX_NOTE_CHARS, MotorState, PinRef, Schematic,
+    SheetId, SimSnapshot, StaticNets, Subject, SymbolId, SymbolInstance, SymbolKind, TextAnchor,
+    TextId, TextNote, TimerView, WindingConnection, Wire, WireId, WireNumbers, cross_references,
     signal_arrows, signal_references, terminal_label, text_bounds,
 };
 
@@ -175,9 +175,32 @@ pub fn build_scene(
 ) -> Scene {
     let layout = LayoutIndex::new(doc, catalog);
     let state = State::new(snapshot);
+    // What a hidden layer hides (ADR-0015) is left out of every map below; the
+    // layout keeps the whole document, so a visible wire still reaches a pin
+    // of a hidden symbol.
+    let layers = LayerStates::new(doc);
     let wires = by_id(&doc.wires, |wire| wire.id);
     let symbols = by_id(&doc.symbols, |symbol| symbol.id);
     let texts = by_id(&doc.texts, |note| note.id);
+    let hidden_junctions = circuit_model::hidden_junctions(doc, &layers);
+    let (wires, symbols, texts) = if layers.is_plain() {
+        (wires, symbols, texts)
+    } else {
+        (
+            wires
+                .into_iter()
+                .filter(|(_, wire)| layers.is_visible(wire.layer))
+                .collect(),
+            symbols
+                .into_iter()
+                .filter(|(_, symbol)| layers.is_visible(symbol.layer))
+                .collect(),
+            texts
+                .into_iter()
+                .filter(|(_, note)| layers.is_visible(note.layer))
+                .collect(),
+        )
+    };
     let mut scene = Scene::default();
 
     // Frames first, so that the drawing lies over them.
@@ -196,6 +219,9 @@ pub fn build_scene(
     }
 
     for junction in by_id(&doc.junctions, |junction| junction.id).values() {
+        if hidden_junctions.contains(&junction.id) {
+            continue;
+        }
         let conductors = state
             .junctions
             .get(&junction.id)
@@ -223,7 +249,7 @@ pub fn build_scene(
     }
 
     draw_wire_numbers(&mut scene, doc, catalog, &layout, &wires);
-    draw_signal_names(&mut scene, doc, catalog, &layout);
+    draw_signal_names(&mut scene, doc, catalog, &layout, &symbols);
     draw_texts(&mut scene, &texts);
 
     if let Some(snapshot) = snapshot {
@@ -495,10 +521,14 @@ fn draw_signal_names(
     doc: &Schematic,
     catalog: &ComponentCatalog,
     layout: &LayoutIndex<'_>,
+    symbols: &BTreeMap<SymbolId, &SymbolInstance>,
 ) {
     let references = signal_references(doc, catalog);
     for (name, arrows) in signal_arrows(doc, catalog) {
         for arrow in arrows {
+            if !symbols.contains_key(&arrow.symbol) {
+                continue;
+            }
             let Some(bounds) = layout.symbol_bounds(arrow.symbol).map(scene_rect) else {
                 continue;
             };
@@ -695,15 +725,22 @@ fn outline(
         );
     };
     match subject {
-        Subject::Document | Subject::Supply(_) | Subject::Sheet(_) => {}
+        Subject::Document | Subject::Supply(_) | Subject::Sheet(_) | Subject::Layer(_) => {}
         Subject::Device(device) => {
             for symbol in symbols.values().filter(|s| s.device_id == *device) {
                 around_symbol(scene, symbol.id);
             }
         }
-        Subject::Symbol(id) => around_symbol(scene, *id),
+        Subject::Symbol(id) => {
+            if symbols.contains_key(id) {
+                around_symbol(scene, *id);
+            }
+        }
         Subject::Pin(pin) => {
-            if let Some(position) = layout.pin_position(pin) {
+            if let Some(position) = layout
+                .pin_position(pin)
+                .filter(|_| symbols.contains_key(&pin.symbol_id))
+            {
                 ring(scene, ScenePoint::from_grid(position), RING_RADIUS);
             }
         }

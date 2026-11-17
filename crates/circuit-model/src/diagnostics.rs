@@ -11,7 +11,7 @@ use std::fmt;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{DeviceId, JunctionId, SheetId, SupplyId, SymbolId, TextId, WireId};
+use crate::ids::{DeviceId, JunctionId, LayerId, SheetId, SupplyId, SymbolId, TextId, WireId};
 use crate::schematic::PinRef;
 
 /// How serious a diagnostic is.
@@ -157,6 +157,10 @@ diagnostic_codes! {
     /// character (ADR-0015). A warning: a note has no electrical meaning, and
     /// the drawing shows it cleaned.
     InvalidText = "OC-STR-021", Structural, Warning, latches = false;
+    /// A layer whose name is empty, too long, has a control character or an
+    /// edge space, or is the name of another layer (ADR-0015). A warning: the
+    /// layers have no electrical meaning.
+    InvalidLayer = "OC-STR-022", Structural, Warning, latches = false;
     /// The same reference designator is used by distinct devices.
     DuplicateReference = "OC-SEM-001", Semantic, Error, latches = false;
     /// A reference designator that does not match the allowed pattern.
@@ -267,6 +271,8 @@ pub enum Subject {
     Sheet(SheetId),
     /// A text note.
     Text(TextId),
+    /// A layer.
+    Layer(LayerId),
 }
 
 impl fmt::Display for Subject {
@@ -281,6 +287,7 @@ impl fmt::Display for Subject {
             Self::Junction(id) => write!(f, "junction {id}"),
             Self::Sheet(id) => write!(f, "sheet {id}"),
             Self::Text(id) => write!(f, "text {id}"),
+            Self::Layer(id) => write!(f, "layer {id}"),
         }
     }
 }
@@ -438,6 +445,7 @@ mod tests {
         ("OC-STR-019", "OverlappingWires", "warning", false),
         ("OC-STR-020", "InvalidWaiver", "warning", false),
         ("OC-STR-021", "InvalidText", "warning", false),
+        ("OC-STR-022", "InvalidLayer", "warning", false),
         ("OC-SEM-001", "DuplicateReference", "error", false),
         ("OC-SEM-002", "InvalidReference", "error", false),
         ("OC-SEM-003", "MissingRequiredTerminal", "error", false),

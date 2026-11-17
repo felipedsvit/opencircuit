@@ -21,6 +21,9 @@ pub enum CommandError {
         /// One entity that still uses it.
         by: Subject,
     },
+    /// The element is on a locked layer (ADR-0015).
+    #[error("{0} is on a locked layer")]
+    Locked(Subject),
     /// The text is not a valid reference designator.
     #[error("`{0}` is not a valid reference designator")]
     InvalidReference(String),
