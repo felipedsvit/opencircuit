@@ -1,0 +1,8 @@
+# Defaults for running the GitHub Actions workflows locally with `act`
+# (nektos/act). See docs/local-ci.md. Only lines that start with `-` are read.
+-P ubuntu-latest=catthehacker/ubuntu:act-24.04
+-P ubuntu-24.04=catthehacker/ubuntu:act-24.04
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+--container-architecture linux/amd64
+--matrix os:ubuntu-latest
+--concurrent-jobs 2
