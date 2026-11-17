@@ -45,13 +45,19 @@ pub struct PaletteState {
     /// What the user is looking for; all tabs are searched when it is not
     /// empty.
     search: String,
+    /// The parts chosen most recently, newest first, kept in this window only.
+    recent: Vec<(ModelRef, circuit_model::SymbolKey)>,
 }
+
+/// Most parts the recent strip remembers.
+const MAX_RECENT: usize = 8;
 
 impl Default for PaletteState {
     fn default() -> Self {
         Self {
             tab: Category::Controls,
             search: String::new(),
+            recent: Vec::new(),
         }
     }
 }
@@ -154,6 +160,7 @@ pub fn show(
         })
         .collect();
     models.sort_by(|a, b| (a.title(), a.id()).cmp(&(b.title(), b.id())));
+    recent_strip(ui, catalog, editor, state);
     let place = if needle.is_empty() {
         state.tab.label()
     } else {
@@ -166,13 +173,72 @@ pub fn show(
     }
     egui::ScrollArea::vertical().show(ui, |ui| {
         for model in models {
-            part(ui, model, editor, &tool);
+            part(ui, model, editor, &tool, &mut state.recent);
+        }
+    });
+}
+
+/// Put a chosen part first in the recent list, once, and keep the newest.
+fn remember(
+    recent: &mut Vec<(ModelRef, circuit_model::SymbolKey)>,
+    model: &ModelRef,
+    symbol: &circuit_model::SymbolKey,
+) {
+    recent.retain(|(m, s)| !(m == model && s == symbol));
+    recent.insert(0, (model.clone(), symbol.clone()));
+    recent.truncate(MAX_RECENT);
+}
+
+/// The parts chosen most recently, as one small button each under the search
+/// field; nothing at all until a part has been chosen.
+fn recent_strip(
+    ui: &mut Ui,
+    catalog: &ComponentCatalog,
+    editor: &mut Editor,
+    state: &mut PaletteState,
+) {
+    let shown: Vec<(ModelRef, circuit_model::SymbolKey, String)> = state
+        .recent
+        .iter()
+        .filter_map(|(model, symbol)| {
+            let found = catalog.model(model)?;
+            found.symbol(symbol)?;
+            Some((model.clone(), symbol.clone(), found.title().to_owned()))
+        })
+        .collect();
+    if shown.is_empty() {
+        return;
+    }
+    let tokens = Tokens::of(ui);
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new("Recent").small().color(tokens.text_dim));
+        for (model, symbol, title) in shown {
+            let label = format!("Recent {} · {}", model.id, symbol.0);
+            let response = ui.small_button(title);
+            let enabled = ui.is_enabled();
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::Button, enabled, label.as_str())
+            });
+            if response.clicked() {
+                remember(&mut state.recent, &model, &symbol);
+                editor.set_tool(Tool::Place {
+                    model,
+                    symbol,
+                    rotation: QuarterTurn::Deg0,
+                });
+            }
         }
     });
 }
 
 /// One model: its title and one cell for each of its symbols.
-fn part(ui: &mut Ui, model: &ComponentModel, editor: &mut Editor, tool: &Tool) {
+fn part(
+    ui: &mut Ui,
+    model: &ComponentModel,
+    editor: &mut Editor,
+    tool: &Tool,
+    recent: &mut Vec<(ModelRef, circuit_model::SymbolKey)>,
+) {
     let tokens = Tokens::of(ui);
     ui.add_space(4.0);
     ui.horizontal(|ui| {
@@ -207,11 +273,13 @@ fn part(ui: &mut Ui, model: &ComponentModel, editor: &mut Editor, tool: &Tool) {
                 .on_hover_text(&hover)
                 .clicked();
             if clicked {
+                let chosen = ModelRef {
+                    id: model.id().to_owned(),
+                    version: model.version(),
+                };
+                remember(recent, &chosen, symbol.key());
                 editor.set_tool(Tool::Place {
-                    model: ModelRef {
-                        id: model.id().to_owned(),
-                        version: model.version(),
-                    },
+                    model: chosen,
                     symbol: symbol.key().clone(),
                     rotation: QuarterTurn::Deg0,
                 });

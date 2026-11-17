@@ -1088,3 +1088,92 @@ fn drag_survives_events_that_change_nothing() {
 
     assert!(bench.editor.is_busy());
 }
+
+mod in_series {
+    //! A part with two terminals clicked on a wire is put in series with it
+    //! (ADR-0014); anywhere else the place tool does what it always did.
+
+    use circuit_model::SchematicBuilder;
+
+    use super::*;
+
+    /// A wire from (0, 0) to (0, 20), between two junctions.
+    fn bench_with_a_wire() -> Bench {
+        let mut bench = Bench::new();
+        let mut b = SchematicBuilder::new("series");
+        let a = b.junction(point(0, 0)).unwrap();
+        let c = b.junction(point(0, 20)).unwrap();
+        b.wire(a, c).unwrap();
+        bench.doc = b.finish();
+        bench
+    }
+
+    #[test]
+    fn a_part_clicked_on_a_wire_cuts_it_and_one_undo_puts_everything_back() {
+        let mut bench = bench_with_a_wire();
+        let before = bench.doc.clone();
+
+        bench
+            .editor
+            .set_tool(place_tool("pushbutton_no", "contact"));
+        bench.click(point(0, 10));
+
+        assert_eq!(bench.doc.wires.len(), 2);
+        assert_eq!(bench.doc.symbols.len(), 1);
+        // The new part is what is selected, as after any placement.
+        assert_eq!(
+            bench.editor.selection().iter().next(),
+            Some(&Subject::Symbol(bench.doc.symbols[0].id))
+        );
+        bench.history.undo(&mut bench.doc).unwrap();
+        assert_eq!(bench.doc.wires, before.wires);
+        assert!(bench.doc.symbols.is_empty());
+    }
+
+    #[test]
+    fn off_the_wire_or_where_the_part_does_not_fit_it_is_placed_loose() {
+        let mut bench = bench_with_a_wire();
+        bench
+            .editor
+            .set_tool(place_tool("pushbutton_no", "contact"));
+
+        // Beside the wire, and so near its end that the terminals would
+        // fall outside it.
+        bench.click(point(10, 10));
+        bench.click(point(0, 1));
+
+        assert_eq!(bench.doc.wires.len(), 1);
+        assert_eq!(bench.doc.symbols.len(), 2);
+    }
+
+    #[test]
+    fn a_part_with_more_terminals_is_placed_loose_even_on_a_wire() {
+        let mut bench = bench_with_a_wire();
+        bench
+            .editor
+            .set_tool(place_tool("contactor.generic", "main"));
+
+        bench.click(point(0, 10));
+
+        assert_eq!(bench.doc.wires.len(), 1);
+        assert_eq!(bench.doc.symbols.len(), 1);
+    }
+
+    #[test]
+    fn the_preview_of_the_place_tool_shows_the_part_in_series_before_the_click() {
+        let mut bench = bench_with_a_wire();
+        bench
+            .editor
+            .set_tool(place_tool("pushbutton_no", "contact"));
+
+        bench
+            .editor
+            .pointer_move(&bench.doc, &bench.catalog, point(0, 10));
+        let preview = bench.editor.preview(&bench.doc, &bench.catalog);
+
+        let shown = preview.document.expect("a preview");
+        assert_eq!(shown.wires.len(), 2);
+        // Nothing has been done to the real document.
+        assert_eq!(bench.doc.wires.len(), 1);
+    }
+}

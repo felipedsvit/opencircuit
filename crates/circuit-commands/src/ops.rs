@@ -240,6 +240,150 @@ pub fn place(
     Ok(tx)
 }
 
+/// Place a part with two terminals on a wire, in series with it (ADR-0014):
+/// the wire is cut at the part and its two halves end at the part's two
+/// terminals, in one transaction.
+///
+/// `at` must lie on a horizontal or vertical segment of the wire. The part is
+/// turned, starting from `rotation`, until its terminals lie on that segment,
+/// one each side of `at` and strictly inside the segment. The first half
+/// keeps the number of the wire, if it had one, and the terminal nearer the
+/// start of the wire is the one the first half ends at.
+///
+/// # Errors
+///
+/// Returns [`CommandError::NotOnWire`] when none of this holds (a part of
+/// another number of terminals, a point off the wire, a segment too short for
+/// the part), and the errors of [`place`] otherwise.
+pub fn place_on_wire(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    model: &ModelRef,
+    symbol: &SymbolKey,
+    at: GridPoint,
+    rotation: QuarterTurn,
+    wire: WireId,
+) -> Result<Transaction, CommandError> {
+    let definition_model = model_of(catalog, model)?;
+    let definition =
+        definition_model
+            .symbol(symbol)
+            .ok_or_else(|| CommandError::UnknownSymbol {
+                model: model.id.clone(),
+                symbol: symbol.0.clone(),
+            })?;
+    let not_here = || CommandError::NotOnWire(wire);
+    let [one, other] = definition.terminals() else {
+        return Err(not_here());
+    };
+    let old = doc
+        .wires
+        .iter()
+        .find(|candidate| candidate.id == wire)
+        .ok_or(CommandError::Missing(Subject::Wire(wire)))?;
+    let layout = LayoutIndex::new(doc, catalog);
+    let path = layout.wire_polyline(old).ok_or_else(not_here)?;
+    let index = segment_at(&path, at).ok_or_else(not_here)?;
+    let (start, end) = match (path.get(index), path.get(index.saturating_add(1))) {
+        (Some(start), Some(end)) => (*start, *end),
+        _ => return Err(not_here()),
+    };
+    // The direction of the segment, and the coordinate along it.
+    let horizontal = start.y == end.y;
+    if horizontal == (start.x == end.x) {
+        return Err(not_here());
+    }
+    let along = |point: GridPoint| if horizontal { point.x } else { point.y };
+    let across = |point: GridPoint| if horizontal { point.y } else { point.x };
+    let forward = along(end) > along(start);
+    let (low, high) = (along(start).min(along(end)), along(start).max(along(end)));
+
+    // The first turn from `rotation` that puts both terminals on the line,
+    // on either side of `at` and strictly inside the segment.
+    let mut turn = rotation;
+    let mut pins = None;
+    for _ in 0..4 {
+        let place = |terminal: &circuit_model::TerminalDefinition| {
+            turn.rotate(terminal.offset)
+                .and_then(|offset| offset.checked_add(at))
+        };
+        if let (Some(first), Some(second)) = (place(one), place(other))
+            && across(first) == across(at)
+            && across(second) == across(at)
+            && along(first) != along(second)
+            && [first, second]
+                .iter()
+                .all(|pin| low < along(*pin) && along(*pin) < high)
+        {
+            pins = Some((first, second));
+            break;
+        }
+        turn = turn.next();
+    }
+    let (first, second) = pins.ok_or_else(not_here)?;
+    fits(definition, at, turn)?;
+    // The terminal that comes first along the wire is where the first half
+    // ends.
+    let first_is_earlier = (along(first) < along(second)) == forward;
+    let (earlier, later) = if first_is_earlier {
+        (one, other)
+    } else {
+        (other, one)
+    };
+
+    let mut ids = IdAllocator::starting_at(doc.next_id);
+    let device = DeviceId(ids.alloc()?);
+    let symbol_id = SymbolId(ids.alloc()?);
+    let first_half = WireId(ids.alloc()?);
+    let second_half = WireId(ids.alloc()?);
+    let reference = free_designator(doc, designator_prefix(definition_model))?;
+    let waypoints = |range: std::ops::Range<usize>| -> Vec<GridPoint> {
+        path.get(range)
+            .map(<[GridPoint]>::to_vec)
+            .unwrap_or_default()
+    };
+    let last = path.len().saturating_sub(1);
+
+    let mut tx = Transaction::new(format!("Place {} on a wire", reference.0), ids.next_id());
+    tx.edits.push(Edit::RemoveWire(old.id));
+    tx.edits.push(Edit::InsertDevice(Device {
+        id: device,
+        reference,
+        model: model.clone(),
+        params: BTreeMap::new(),
+        info: None,
+    }));
+    tx.edits.push(Edit::InsertSymbol(SymbolInstance {
+        id: symbol_id,
+        device_id: device,
+        symbol_key: symbol.clone(),
+        slot: definition.slotted().then_some(1),
+        position: at,
+        rotation: turn,
+    }));
+    let pin = |terminal: &circuit_model::TerminalDefinition| {
+        Endpoint::Terminal(circuit_model::PinRef {
+            symbol_id,
+            terminal: terminal.key.clone(),
+        })
+    };
+    tx.edits.push(Edit::InsertWire(Wire {
+        id: first_half,
+        from: old.from.clone(),
+        to: pin(earlier),
+        route: waypoints(1..index.saturating_add(1)),
+        number: old.number.clone(),
+    }));
+    tx.edits.push(Edit::InsertWire(Wire {
+        id: second_half,
+        from: pin(later),
+        to: old.to.clone(),
+        route: waypoints(index.saturating_add(1)..last),
+        number: None,
+    }));
+    Ok(tx)
+}
+
 /// Add another symbol of an existing device, such as an auxiliary contact
 /// of a contactor. A slotted symbol takes the first free slot.
 ///

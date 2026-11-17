@@ -2218,3 +2218,182 @@ fn a_junction_is_added_alone_and_with_a_new_id() {
     assert_ne!(doc.junctions[0].id, doc.junctions[1].id);
     assert_eq!(doc.junctions[0].position, point(3, 4));
 }
+
+mod place_on_wire {
+    use circuit_model::{Endpoint, JunctionId, PinRef, SchematicBuilder, WireId, loose_geometry};
+
+    use super::*;
+
+    /// A wire from a junction at `a` through `via` to a junction at `b`.
+    fn wired(a: (i32, i32), via: &[(i32, i32)], b: (i32, i32)) -> Schematic {
+        let mut builder = SchematicBuilder::new("inline");
+        let start = builder.junction(point(a.0, a.1)).unwrap();
+        let end = builder.junction(point(b.0, b.1)).unwrap();
+        let waypoints: Vec<GridPoint> = via.iter().map(|(x, y)| point(*x, *y)).collect();
+        builder.wire_routed(start, end, &waypoints).unwrap();
+        builder.finish()
+    }
+
+    fn place_here(
+        doc: &Schematic,
+        at: (i32, i32),
+        model_id: &str,
+        symbol: &str,
+    ) -> Result<Transaction, CommandError> {
+        ops::place_on_wire(
+            doc,
+            &ComponentCatalog::builtin(),
+            &model(model_id),
+            &key(symbol),
+            point(at.0, at.1),
+            QuarterTurn::Deg0,
+            doc.wires[0].id,
+        )
+    }
+
+    fn apply(doc: &mut Schematic, tx: Transaction) -> History {
+        let mut history = History::new();
+        history.execute(doc, tx).unwrap();
+        history
+    }
+
+    fn pin_of(endpoint: &Endpoint) -> &PinRef {
+        match endpoint {
+            Endpoint::Terminal(pin) => pin,
+            Endpoint::Junction(_) => panic!("a terminal was expected"),
+        }
+    }
+
+    /// The document is sound: structurally valid, nothing touching and not
+    /// connected, and every wire runs orthogonally from end to end.
+    fn assert_sound(doc: &Schematic) {
+        let catalog = ComponentCatalog::builtin();
+        // The ends of the fixture are junctions with one wire each.
+        assert!(
+            doc.validate()
+                .iter()
+                .all(|d| d.code() == DiagnosticCode::JunctionDangling),
+            "{:?}",
+            doc.validate()
+        );
+        assert_eq!(integrity(doc), []);
+        assert_eq!(loose_geometry(doc, &catalog), []);
+        assert!(wire_paths_are_orthogonal(doc, &catalog));
+    }
+
+    #[test]
+    fn a_part_on_a_vertical_wire_cuts_it_and_the_halves_end_at_its_terminals() {
+        let mut doc = wired((0, 0), &[], (0, 20));
+        let original = doc.clone();
+
+        let tx = place_here(&doc, (0, 10), "pushbutton_no", "contact").unwrap();
+        let mut history = apply(&mut doc, tx);
+
+        assert_sound(&doc);
+        assert_eq!(
+            (doc.devices.len(), doc.symbols.len(), doc.wires.len()),
+            (1, 1, 2)
+        );
+        let (first, second) = (&doc.wires[0], &doc.wires[1]);
+        assert_eq!(first.from, Endpoint::Junction(JunctionId(1)));
+        assert_eq!(pin_of(&first.to).terminal.0, "p1");
+        assert_eq!(pin_of(&second.from).terminal.0, "p2");
+        assert_eq!(second.to, Endpoint::Junction(JunctionId(2)));
+        assert_eq!(doc.devices[0].reference.0, "S1");
+
+        // One step to undo.
+        assert_eq!(history.undo_label(), Some("Place S1 on a wire"));
+        history.undo(&mut doc).unwrap();
+        assert_eq!(doc.wires, original.wires);
+        assert!(doc.symbols.is_empty() && doc.devices.is_empty());
+    }
+
+    #[test]
+    fn the_part_is_turned_to_the_direction_of_a_horizontal_wire() {
+        let mut doc = wired((0, 0), &[], (20, 0));
+
+        let tx = place_here(&doc, (10, 0), "pushbutton_no", "contact").unwrap();
+        apply(&mut doc, tx);
+
+        assert_sound(&doc);
+        assert_ne!(doc.symbols[0].rotation, QuarterTurn::Deg0);
+    }
+
+    #[test]
+    fn the_terminal_nearer_the_start_of_the_wire_is_where_the_first_half_ends() {
+        // The wire runs from the bottom to the top, so p2 (the lower
+        // terminal of the part) comes first along it.
+        let mut doc = wired((0, 20), &[], (0, 0));
+
+        let tx = place_here(&doc, (0, 10), "pushbutton_no", "contact").unwrap();
+        apply(&mut doc, tx);
+
+        assert_sound(&doc);
+        assert_eq!(pin_of(&doc.wires[0].to).terminal.0, "p2");
+        assert_eq!(pin_of(&doc.wires[1].from).terminal.0, "p1");
+    }
+
+    #[test]
+    fn a_bend_before_the_cut_stays_with_the_first_half() {
+        // Down the right, along the top, then down: cut on the last leg.
+        let mut doc = wired((0, 0), &[(20, 0)], (20, 20));
+
+        let tx = place_here(&doc, (20, 10), "pushbutton_no", "contact").unwrap();
+        apply(&mut doc, tx);
+
+        assert_sound(&doc);
+        assert_eq!(doc.wires[0].route, [point(20, 0)]);
+        assert_eq!(doc.wires[1].route, []);
+    }
+
+    #[test]
+    fn the_number_of_the_wire_stays_on_the_first_half_only() {
+        let mut doc = wired((0, 0), &[], (0, 20));
+        doc.wires[0].number = Some("L1".to_owned());
+
+        let tx = place_here(&doc, (0, 10), "pushbutton_no", "contact").unwrap();
+        apply(&mut doc, tx);
+
+        assert_eq!(doc.wires[0].number.as_deref(), Some("L1"));
+        assert_eq!(doc.wires[1].number, None);
+    }
+
+    #[test]
+    fn what_does_not_fit_is_refused_so_that_the_editor_can_place_it_loose() {
+        let doc = wired((0, 0), &[], (0, 20));
+
+        // Too near the end for the terminals to be inside the wire.
+        for at in [(0, 1), (0, 19), (0, 0)] {
+            assert!(
+                matches!(
+                    place_here(&doc, at, "pushbutton_no", "contact"),
+                    Err(CommandError::NotOnWire(_))
+                ),
+                "{at:?}"
+            );
+        }
+        // Not on the wire.
+        assert!(matches!(
+            place_here(&doc, (5, 10), "pushbutton_no", "contact"),
+            Err(CommandError::NotOnWire(_))
+        ));
+        // Six terminals.
+        assert!(matches!(
+            place_here(&doc, (0, 10), "contactor.generic", "main"),
+            Err(CommandError::NotOnWire(_))
+        ));
+        // A wire that is not there.
+        assert!(matches!(
+            ops::place_on_wire(
+                &doc,
+                &ComponentCatalog::builtin(),
+                &model("pushbutton_no"),
+                &key("contact"),
+                point(0, 10),
+                QuarterTurn::Deg0,
+                WireId(900),
+            ),
+            Err(CommandError::Missing(_))
+        ));
+    }
+}
