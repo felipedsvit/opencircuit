@@ -36,6 +36,9 @@ pub struct CanvasEvents {
     pub released_at: Option<[f32; 2]>,
     /// Where the pointer hovers over the canvas.
     pub hover: Option<[f32; 2]>,
+    /// Where a secondary click landed, relative to the canvas: a drag with
+    /// that button pans and is not a click.
+    pub context: Option<[f32; 2]>,
     /// The top-left corner of the canvas on screen.
     pub origin: [f32; 2],
     /// The size of the canvas.
@@ -175,6 +178,10 @@ pub fn show(
             })
             .map(local),
         hover: response.hover_pos().map(local),
+        context: response
+            .secondary_clicked()
+            .then(|| response.interact_pointer_pos().map(local))
+            .flatten(),
         origin: [origin.x, origin.y],
         size,
     }

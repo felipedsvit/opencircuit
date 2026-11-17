@@ -417,6 +417,81 @@ fn box_selection_selects_what_lies_entirely_inside() {
 }
 
 #[test]
+fn a_box_dragged_to_the_right_takes_only_what_it_contains() {
+    let mut bench = Bench::new();
+    bench.place("pushbutton_no", "contact", point(0, 0));
+
+    // The box covers part of the symbol, not all of it.
+    bench.drag(point(-6, -6), point(1, 1));
+
+    assert!(bench.editor.selection().is_empty());
+}
+
+#[test]
+fn a_box_dragged_to_the_left_takes_what_it_touches() {
+    let mut bench = Bench::new();
+    let touched = bench.place("pushbutton_no", "contact", point(0, 0));
+    bench.place("pushbutton_no", "contact", point(20, 0));
+
+    bench.drag(point(6, 6), point(1, 1));
+
+    assert_eq!(
+        bench.editor.selection(),
+        &BTreeSet::from([Subject::Symbol(touched)])
+    );
+}
+
+#[test]
+fn a_box_dragged_to_the_left_also_takes_a_wire_that_only_crosses_it() {
+    let mut bench = Bench::new();
+    let a = bench.place("pushbutton_no", "contact", point(0, 0));
+    let b = bench.place("pushbutton_no", "contact", point(20, 0));
+    let end = |symbol_id: SymbolId| {
+        ops::Anchor::Endpoint(circuit_model::Endpoint::Terminal(circuit_model::PinRef {
+            symbol_id,
+            terminal: circuit_model::TerminalKey("p2".to_owned()),
+        }))
+    };
+    let wire = ops::connect(&bench.doc, &bench.catalog, &end(a), &end(b), &[]).unwrap();
+    bench.history.execute(&mut bench.doc, wire).unwrap();
+
+    // A thin box across the middle of the wire, away from both symbols.
+    bench.drag(point(11, 10), point(9, 1));
+
+    assert_eq!(bench.editor.selection().len(), 1);
+    assert!(matches!(
+        bench.editor.selection().iter().next(),
+        Some(Subject::Wire(_))
+    ));
+    // Dragged to the right it would contain nothing of the wire.
+    bench.editor.set_selection(BTreeSet::new());
+    bench.drag(point(9, 1), point(11, 10));
+    assert!(bench.editor.selection().is_empty());
+}
+
+#[test]
+fn the_preview_says_whether_the_box_selects_by_touching() {
+    let mut bench = Bench::new();
+    let down = bench.editor.pointer_down(
+        &bench.doc,
+        &bench.catalog,
+        point(6, 6),
+        Modifiers::default(),
+    );
+    bench.apply(down);
+
+    bench
+        .editor
+        .pointer_move(&bench.doc, &bench.catalog, point(1, 1));
+    assert!(bench.editor.preview(&bench.doc, &bench.catalog).crossing);
+
+    bench
+        .editor
+        .pointer_move(&bench.doc, &bench.catalog, point(9, 9));
+    assert!(!bench.editor.preview(&bench.doc, &bench.catalog).crossing);
+}
+
+#[test]
 fn box_selection_shows_its_rectangle_while_dragging() {
     let mut bench = Bench::new();
     let down = bench.editor.pointer_down(

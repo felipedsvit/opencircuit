@@ -114,6 +114,9 @@ pub struct Preview {
     pub guide: Vec<GridPoint>,
     /// The rectangle of a box selection.
     pub selection_box: Option<GridRect>,
+    /// Whether the box selects what it touches (dragged to the left) and
+    /// not only what it contains (dragged to the right).
+    pub crossing: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -420,7 +423,14 @@ impl Editor {
                 },
             },
             Gesture::BoxSelect { from, additive, .. } => {
-                let inside = Self::inside(doc, catalog, GridRect::from_corners(from, at));
+                let area = GridRect::from_corners(from, at);
+                // Dragged to the right, the box takes what it contains;
+                // dragged to the left, what it touches.
+                let inside = if at.x < from.x {
+                    Self::touching(doc, catalog, area)
+                } else {
+                    Self::inside(doc, catalog, area)
+                };
                 if additive {
                     self.selection.extend(inside);
                 } else {
@@ -436,6 +446,38 @@ impl Editor {
             }
             Gesture::Pressed { .. } | Gesture::Idle => Outcome::default(),
         }
+    }
+
+    /// The symbols, junctions and wires that a rectangle touches.
+    fn touching(doc: &Schematic, catalog: &ComponentCatalog, area: GridRect) -> BTreeSet<Subject> {
+        let layout = LayoutIndex::new(doc, catalog);
+        let mut found = BTreeSet::new();
+        for symbol in &doc.symbols {
+            let touched = layout
+                .symbol_bounds(symbol.id)
+                .is_some_and(|b| area.overlaps(&b));
+            if touched {
+                found.insert(Subject::Symbol(symbol.id));
+            }
+        }
+        for junction in &doc.junctions {
+            if area.contains(junction.position) {
+                found.insert(Subject::Junction(junction.id));
+            }
+        }
+        for wire in &doc.wires {
+            let touched = layout.wire_polyline(wire).is_some_and(|path| {
+                path.iter().any(|p| area.contains(*p))
+                    || path.windows(2).any(|pair| match pair {
+                        [a, b] => area.overlaps(&GridRect::from_corners(*a, *b)),
+                        _ => false,
+                    })
+            });
+            if touched {
+                found.insert(Subject::Wire(wire.id));
+            }
+        }
+        found
     }
 
     /// The symbols, junctions and wires entirely inside a rectangle.
@@ -596,6 +638,7 @@ impl Editor {
             },
             (Gesture::BoxSelect { from, to, .. }, _) => Preview {
                 selection_box: Some(GridRect::from_corners(*from, *to)),
+                crossing: to.x < from.x,
                 ..Preview::default()
             },
             (
