@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::diagnostics::{Diagnostic, DiagnosticCode, Subject, sort_diagnostics};
 use crate::geometry::GridRect;
+use crate::ids::WireId;
 use crate::ids::{DeviceId, JunctionId, MAX_ENTITY_ID, SheetId, SymbolId};
 use crate::schematic::{CURRENT_SCHEMA_VERSION, Endpoint, Schematic};
 use crate::sheet::{MAX_SHEET_SIDE, MAX_ZONES};
@@ -23,6 +24,7 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     check_designators(doc, &mut out);
     check_supply_profiles(doc, &mut out);
     check_sheets(doc, &mut out);
+    check_wire_numbers(doc, &mut out);
 
     sort_diagnostics(&mut out);
     out
@@ -360,6 +362,95 @@ fn check_sheets(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Two wires of one net that carry different numbers (ADR-0014). The nets
+/// are found from the wire endpoints alone, which is all a net with two wires
+/// needs, so the check needs no catalog. The subject is the numbered wire with
+/// the smallest ID, which is the one whose number wins.
+fn check_wire_numbers(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    let numbered: Vec<(WireId, &str)> = doc
+        .wires
+        .iter()
+        .filter_map(|wire| match wire.number.as_deref() {
+            Some(number) if !number.is_empty() => Some((wire.id, number)),
+            _ => None,
+        })
+        .collect();
+    if numbered.len() < 2 {
+        return;
+    }
+
+    let mut index: BTreeMap<&Endpoint, usize> = BTreeMap::new();
+    for wire in &doc.wires {
+        for endpoint in [&wire.from, &wire.to] {
+            let next = index.len();
+            index.entry(endpoint).or_insert(next);
+        }
+    }
+    let mut parent: Vec<usize> = (0..index.len()).collect();
+    let find = |parent: &mut Vec<usize>, mut node: usize| -> usize {
+        while let Some(&up) = parent.get(node) {
+            if up == node {
+                break;
+            }
+            let grand = parent.get(up).copied().unwrap_or(up);
+            if let Some(slot) = parent.get_mut(node) {
+                *slot = grand;
+            }
+            node = grand;
+        }
+        node
+    };
+    for wire in &doc.wires {
+        let (Some(&a), Some(&b)) = (index.get(&wire.from), index.get(&wire.to)) else {
+            continue;
+        };
+        let (a, b) = (find(&mut parent, a), find(&mut parent, b));
+        if a != b
+            && let Some(slot) = parent.get_mut(a.max(b))
+        {
+            *slot = a.min(b);
+        }
+    }
+
+    let mut nets: BTreeMap<usize, Vec<(WireId, &str)>> = BTreeMap::new();
+    for (id, number) in numbered {
+        let Some(&node) = doc
+            .wires
+            .iter()
+            .find(|wire| wire.id == id)
+            .and_then(|wire| index.get(&wire.from))
+        else {
+            continue;
+        };
+        nets.entry(find(&mut parent, node))
+            .or_default()
+            .push((id, number));
+    }
+    for mut wires in nets.into_values() {
+        wires.sort_unstable();
+        wires.dedup();
+        let Some(&(first, number)) = wires.first() else {
+            continue;
+        };
+        let others: Vec<Subject> = wires
+            .iter()
+            .filter(|(_, other)| *other != number)
+            .map(|(id, _)| Subject::Wire(*id))
+            .collect();
+        if others.is_empty() {
+            continue;
+        }
+        out.push(
+            Diagnostic::new(
+                DiagnosticCode::WireNumberConflict,
+                Subject::Wire(first),
+                format!("wires of one net carry different numbers; `{number}` wins"),
+            )
+            .with_related(others),
+        );
+    }
+}
+
 fn check_supply_profiles(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     for supply in &doc.supplies {
         if let Some(reason) = supply.inconsistency() {
@@ -457,6 +548,62 @@ mod tests {
             .into_iter()
             .map(|d| (d.code(), d.subject().clone()))
             .collect()
+    }
+
+    #[test]
+    fn two_numbers_on_one_net_are_a_warning_on_the_wire_that_wins() {
+        let mut doc = valid();
+        doc.wires[0].number = Some("A".to_owned());
+        doc.wires[1].number = Some("B".to_owned());
+
+        let diagnostics = doc.validate();
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code(), DiagnosticCode::WireNumberConflict);
+        assert_eq!(diagnostics[0].subject(), &Subject::Wire(WireId(5)));
+        assert_eq!(diagnostics[0].related(), [Subject::Wire(WireId(6))]);
+    }
+
+    #[test]
+    fn the_same_number_twice_on_a_net_and_empty_numbers_are_no_conflict() {
+        let mut doc = valid();
+        doc.wires[0].number = Some("A".to_owned());
+        doc.wires[1].number = Some("A".to_owned());
+        assert_eq!(codes(&doc), []);
+
+        doc.wires[1].number = Some(String::new());
+        assert_eq!(codes(&doc), []);
+    }
+
+    #[test]
+    fn different_numbers_on_different_nets_are_no_conflict() {
+        let mut doc = valid();
+        doc.junctions.push(Junction {
+            id: JunctionId(8),
+            position: GridPoint::new(9, 9),
+        });
+        doc.wires[1].to = Endpoint::Junction(JunctionId(8));
+        doc.next_id = 9;
+        doc.wires[0].number = Some("A".to_owned());
+        doc.wires[1].number = Some("B".to_owned());
+
+        assert!(
+            !doc.validate()
+                .iter()
+                .any(|d| d.code() == DiagnosticCode::WireNumberConflict)
+        );
+    }
+
+    #[test]
+    fn the_wire_number_conflict_does_not_depend_on_the_order_of_the_wires() {
+        let mut doc = valid();
+        doc.wires[0].number = Some("A".to_owned());
+        doc.wires[1].number = Some("B".to_owned());
+        let expected = doc.validate();
+
+        doc.wires.reverse();
+
+        assert_eq!(doc.validate(), expected);
     }
 
     #[test]

@@ -7,12 +7,12 @@ use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ComponentModel, ConductorSet, CrossReferences, DeviceClass, DeviceId,
     JunctionId, LayoutIndex, Location, MotorState, PinRef, Schematic, SheetId, SimSnapshot,
-    Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire, WireId,
-    cross_references, terminal_label,
+    StaticNets, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire,
+    WireId, WireNumbers, cross_references, terminal_label,
 };
 
 use crate::frame::{draw_sheets, frame_rect};
-use crate::scene::{Anchor, Scene, ScenePoint, SceneRect, Shape, StyleKey};
+use crate::scene::{Anchor, SUBUNITS_PER_GRID, Scene, ScenePoint, SceneRect, Shape, StyleKey};
 use crate::symbols::{self, Actuator, Look};
 
 /// Radius of a junction dot, in subunits.
@@ -27,6 +27,12 @@ const LABEL_LINE: i64 = 12;
 const RING_RADIUS: i64 = 5;
 /// Gap between a terminal and its number, to the right of the lead.
 const TERMINAL_LABEL_GAP: i64 = 3;
+/// Width of one glyph of the label font, in subunits (rounded up).
+const GLYPH_ADVANCE: i64 = 5;
+/// Distance between a wire and its number.
+const WIRE_NUMBER_GAP: i64 = 6;
+/// Free length a segment keeps beyond its number.
+const WIRE_NUMBER_MARGIN: i64 = 10;
 
 /// What to show besides the document and the simulation state.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -206,6 +212,8 @@ pub fn build_scene(
     for symbol in symbols.values() {
         draw_label(&mut scene, &layout, catalog, &state, &xrefs, symbol);
     }
+
+    draw_wire_numbers(&mut scene, doc, catalog, &layout, &wires);
 
     if let Some(snapshot) = snapshot {
         let subjects: BTreeSet<&Subject> = snapshot
@@ -425,6 +433,87 @@ fn draw_label(
             },
             StyleKey::Label,
             subject.clone(),
+        );
+    }
+}
+
+/// The number of every wire, once, on its longest segment (ADR-0014). Nothing
+/// is drawn unless the project has a numbering rule, so a document that does
+/// not use wire numbers looks as before. A number goes above a horizontal
+/// segment and beside a vertical one, and is left out when the segment is too
+/// short to hold it.
+fn draw_wire_numbers(
+    scene: &mut Scene,
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    layout: &LayoutIndex<'_>,
+    wires: &BTreeMap<circuit_model::WireId, &Wire>,
+) {
+    if doc.project.wire_numbering.is_none() {
+        return;
+    }
+    let numbers = WireNumbers::build(doc, catalog, &StaticNets::build(doc, catalog));
+    for wire in wires.values() {
+        let Some(text) = numbers.of_wire(wire.id) else {
+            continue;
+        };
+        let Some(path) = layout.wire_polyline(wire) else {
+            continue;
+        };
+        let longest = path
+            .windows(2)
+            .filter_map(|pair| match pair {
+                [a, b] => Some((*a, *b)),
+                _ => None,
+            })
+            .map(|(a, b)| {
+                let length =
+                    i64::from(a.x.abs_diff(b.x)).saturating_add(i64::from(a.y.abs_diff(b.y)));
+                (length, a, b)
+            })
+            .fold(None, |best: Option<(i64, _, _)>, candidate| match best {
+                Some(best) if best.0 >= candidate.0 => Some(best),
+                _ => Some(candidate),
+            });
+        let Some((length, a, b)) = longest else {
+            continue;
+        };
+        let length = length.saturating_mul(SUBUNITS_PER_GRID);
+        let (from, to) = (ScenePoint::from_grid(a), ScenePoint::from_grid(b));
+        let middle = ScenePoint::new(
+            from.x.saturating_add(to.x).checked_div(2).unwrap_or(from.x),
+            from.y.saturating_add(to.y).checked_div(2).unwrap_or(from.y),
+        );
+        let width = i64::try_from(text.chars().count())
+            .unwrap_or(i64::MAX)
+            .saturating_mul(GLYPH_ADVANCE);
+        let (at, anchor) = if a.y == b.y {
+            if length < width.saturating_add(WIRE_NUMBER_MARGIN) {
+                continue;
+            }
+            (
+                ScenePoint::new(middle.x, middle.y.saturating_sub(WIRE_NUMBER_GAP)),
+                Anchor::Center,
+            )
+        } else if a.x == b.x {
+            if length < LABEL_LINE.saturating_add(WIRE_NUMBER_MARGIN) {
+                continue;
+            }
+            (
+                ScenePoint::new(middle.x.saturating_add(WIRE_NUMBER_GAP), middle.y),
+                Anchor::Left,
+            )
+        } else {
+            continue;
+        };
+        scene.push(
+            Shape::Text {
+                at,
+                text: text.to_owned(),
+                anchor,
+            },
+            StyleKey::Label,
+            Some(Subject::Wire(wire.id)),
         );
     }
 }

@@ -122,6 +122,15 @@ none of them:
 | `project.wire_numbering` | `{ "prefix": <text of at most 16 bytes>, "start": <integer>, "step": <integer, at least 1>, "per_sheet": <boolean> }`; absent: wires are not numbered |
 | `waivers` | list of `{ "code": "OC-STR-018", "subject": <subject>, "reason": <text> }`, sorted by code and then subject, at most 10 000 |
 
+Wire numbers are derived from the nets and are never stored (ADR-0014): one
+number per net, in the order of the first point of the net (sheet, then zone
+row, then zone column, then `y`, then `x`). `wire_numbering` gives the prefix
+and the counter; `per_sheet` writes `<prefix><sheet>.<counter>` and restarts
+the counter on every sheet. A `wires[].number` replaces the number of its net
+without moving the others; if two wires of one net carry different overrides,
+the one on the wire with the smaller ID wins and the document has the warning
+`OC-SEM-012`. A project without `wire_numbering` draws no wire number.
+
 A subject is the tagged form the command line prints: `"document"`,
 `{ "supply": 1 }`, `{ "device": 2 }`, `{ "symbol": 3 }`, `{ "wire": 5 }`,
 `{ "junction": 4 }`, `{ "sheet": 7 }` or

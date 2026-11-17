@@ -360,6 +360,111 @@ fn every_symbol_is_labelled_with_its_designator() {
     assert!(labels.is_superset(&BTreeSet::from(["K1", "P0", "P24", "S1", "S2"])));
 }
 
+/// The texts the scene draws for wires.
+fn wire_texts(scene: &Scene) -> Vec<&str> {
+    scene
+        .items
+        .iter()
+        .filter_map(|item| match (&item.shape, &item.subject) {
+            (Shape::Text { text, .. }, Some(Subject::Wire(_))) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Three horizontal wires of ten grid units, one above the other, and a
+/// vertical one of ten at their left; each its own net.
+fn numbered_starter() -> Schematic {
+    let mut b = SchematicBuilder::new("numbered");
+    for y in [0, 5, 10] {
+        let left = b.junction(GridPoint::new(0, y)).unwrap();
+        let right = b.junction(GridPoint::new(10, y)).unwrap();
+        b.wire(left, right).unwrap();
+    }
+    let top = b.junction(GridPoint::new(20, 0)).unwrap();
+    let bottom = b.junction(GridPoint::new(20, 10)).unwrap();
+    b.wire(top, bottom).unwrap();
+    let mut doc = b.finish();
+    doc.project.wire_numbering = Some(circuit_model::WireNumbering {
+        prefix: "W".to_owned(),
+        start: 1,
+        step: std::num::NonZeroU32::MIN,
+        per_sheet: false,
+    });
+    doc
+}
+
+#[test]
+fn a_project_without_a_numbering_rule_draws_no_wire_number() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = numbered_starter();
+    doc.project.wire_numbering = None;
+    doc.wires[0].number = Some("L1".to_owned());
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    assert_eq!(wire_texts(&scene), Vec::<&str>::new());
+}
+
+#[test]
+fn a_numbering_rule_draws_each_wire_number_once_in_reading_order() {
+    let catalog = ComponentCatalog::builtin();
+    let doc = numbered_starter();
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    // Nets are numbered by where they start, top row first and then left to
+    // right: the upper row, the vertical wire (it starts on that row, further
+    // right), the middle row, the lower row. The scene lists wires by ID.
+    assert_eq!(wire_texts(&scene), ["W1", "W3", "W4", "W2"]);
+}
+
+#[test]
+fn an_override_replaces_the_generated_number_on_the_drawing() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = numbered_starter();
+    doc.wires[1].number = Some("L1".to_owned());
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    assert_eq!(wire_texts(&scene), ["W1", "L1", "W4", "W2"]);
+}
+
+#[test]
+fn a_wire_too_short_to_hold_its_number_is_left_unlabelled() {
+    let catalog = ComponentCatalog::builtin();
+    let mut b = SchematicBuilder::new("short");
+    let a = b.junction(GridPoint::new(0, 0)).unwrap();
+    let c = b.junction(GridPoint::new(1, 0)).unwrap();
+    b.wire(a, c).unwrap();
+    let mut doc = b.finish();
+    doc.project.wire_numbering = Some(circuit_model::WireNumbering {
+        prefix: "WIRE".to_owned(),
+        start: 100,
+        step: std::num::NonZeroU32::MIN,
+        per_sheet: false,
+    });
+
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+    assert_eq!(wire_texts(&scene), Vec::<&str>::new());
+}
+
+#[test]
+fn wire_numbers_do_not_depend_on_the_order_of_the_collections() {
+    let catalog = ComponentCatalog::builtin();
+    let doc = numbered_starter();
+    let mut shuffled = doc.clone();
+    shuffled.devices.reverse();
+    shuffled.symbols.reverse();
+    shuffled.wires.reverse();
+
+    assert_eq!(
+        build_scene(&doc, &catalog, None, &SceneOptions::default()),
+        build_scene(&shuffled, &catalog, None, &SceneOptions::default())
+    );
+}
+
 #[test]
 fn terminals_are_numbered_next_to_their_pins() {
     let catalog = ComponentCatalog::builtin();
