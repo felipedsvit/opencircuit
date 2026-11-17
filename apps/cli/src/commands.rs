@@ -673,12 +673,17 @@ fn report(
             out.write_all(body.as_bytes())?;
         }
         Some((path, file)) => {
-            let body = match file {
-                FileFormat::Text => as_text(),
-                FileFormat::Json => as_json()?,
-                FileFormat::Csv => as_csv(),
+            let body: Vec<u8> = match file {
+                FileFormat::Text => as_text().into_bytes(),
+                FileFormat::Json => as_json()?.into_bytes(),
+                FileFormat::Csv => as_csv().into_bytes(),
+                FileFormat::Pdf => {
+                    let pages: Vec<circuit_model::Table> =
+                        tables.iter().map(|(_, table)| table.clone()).collect();
+                    circuit_export::table_pdf(&pages, circuit_export::Theme::Print)
+                }
             };
-            write_atomic(path, body.as_bytes())?;
+            write_atomic(path, &body)?;
             match console {
                 OutputFormat::Text => writeln!(out, "wrote  {}", path.display())?,
                 OutputFormat::Json => emit(
@@ -692,6 +697,7 @@ fn report(
                             FileFormat::Text => "txt",
                             FileFormat::Json => "json",
                             FileFormat::Csv => "csv",
+                            FileFormat::Pdf => "pdf",
                         },
                         reports: tables.len(),
                     },

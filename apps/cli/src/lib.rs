@@ -63,7 +63,7 @@ usage:
                      [--theme print|live] [--sheet <number>|all]
                      [--format text|json] [--library <file.oclib|dir>]
   opencircuit report <project.ocircuit> --kind bom|wires|terminals|xref|io|problems|all
-                     [--format text|json|csv] [--output <file.csv|json|txt>]
+                     [--format text|json|csv] [--output <file.csv|json|txt|pdf>]
                      [--library <file.oclib|dir>]
   opencircuit serve <project.ocircuit> [--listen <address:port>]
                     [--print-map [--format text|json]]
@@ -76,7 +76,8 @@ report derives the tables of a project (bill of materials, wires, terminals,
 cross-reference exceptions, I/O map, problems). Without --output the tables
 go to standard output in --format; with --output the extension of the file
 picks the format and --format (text or json) says how the confirmation is
-written. A CSV holds one table.
+written. A CSV holds one table; a PDF sets every table on A4 landscape
+pages.
 
 serve answers Modbus TCP on 127.0.0.1:5020 unless --listen names another
 address. Modbus has no authentication. OpenCircuit is a simulator, not a

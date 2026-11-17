@@ -1573,3 +1573,47 @@ fn report_usage_errors_exit_with_2_and_a_broken_project_with_1() {
     assert_eq!(document["ok"], false);
     assert_eq!(document["command"], "report");
 }
+
+#[test]
+fn report_to_a_pdf_sets_every_table_on_its_own_pages() {
+    let directory = scratch("report-pdf");
+    let pdf = directory.join("all.pdf");
+
+    let output = opencircuit(&[
+        "report",
+        STARTER,
+        "--kind",
+        "all",
+        "--output",
+        pdf.to_str().expect("utf-8 path"),
+        "--format",
+        "json",
+    ]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let confirmation: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
+    assert_eq!(confirmation["kind"], "pdf");
+    let bytes = fs::read(&pdf).expect("written");
+    assert!(bytes.starts_with(b"%PDF-"));
+    // At least one page for each of the six tables; a long one takes more.
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let pages: usize = text
+        .split("/Count ")
+        .nth(1)
+        .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
+        .and_then(|digits| digits.parse().ok())
+        .expect("a page count");
+    assert!(pages >= 6, "{pages} pages");
+
+    let again = directory.join("again.pdf");
+    let output = opencircuit(&[
+        "report",
+        STARTER,
+        "--kind",
+        "all",
+        "--output",
+        again.to_str().expect("utf-8 path"),
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert_eq!(fs::read(&again).expect("written"), bytes);
+}
