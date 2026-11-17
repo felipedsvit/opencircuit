@@ -1168,6 +1168,7 @@ Regras:
 | OC-SEM-010 | `InvalidTransformer` | Error | não | Secundário de transformador que não é monofásico, é nomeado por outro transformador ou também é derivado por um `supply.terminal` (M4) |
 | OC-SEM-011 | `NotSimulated` | Info | não | Dispositivo só de símbolo (classe `symbolic`): desenhado e ligado, sem comportamento na simulação (ADR-0013) |
 | OC-SEM-012 | `WireNumberConflict` | Warning | não | Dois fios da mesma net com números diferentes; vale o de menor ID (ADR-0014) |
+| OC-SEM-013 | `DuplicateTerminal` | Warning | não | Dois blocos de bornes com a mesma régua e o mesmo número (ADR-0016) |
 | OC-ELEC-001 | `ShortCircuit` | Error | sim | Condutores incompatíveis no mesmo grupo, estático ou em execução (inclui mistura AC/DC) |
 | OC-ELEC-002 | `ProtectiveEarthFault` | Error | sim | PE em contato com condutor ativo |
 | OC-ELEC-003 | `NeutralEarthBond` | Warning | não | N e PE no mesmo grupo |

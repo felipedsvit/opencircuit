@@ -439,6 +439,19 @@ fn param_row(
                 });
             }
         }
+        ParamType::Name => {
+            let text = match shown {
+                Some(ParamValue::Text(text)) => text.clone(),
+                _ => String::new(),
+            };
+            if let Some(typed) = state.text_field(ui, format!("param:{device}:{key}"), key, &text) {
+                request = Some(if typed.is_empty() {
+                    set(None)
+                } else {
+                    set(Some(ParamValue::Text(typed)))
+                });
+            }
+        }
         ParamType::Enum(choices) => {
             let selected = match shown {
                 Some(ParamValue::Text(text)) => text.clone(),

@@ -224,10 +224,10 @@ fn tools() -> Value {
         },
         {
             "name": "report",
-            "description": "Derive the reports of a project: bom, wires, terminals, xref, io, problems or all.",
+            "description": "Derive the reports of a project: bom, wires, terminals, strips, xref, io, problems or all.",
             "inputSchema": { "type": "object", "required": ["project", "kind"], "properties": {
                 "project": project,
-                "kind": string_property("bom, wires, terminals, xref, io, problems or all."),
+                "kind": string_property("bom, wires, terminals, strips, xref, io, problems or all."),
                 "library": library
             } }
         },

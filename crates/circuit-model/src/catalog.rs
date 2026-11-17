@@ -86,6 +86,9 @@ pub enum DeviceClass {
     /// Control transformer: a primary load and a secondary that provides a
     /// separate single-phase section while the primary is powered.
     Transformer,
+    /// A terminal of a terminal strip (ADR-0016): two terminals that always
+    /// conduct, numbered by the parameters `strip` and `number`.
+    TerminalBlock,
     /// A device that is drawn and wired but has no behaviour in the
     /// simulation (ADR-0013): a diode, a PLC block, a cylinder. It adds no
     /// switch, source or load; its terminals only join the nets their wires
@@ -156,6 +159,8 @@ pub enum SymbolKind {
     },
     /// Fuse link; always conducting.
     FuseLink,
+    /// One terminal of a terminal strip; always conducting.
+    TerminalPoint,
     /// Three-terminal motor.
     Motor,
     /// Motor with both ends of its three windings brought out: `u1`-`u2`,
@@ -243,7 +248,9 @@ impl SymbolKind {
         match self {
             Self::Coil | Self::TransformerPrimary => pair("a1", "a2", true),
             Self::TransformerSecondary => pair("x1", "x2", false),
-            Self::ContactNo | Self::ContactNc | Self::FuseLink => pair("p1", "p2", false),
+            Self::ContactNo | Self::ContactNc | Self::FuseLink | Self::TerminalPoint => {
+                pair("p1", "p2", false)
+            }
             Self::Changeover => vec![
                 TerminalDefinition::new("com", false, GridPoint::new(0, BELOW)),
                 TerminalDefinition::new("nc", false, GridPoint::new(CHANGEOVER_NC, ABOVE)),
@@ -316,6 +323,7 @@ impl SymbolKind {
             | Self::ContactNc
             | Self::Changeover
             | Self::FuseLink
+            | Self::TerminalPoint
             | Self::Lamp
             | Self::Buzzer
             | Self::TransformerPrimary
@@ -518,6 +526,23 @@ pub enum ParamType {
     SupplyRef,
     /// The ID of a device of the document.
     DeviceRef,
+    /// A short name (ADR-0016): 1 to [`MAX_NAME_PARAM_CHARS`] letters, digits,
+    /// `_`, `-` or `.`, such as the strip of a terminal or the name of a
+    /// signal.
+    Name,
+}
+
+/// Longest value of a [`ParamType::Name`] parameter, in characters.
+pub const MAX_NAME_PARAM_CHARS: usize = 32;
+
+/// Whether `text` is a valid value of a [`ParamType::Name`] parameter.
+#[must_use]
+pub fn is_name(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().count() <= MAX_NAME_PARAM_CHARS
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
 }
 
 /// One parameter a component model accepts.
@@ -564,6 +589,11 @@ impl ParamDefinition {
                 }
             }
             (ParamType::SupplyRef | ParamType::DeviceRef, ParamValue::Int(v)) if *v > 0 => Ok(()),
+            (ParamType::Name, ParamValue::Text(text)) if is_name(text) => Ok(()),
+            (ParamType::Name, _) => Err(format!(
+                "parameter `{}` must be a name of 1 to {MAX_NAME_PARAM_CHARS} letters, digits, `_`, `-` or `.`",
+                self.key
+            )),
             (ParamType::Bool, _) => Err(format!("parameter `{}` must be a boolean", self.key)),
             (ParamType::Int { .. }, _) => {
                 Err(format!("parameter `{}` must be an integer", self.key))
@@ -684,6 +714,7 @@ impl Category {
         match class {
             DeviceClass::PowerSupply | DeviceClass::Transformer => Self::Supplies,
             DeviceClass::Fuse => Self::Protection,
+            DeviceClass::TerminalBlock => Self::Lines,
             DeviceClass::Contactor
             | DeviceClass::ThermalOverload
             | DeviceClass::Pushbutton
@@ -1257,6 +1288,7 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
             SymbolKind::ContactNo | SymbolKind::ContactNc | SymbolKind::PowerContacts { .. }
         ),
         DeviceClass::Fuse => matches!(kind, SymbolKind::FuseLink),
+        DeviceClass::TerminalBlock => matches!(kind, SymbolKind::TerminalPoint),
         DeviceClass::Motor => matches!(kind, SymbolKind::Motor | SymbolKind::MotorSixTerminal),
         DeviceClass::Lamp => matches!(kind, SymbolKind::Lamp),
         DeviceClass::Buzzer => matches!(kind, SymbolKind::Buzzer),
@@ -1339,6 +1371,7 @@ const fn class_params(class: DeviceClass) -> &'static [(&'static str, ExpectedPa
         DeviceClass::ThermalOverload
         | DeviceClass::Pushbutton
         | DeviceClass::Fuse
+        | DeviceClass::TerminalBlock
         | DeviceClass::Symbolic => &[],
     }
 }

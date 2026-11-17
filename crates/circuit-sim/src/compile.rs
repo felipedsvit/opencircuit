@@ -17,8 +17,8 @@ use circuit_model::{
     ComponentCatalog, ComponentModel, Conductor, Connection, Device, DeviceClass, DeviceId,
     Diagnostic, DiagnosticCode, Endpoint, JunctionId, LayoutIndex, PhaseSequence, PinRef,
     Schematic, Subject, SupplyId, SupplyKind, SupplyProfile, SymbolDefinition, SymbolId,
-    SymbolInstance, SymbolKey, SymbolKind, TimerMode, has_errors, is_orthogonal, loose_geometry,
-    sort_diagnostics,
+    SymbolInstance, SymbolKey, SymbolKind, TimerMode, duplicate_terminals, has_errors,
+    is_orthogonal, loose_geometry, sort_diagnostics,
 };
 
 use crate::compiled::{
@@ -63,6 +63,7 @@ pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutp
     // Terminals and wires that look connected and are not: a warning of the
     // drawing, never an electrical fact (ADR-0014).
     diagnostics.extend(loose_geometry(schematic, catalog));
+    diagnostics.extend(duplicate_terminals(schematic, catalog));
 
     let circuit = if has_errors(&diagnostics) {
         None
@@ -565,6 +566,7 @@ const fn signal_kind(class: DeviceClass) -> Option<SignalKind> {
         DeviceClass::ThermalOverload => Some(SignalKind::Tripped),
         DeviceClass::Transformer => Some(SignalKind::Powered),
         DeviceClass::Fuse
+        | DeviceClass::TerminalBlock
         | DeviceClass::Motor
         | DeviceClass::Lamp
         | DeviceClass::Buzzer
@@ -902,7 +904,9 @@ fn build(
                     });
                 }
             }
-            SymbolKind::FuseLink => {
+            // A fuse never melts and a terminal never opens: both always
+            // conduct.
+            SymbolKind::FuseLink | SymbolKind::TerminalPoint => {
                 let (Some(a), Some(b)) = (terminal_net(0), terminal_net(1)) else {
                     continue;
                 };
@@ -1357,6 +1361,7 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             DeviceClass::MechanicalInterlock => 13,
             DeviceClass::Transformer => 14,
             DeviceClass::Symbolic => 15,
+            DeviceClass::TerminalBlock => 16,
         });
         hash.u32(device.signal.map_or(u32::MAX, |sig| sig.0));
         hash.u32(device.coil.map_or(u32::MAX, |load| load.0));

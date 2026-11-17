@@ -251,7 +251,7 @@ fn every_committed_scenario_passes() {
     let output = opencircuit(&["test", "examples", "tests/fixtures"]);
 
     assert_eq!(code(&output), 0, "{}", stdout(&output));
-    assert!(stdout(&output).ends_with("24 scenario(s), 0 failed\n"));
+    assert!(stdout(&output).ends_with("25 scenario(s), 0 failed\n"));
 }
 
 #[test]
@@ -963,10 +963,10 @@ fn test_in_json_lists_every_scenario_and_why_one_failed() {
             value["total"].clone(),
             value["failed"].clone()
         ),
-        (true.into(), 24.into(), 0.into())
+        (true.into(), 25.into(), 0.into())
     );
     let scenarios = value["scenarios"].as_array().expect("a list");
-    assert_eq!(scenarios.len(), 24);
+    assert_eq!(scenarios.len(), 25);
     assert!(
         scenarios
             .iter()
@@ -1468,7 +1468,15 @@ fn report_all_in_json_has_every_table_with_format_1() {
         .collect();
     assert_eq!(
         kinds,
-        ["bom", "wires", "terminals", "xref", "io", "problems"]
+        [
+            "bom",
+            "wires",
+            "terminals",
+            "strips",
+            "xref",
+            "io",
+            "problems"
+        ]
     );
     assert_eq!(document["reports"][0]["columns"][1], "Qty");
 }
@@ -1513,10 +1521,10 @@ fn report_to_a_file_picks_the_format_from_the_extension() {
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let confirmation: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
     assert_eq!(confirmation["kind"], "json");
-    assert_eq!(confirmation["reports"], 6);
+    assert_eq!(confirmation["reports"], 7);
     let written: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&json).expect("written")).expect("JSON");
-    assert_eq!(written["reports"].as_array().expect("reports").len(), 6);
+    assert_eq!(written["reports"].as_array().expect("reports").len(), 7);
 }
 
 #[test]
@@ -1595,7 +1603,7 @@ fn report_to_a_pdf_sets_every_table_on_its_own_pages() {
     assert_eq!(confirmation["kind"], "pdf");
     let bytes = fs::read(&pdf).expect("written");
     assert!(bytes.starts_with(b"%PDF-"));
-    // At least one page for each of the six tables; a long one takes more.
+    // At least one page for each of the seven tables; a long one takes more.
     let text = String::from_utf8_lossy(&bytes).into_owned();
     let pages: usize = text
         .split("/Count ")
@@ -1603,7 +1611,7 @@ fn report_to_a_pdf_sets_every_table_on_its_own_pages() {
         .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
         .and_then(|digits| digits.parse().ok())
         .expect("a page count");
-    assert!(pages >= 6, "{pages} pages");
+    assert!(pages >= 7, "{pages} pages");
 
     let again = directory.join("again.pdf");
     let output = opencircuit(&[
@@ -1944,4 +1952,110 @@ fn mcp_with_a_root_that_is_not_a_directory_is_a_usage_error() {
     let output = opencircuit(&["mcp", "--root", "no/such/directory"]);
 
     assert_eq!(code(&output), 2);
+}
+
+const TERMINALS: &str = "examples/terminals/terminals.ocircuit";
+
+#[test]
+fn the_terminal_plan_of_the_example_is_the_committed_one_and_the_circuit_runs_through_the_strip() {
+    let made = opencircuit(&["report", TERMINALS, "--kind", "strips", "--format", "csv"]);
+
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+    let golden = fs::read_to_string(root().join("examples/terminals/strips.csv")).expect("golden");
+    assert_eq!(stdout(&made), golden);
+    assert!(golden.contains("X1,1,XT1,,P24:out,,S2:11\n"), "{golden}");
+
+    // The terminals always conduct: the golden trace of the scenario has the
+    // coil on after the start button, as in the plain control circuit.
+    let ran = opencircuit(&["test", "examples/terminals"]);
+    assert_eq!(code(&ran), 0, "{}", stdout(&ran));
+}
+
+#[test]
+fn the_same_strip_and_number_on_two_terminals_is_a_warning_that_can_be_waived() {
+    let directory = scratch("strips-duplicate");
+    let project = directory.join("strips.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let edit = directory.join("edit.json");
+    fs::write(
+        &edit,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "place", "model": "std.terminal_block", "symbol": "terminal", "at": [0, 0],
+              "reference": "XT1" },
+            { "op": "place", "model": "std.terminal_block", "symbol": "terminal", "at": [10, 0],
+              "reference": "XT2" },
+            { "op": "set_param", "device": "XT2", "key": "strip", "value": "X1" },
+            { "op": "set_param", "device": "XT2", "key": "number", "value": 1 }
+        ] }"#,
+    )
+    .expect("write");
+    let applied = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+    assert_eq!(
+        code(&applied),
+        0,
+        "{}{}",
+        stdout(&applied),
+        stderr(&applied)
+    );
+
+    let failing = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&failing), 1);
+    assert!(
+        stdout(&failing).contains("OC-SEM-013"),
+        "{}",
+        stdout(&failing)
+    );
+
+    let waive = directory.join("waive.json");
+    fs::write(
+        &waive,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "waive", "code": "OC-SEM-013", "subject": { "device": "XT1" },
+              "reason": "the second strip is not numbered yet" }
+        ] }"#,
+    )
+    .expect("write");
+    assert_eq!(
+        code(&opencircuit(&[
+            "edit",
+            path,
+            "--apply",
+            waive.to_str().expect("utf-8 path")
+        ])),
+        0
+    );
+    assert_eq!(
+        code(&opencircuit(&["validate", path, "--deny-warnings"])),
+        0
+    );
+}
+
+#[test]
+fn a_terminal_with_an_invalid_name_or_number_is_refused() {
+    let directory = scratch("strips-invalid");
+    let project = directory.join("strips.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    for (key, value) in [
+        ("strip", r#""not a name""#),
+        ("strip", r#""""#),
+        ("strip", "7"),
+        ("number", "0"),
+        ("number", "10000"),
+    ] {
+        let edit = directory.join("edit.json");
+        fs::write(
+            &edit,
+            format!(
+                r#"{{ "schema_version": 1, "operations": [
+                  {{ "op": "place", "model": "std.terminal_block", "symbol": "terminal", "at": [0, 0] }},
+                  {{ "op": "set_param", "device": "XT1", "key": "{key}", "value": {value} }}
+                ] }}"#
+            ),
+        )
+        .expect("write");
+        let applied = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+        assert_eq!(code(&applied), 1, "{key} {value}: {}", stdout(&applied));
+    }
 }

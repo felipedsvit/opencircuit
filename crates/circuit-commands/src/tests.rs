@@ -1361,6 +1361,7 @@ fn transaction(
             let definition = (!model.params().is_empty()).then(|| p.get(model.params()))?;
             let value = match &definition.ty {
                 circuit_model::ParamType::Bool => ParamValue::Bool(value % 2 == 0),
+                circuit_model::ParamType::Name => ParamValue::Text(format!("n{value}")),
                 circuit_model::ParamType::Int { .. }
                 | circuit_model::ParamType::SupplyRef
                 | circuit_model::ParamType::DeviceRef => ParamValue::Int((*value).into()),

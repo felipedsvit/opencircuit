@@ -80,10 +80,11 @@ impl Example {
 }
 
 impl Example {
-    /// The catalog the project is drawn and checked with: the built-in one,
-    /// plus the example's library when it uses one.
+    /// The catalog the project is drawn and checked with: the built-in one and
+    /// the standard library `std`, as the command line has it, plus the
+    /// example's library when it uses one.
     pub(crate) fn catalog(&self) -> Result<circuit_model::ComponentCatalog, String> {
-        let builtin = circuit_model::ComponentCatalog::builtin();
+        let builtin = circuit_project::stdlib::catalog();
         let Some(text) = self.library else {
             return Ok(builtin);
         };
@@ -106,47 +107,60 @@ pub(crate) fn outputs() -> Vec<Result<(String, Vec<u8>), String>> {
     projects.chain(drawings).chain(reports()).collect()
 }
 
-/// The project whose reports are committed next to it as CSV: the goldens of
-/// `circuit-report` and of `opencircuit report`.
-const REPORTED: &str = "examples/documentation/documentation.ocircuit";
+/// The projects whose reports are committed next to them as CSV, with the
+/// reports: the goldens of `circuit-report` and of `opencircuit report`.
+const REPORTED: &[(&str, &[circuit_report::Kind])] = &[
+    (
+        "examples/documentation/documentation.ocircuit",
+        &[
+            circuit_report::Kind::Bom,
+            circuit_report::Kind::Wires,
+            circuit_report::Kind::Terminals,
+            circuit_report::Kind::Xref,
+            circuit_report::Kind::Io,
+        ],
+    ),
+    (
+        "examples/terminals/terminals.ocircuit",
+        &[circuit_report::Kind::Strips],
+    ),
+];
 
-/// The reports of the documented example, one CSV file each. They are made
-/// with the standard catalog, as the command line does.
+/// The reports of the reported examples, one CSV file each. They are made with
+/// the standard catalog, as the command line does.
 fn reports() -> Vec<Result<(String, Vec<u8>), String>> {
-    let Some(example) = EXAMPLES.iter().find(|example| example.path == REPORTED) else {
-        return vec![Err(format!("{REPORTED} is not an example"))];
-    };
-    let doc = match (example.build)() {
-        Ok(doc) => doc,
-        Err(error) => return vec![Err(format!("{REPORTED}: {error}"))],
-    };
     let catalog = circuit_project::stdlib::catalog();
-    let directory = REPORTED
-        .rsplit_once('/')
-        .map_or("", |(directory, _)| directory);
-    [
-        circuit_report::Kind::Bom,
-        circuit_report::Kind::Wires,
-        circuit_report::Kind::Terminals,
-        circuit_report::Kind::Xref,
-        circuit_report::Kind::Io,
-    ]
-    .into_iter()
-    .map(|kind| {
-        let table = match kind {
-            circuit_report::Kind::Bom => circuit_report::bom(&doc, &catalog),
-            circuit_report::Kind::Wires => circuit_report::wires(&doc, &catalog),
-            circuit_report::Kind::Terminals => circuit_report::terminals(&doc, &catalog),
-            circuit_report::Kind::Xref => circuit_report::xref(&doc, &catalog),
-            circuit_report::Kind::Io => circuit_report::io(&doc, &catalog),
-            circuit_report::Kind::Problems => circuit_report::problems(&doc, &[]),
+    let mut out = Vec::new();
+    for (path, kinds) in REPORTED {
+        let Some(example) = EXAMPLES.iter().find(|example| example.path == *path) else {
+            out.push(Err(format!("{path} is not an example")));
+            continue;
         };
-        Ok((
-            format!("{directory}/{}.csv", kind.name()),
-            table.to_csv().into_bytes(),
-        ))
-    })
-    .collect()
+        let doc = match (example.build)() {
+            Ok(doc) => doc,
+            Err(error) => {
+                out.push(Err(format!("{path}: {error}")));
+                continue;
+            }
+        };
+        let directory = path.rsplit_once('/').map_or("", |(directory, _)| directory);
+        for kind in *kinds {
+            let table = match kind {
+                circuit_report::Kind::Bom => circuit_report::bom(&doc, &catalog),
+                circuit_report::Kind::Wires => circuit_report::wires(&doc, &catalog),
+                circuit_report::Kind::Terminals => circuit_report::terminals(&doc, &catalog),
+                circuit_report::Kind::Strips => circuit_report::strips(&doc, &catalog),
+                circuit_report::Kind::Xref => circuit_report::xref(&doc, &catalog),
+                circuit_report::Kind::Io => circuit_report::io(&doc, &catalog),
+                circuit_report::Kind::Problems => circuit_report::problems(&doc, &[]),
+            };
+            out.push(Ok((
+                format!("{directory}/{}.csv", kind.name()),
+                table.to_csv().into_bytes(),
+            )));
+        }
+    }
+    out
 }
 
 /// Every generated project file.
@@ -159,6 +173,11 @@ pub(crate) const EXAMPLES: &[Example] = &[
     Example {
         path: "examples/direct-starter/starter.ocircuit",
         build: starter,
+        library: None,
+    },
+    Example {
+        path: "examples/terminals/terminals.ocircuit",
+        build: terminals,
         library: None,
     },
     Example {
@@ -406,6 +425,42 @@ fn command() -> Built<Schematic> {
     sheet.route(pin(seal, "p2"), bottom, &[(4, 14)])?;
     sheet.wire(bottom, pin(coil, "a1"))?;
     sheet.wire(pin(coil, "a2"), out(p0))?;
+    Ok(sheet.finish())
+}
+
+/// The control circuit of the direct-online starter wired through a terminal
+/// strip, as it is in a panel: the supply comes in on `X1:1`, and the coil
+/// returns by `X1:2`. Terminals always conduct, so it behaves like
+/// `command.ocircuit`.
+fn terminals() -> Built<Schematic> {
+    let strip = |number: i64| {
+        [
+            ("strip", ParamValue::Text("X1".to_owned())),
+            ("number", ParamValue::Int(number)),
+        ]
+    };
+    let mut sheet = Sheet::new("Control circuit through a terminal strip");
+    let (p24, p0) = sheet.control_supply((0, 0), (0, 40))?;
+    let feed = sheet.part("XT1", "std.terminal_block", "terminal", &strip(1), (0, 4))?;
+    let stop = sheet.part("S2", "pushbutton_nc", "contact", &[], (0, 10))?;
+    let start = sheet.part("S1", "pushbutton_no", "contact", &[], (-4, 17))?;
+    let k1 = sheet.device("K1", "contactor.generic", &dc_load())?;
+    let coil = sheet.symbol(k1, "coil", None, (0, 26))?;
+    let seal = sheet.symbol(k1, "aux_no", Some(1), (4, 17))?;
+    let back = sheet.part("XT2", "std.terminal_block", "terminal", &strip(2), (0, 34))?;
+    let top = sheet.junction((0, 14))?;
+    let bottom = sheet.junction((0, 22))?;
+
+    sheet.wire(out(p24), pin(feed, "p1"))?;
+    sheet.wire(pin(feed, "p2"), pin(stop, "p1"))?;
+    sheet.wire(pin(stop, "p2"), top)?;
+    sheet.route(top, pin(start, "p1"), &[(-4, 14)])?;
+    sheet.route(top, pin(seal, "p1"), &[(4, 14)])?;
+    sheet.route(pin(start, "p2"), bottom, &[(-4, 22)])?;
+    sheet.route(pin(seal, "p2"), bottom, &[(4, 22)])?;
+    sheet.wire(bottom, pin(coil, "a1"))?;
+    sheet.wire(pin(coil, "a2"), pin(back, "p1"))?;
+    sheet.wire(pin(back, "p2"), out(p0))?;
     Ok(sheet.finish())
 }
 

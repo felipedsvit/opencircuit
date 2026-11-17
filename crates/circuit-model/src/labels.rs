@@ -25,6 +25,26 @@
 use crate::catalog::{ComponentCatalog, DeviceClass, SymbolKind};
 use crate::schematic::{PinRef, Schematic, TerminalKey};
 
+/// A designator, a strip or any name split for natural order: its letters, its
+/// first number and what follows it, so that `K2` sorts before `K10` and `X2`
+/// before `X10`.
+#[must_use]
+pub fn natural_key(text: &str) -> (String, u64, String) {
+    let split = text
+        .find(|c: char| c.is_ascii_digit())
+        .unwrap_or(text.len());
+    let prefix = text.get(..split).unwrap_or_default();
+    let rest = text.get(split..).unwrap_or_default();
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    let number = if digits.is_empty() {
+        0
+    } else {
+        digits.parse::<u64>().unwrap_or(u64::MAX)
+    };
+    let tail = rest.get(digits.len()..).unwrap_or_default();
+    (prefix.to_owned(), number, tail.to_owned())
+}
+
 /// A terminal named for a person: `K1:A1`, the designator of its device and the
 /// printed number of the terminal, or its key when it has none (`P24:out`).
 /// A terminal whose symbol or device is not in the document is `?:key`.
@@ -101,6 +121,8 @@ pub fn terminal_label(
             }
         }
         SymbolKind::FuseLink => pair("1", "2"),
+        // The number of a terminal is its `number` parameter, drawn with it.
+        SymbolKind::TerminalPoint => None,
         SymbolKind::Motor | SymbolKind::MotorSixTerminal => {
             matches!(key, "u1" | "v1" | "w1" | "u2" | "v2" | "w2").then(|| key.to_uppercase())
         }

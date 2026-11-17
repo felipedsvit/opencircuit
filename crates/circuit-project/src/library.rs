@@ -24,8 +24,10 @@ use serde::Deserialize;
 ///
 /// Version 2 adds the optional model fields `category`, `title` and `note`;
 /// version 1 files keep loading, and their models take the category of their
-/// class and the identifier as title.
-pub const LIBRARY_SCHEMA_VERSION: u32 = 2;
+/// class and the identifier as title. Version 3 adds the parameter type
+/// `name`, the class `terminal_block` and the symbol kind `terminal_point`
+/// (ADR-0016); older files keep loading.
+pub const LIBRARY_SCHEMA_VERSION: u32 = 3;
 
 /// The first library schema version.
 const FIRST_LIBRARY_SCHEMA_VERSION: u32 = 1;
@@ -112,6 +114,7 @@ enum ClassFile {
     PowerSupply,
     MechanicalInterlock,
     Transformer,
+    TerminalBlock,
     Symbolic,
 }
 
@@ -142,6 +145,7 @@ enum ParamTypeFile {
     Enum(Vec<String>),
     SupplyRef,
     DeviceRef,
+    Name,
 }
 
 #[derive(Deserialize)]
@@ -165,6 +169,7 @@ enum KindFile {
     PowerContacts { poles: u8 },
     ThermalElement { poles: u8 },
     FuseLink,
+    TerminalPoint,
     Motor,
     MotorSixTerminal,
     Lamp,
@@ -248,6 +253,25 @@ pub fn from_str(text: &str) -> Result<Library, LibraryError> {
             )));
         }
     }
+    let has_v3_features = |model: &ModelFile| {
+        matches!(model.class, ClassFile::TerminalBlock)
+            || model
+                .params
+                .iter()
+                .any(|param| matches!(param.ty, ParamTypeFile::Name))
+            || model
+                .symbols
+                .iter()
+                .any(|symbol| matches!(symbol.kind, KindFile::TerminalPoint))
+    };
+    if file.schema_version < 3 {
+        if let Some(model) = file.models.iter().find(|model| has_v3_features(model)) {
+            return Err(LibraryError::Schema(format!(
+                "model `{}`: the parameter type `name`, the class `terminal_block` and the kind `terminal_point` need schema version 3",
+                model.id
+            )));
+        }
+    }
     let models = file
         .models
         .into_iter()
@@ -297,6 +321,7 @@ fn to_model(model: ModelFile, provenance: &Provenance) -> Result<ComponentModel,
         ClassFile::PowerSupply => DeviceClass::PowerSupply,
         ClassFile::MechanicalInterlock => DeviceClass::MechanicalInterlock,
         ClassFile::Transformer => DeviceClass::Transformer,
+        ClassFile::TerminalBlock => DeviceClass::TerminalBlock,
         ClassFile::Symbolic => DeviceClass::Symbolic,
     };
     let params = model
@@ -361,6 +386,7 @@ fn to_param(param: ParamFile) -> Result<ParamDefinition, LibraryError> {
         }
         ParamTypeFile::SupplyRef => ParamType::SupplyRef,
         ParamTypeFile::DeviceRef => ParamType::DeviceRef,
+        ParamTypeFile::Name => ParamType::Name,
     };
     if let Some(ParamValue::Text(text)) = &param.default {
         limit("bytes in a text", text.len(), MAX_TEXT_BYTES)?;
@@ -382,6 +408,7 @@ fn to_symbol(symbol: SymbolFile) -> Result<SymbolDefinition, LibraryError> {
         KindFile::PowerContacts { poles } => SymbolKind::PowerContacts { poles },
         KindFile::ThermalElement { poles } => SymbolKind::ThermalElement { poles },
         KindFile::FuseLink => SymbolKind::FuseLink,
+        KindFile::TerminalPoint => SymbolKind::TerminalPoint,
         KindFile::Motor => SymbolKind::Motor,
         KindFile::MotorSixTerminal => SymbolKind::MotorSixTerminal,
         KindFile::Lamp => SymbolKind::Lamp,
@@ -483,7 +510,7 @@ mod tests {
         let unknown = text.replacen("\"version\": 1,", "\"version\": 1, \"extra\": 0,", 1);
         let float = text.replacen("\"min\": 0,", "\"min\": 0.0,", 1);
         let repeated = text.replacen("\"name\":", "\"name\": \"x\", \"name\":", 1);
-        let newer = text.replacen("\"schema_version\": 2", "\"schema_version\": 3", 1);
+        let newer = text.replacen("\"schema_version\": 2", "\"schema_version\": 4", 1);
         let older = text.replacen("\"schema_version\": 2", "\"schema_version\": 0", 1);
 
         for broken in [&unknown, &float, &repeated] {
@@ -495,16 +522,72 @@ mod tests {
         assert_eq!(
             from_str(&newer),
             Err(LibraryError::UnsupportedVersion {
-                found: 3,
-                supported: 2
+                found: 4,
+                supported: 3
             })
         );
         assert_eq!(
             from_str(&older),
             Err(LibraryError::UnsupportedVersion {
                 found: 0,
-                supported: 2
+                supported: 3
             })
+        );
+    }
+
+    /// A library of one terminal block, which needs schema version 3.
+    fn terminal_library(schema: u32) -> String {
+        format!(
+            r#"{{
+  "schema_version": {schema},
+  "id": "panel",
+  "version": 1,
+  "name": "Panel parts",
+  "provenance": {{ "origin": "test", "license": "MIT" }},
+  "models": [
+    {{
+      "id": "panel.terminal",
+      "version": 1,
+      "class": "terminal_block",
+      "params": [
+        {{ "key": "strip", "type": "name", "default": "X1" }},
+        {{ "key": "number", "type": {{ "int": {{ "min": 1, "max": 99 }} }}, "default": 1 }}
+      ],
+      "symbols": [
+        {{ "key": "terminal", "kind": "terminal_point", "min": 1, "max": 1, "slotted": false }}
+      ]
+    }}
+  ]
+}}"#
+        )
+    }
+
+    #[test]
+    fn a_library_can_declare_a_terminal_block_with_a_name_parameter_from_schema_3() {
+        let library = from_str(&terminal_library(3)).expect("a version 3 library");
+        let catalog = ComponentCatalog::builtin().with_library(library).unwrap();
+        let model = model_named(&catalog, "panel.terminal");
+
+        assert_eq!(model.class(), DeviceClass::TerminalBlock);
+        let strip = model.params().iter().find(|p| p.key == "strip").unwrap();
+        assert_eq!(strip.ty, ParamType::Name);
+        assert_eq!(strip.accepts(&ParamValue::Text("X2.1".to_owned())), Ok(()));
+        assert!(
+            strip
+                .accepts(&ParamValue::Text("not a name".to_owned()))
+                .is_err()
+        );
+        assert!(strip.accepts(&ParamValue::Text(String::new())).is_err());
+        assert!(strip.accepts(&ParamValue::Int(3)).is_err());
+    }
+
+    #[test]
+    fn the_same_library_is_refused_in_schema_2_naming_what_needs_version_3() {
+        let error = from_str(&terminal_library(2)).expect_err("needs version 3");
+
+        assert!(
+            matches!(&error, LibraryError::Schema(message) if message.contains("schema version 3")),
+            "{error:?}"
         );
     }
 

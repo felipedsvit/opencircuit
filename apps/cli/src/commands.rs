@@ -632,6 +632,7 @@ fn report(
                 circuit_report::Kind::Bom => circuit_report::bom(&doc, catalog),
                 circuit_report::Kind::Wires => circuit_report::wires(&doc, catalog),
                 circuit_report::Kind::Terminals => circuit_report::terminals(&doc, catalog),
+                circuit_report::Kind::Strips => circuit_report::strips(&doc, catalog),
                 circuit_report::Kind::Xref => circuit_report::xref(&doc, catalog),
                 circuit_report::Kind::Io => circuit_report::io(&doc, catalog),
                 circuit_report::Kind::Problems => {
