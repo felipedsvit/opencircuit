@@ -38,8 +38,18 @@ pub fn set_device_info(
         part_no: clean(info.part_no),
         description: clean(info.description),
         location: clean(info.location),
-        datasheet: None,
+        datasheet: clean(info.datasheet),
     };
+    if info
+        .datasheet
+        .as_deref()
+        .is_some_and(|link| !circuit_model::annotations::is_valid_datasheet(link))
+    {
+        return Err(CommandError::Invalid(
+            "a datasheet is an http, https or file link, or a relative path, with no space"
+                .to_owned(),
+        ));
+    }
     let info = (!info.is_empty()).then_some(info);
     let mut tx = Transaction::new("Edit catalog data", doc.next_id);
     if info != found.info {

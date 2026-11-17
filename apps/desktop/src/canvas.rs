@@ -137,6 +137,13 @@ pub fn show(
                     look.color,
                 );
             }
+            Shape::Block(rect) => {
+                painter.rect_filled(
+                    Rect::from_two_pos(to_screen(rect.min), to_screen(rect.max)),
+                    0.0,
+                    look.color,
+                );
+            }
             Shape::Text { at, text, anchor } => {
                 if text_points >= MIN_TEXT_POINTS {
                     let align = match anchor {

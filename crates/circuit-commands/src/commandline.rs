@@ -42,6 +42,12 @@ pub struct CommandSpec {
 /// Every command, sorted by name.
 pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
+        name: "comment",
+        aliases: &[],
+        usage: "comment words",
+        help: "Add a comment about the selected element, or about the project when nothing is selected.",
+    },
+    CommandSpec {
         name: "delete",
         aliases: &["erase", "e"],
         usage: "delete",
@@ -54,6 +60,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "Extend the free wire end at x,y to the next terminal, junction or wire.",
     },
     CommandSpec {
+        name: "group",
+        aliases: &[],
+        usage: "group name",
+        help: "Make a group of the selection: a click on one member then selects them all.",
+    },
+    CommandSpec {
         name: "help",
         aliases: &["?"],
         usage: "help [command]",
@@ -64,6 +76,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &[],
         usage: "layer [new|show|hide|lock|unlock|delete|assign name | release]",
         help: "List the layers, add one, show, hide, lock or delete one, or put the selection on one (release: back on the default layer).",
+    },
+    CommandSpec {
+        name: "mirror",
+        aliases: &[],
+        usage: "mirror",
+        help: "Mirror the selected symbols about their vertical axis, or undo it.",
     },
     CommandSpec {
         name: "mode",
@@ -94,6 +112,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &["p", "insert"],
         usage: "place model [symbol] [x,y] [0|90|180|270]",
         help: "Place a part at a point, or choose it to click where it goes.",
+    },
+    CommandSpec {
+        name: "qr",
+        aliases: &[],
+        usage: "qr x,y size words",
+        help: "Add a QR code of size grid units with its top-left corner at x,y.",
     },
     CommandSpec {
         name: "redo",
@@ -132,6 +156,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "Choose the select tool.",
     },
     CommandSpec {
+        name: "shape",
+        aliases: &[],
+        usage: "shape rect|cloud x,y x,y [mark] | circle x,y r | arc x,y r start sweep | line x,y x,y ...",
+        help: "Draw a rectangle, a revision cloud, a circle, an arc or a line.",
+    },
+    CommandSpec {
         name: "sheets",
         aliases: &[],
         usage: "sheets renumber",
@@ -160,6 +190,18 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &["u"],
         usage: "undo",
         help: "Undo the last change.",
+    },
+    CommandSpec {
+        name: "ungroup",
+        aliases: &[],
+        usage: "ungroup",
+        help: "Take apart the groups of the selection; the elements stay.",
+    },
+    CommandSpec {
+        name: "view",
+        aliases: &[],
+        usage: "view designator x,y [width height]",
+        help: "Show a device again on a panel layout or single-line sheet.",
     },
     CommandSpec {
         name: "wire",
@@ -424,9 +466,20 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
             ["renumber"] => Ok(vec![Request::Edit(crate::sheets::renumber_sheets(
                 context.doc,
             ))]),
+            ["kind", number, kind] => sheet_kind(number, kind, context),
+            ["kind", ..] => Err(CommandLineError::Usage(
+                "sheets kind number schematic|single_line|panel_layout",
+            )),
             _ => Err(CommandLineError::Usage("sheets renumber")),
         },
         "rotate" => rotate_selection(rest, context),
+        "mirror" => mirror_selection(rest, context),
+        "comment" => comment(rest, command, context),
+        "group" => group_selection(rest, command, context),
+        "ungroup" => ungroup_selection(rest, context),
+        "qr" => qr_code(rest, command, context),
+        "shape" => shape(rest, command, context),
+        "view" => device_view(rest, command, context),
         "delete" => delete_selection(rest, context),
         "undo" => bare(rest, command, Request::Undo),
         "redo" => bare(rest, command, Request::Redo),
@@ -805,6 +858,219 @@ fn rotate_selection(
     )?)])
 }
 
+fn mirror_selection(
+    rest: &[&str],
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    if !rest.is_empty() {
+        return Err(CommandLineError::Usage("mirror"));
+    }
+    let symbols: BTreeSet<SymbolId> = context
+        .selection
+        .iter()
+        .filter_map(|subject| match subject {
+            Subject::Symbol(id) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    if symbols.is_empty() {
+        return Err(CommandLineError::NothingSelected);
+    }
+    Ok(vec![Request::Edit(ops::mirror(
+        context.doc,
+        context.catalog,
+        &symbols,
+    )?)])
+}
+
+/// A comment about the one selected element, or about the project.
+fn comment(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    if rest.is_empty() {
+        return Err(CommandLineError::Usage(command.usage));
+    }
+    let mut selected = context.selection.iter();
+    let subject = match (selected.next(), selected.next()) {
+        (None, _) => Subject::Document,
+        (Some(subject), None) => subject.clone(),
+        (Some(_), Some(_)) => {
+            return Err(CommandLineError::Usage(
+                "comment words (with one element selected)",
+            ));
+        }
+    };
+    let (tx, _) = crate::annotations::add_comment(context.doc, subject, &rest.join(" "), None)?;
+    Ok(vec![Request::Edit(tx)])
+}
+
+fn group_selection(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    if rest.is_empty() {
+        return Err(CommandLineError::Usage(command.usage));
+    }
+    selected(context)?;
+    // A device is grouped by its symbols.
+    let members: BTreeSet<Subject> = context
+        .selection
+        .iter()
+        .flat_map(|subject| match subject {
+            Subject::Device(id) => context
+                .doc
+                .symbols
+                .iter()
+                .filter(|symbol| symbol.device_id == *id)
+                .map(|symbol| Subject::Symbol(symbol.id))
+                .collect(),
+            other => vec![other.clone()],
+        })
+        .collect();
+    let (tx, _) = crate::annotations::group(context.doc, &rest.join(" "), &members)?;
+    Ok(vec![Request::Edit(tx)])
+}
+
+fn ungroup_selection(
+    rest: &[&str],
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    if !rest.is_empty() {
+        return Err(CommandLineError::Usage("ungroup"));
+    }
+    let groups: BTreeSet<circuit_model::GroupId> = context
+        .selection
+        .iter()
+        .filter_map(|subject| match subject {
+            Subject::Group(id) => Some(*id),
+            other => crate::annotations::group_of(context.doc, other).map(|group| group.id),
+        })
+        .collect();
+    if groups.is_empty() {
+        return Err(CommandLineError::NothingSelected);
+    }
+    let mut tx = Transaction::new("Ungroup", context.doc.next_id);
+    for id in groups {
+        tx.edits
+            .extend(crate::annotations::ungroup(context.doc, id)?.edits);
+    }
+    Ok(vec![Request::Edit(tx)])
+}
+
+/// A whole number of grid units, such as a radius or a size.
+fn units(word: &str) -> Result<u32, CommandLineError> {
+    word.parse::<u32>()
+        .map_err(|_| CommandLineError::BadPoint(word.to_owned()))
+}
+
+fn qr_code(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    let [at, size, words @ ..] = rest else {
+        return Err(CommandLineError::Usage(command.usage));
+    };
+    if words.is_empty() {
+        return Err(CommandLineError::Usage(command.usage));
+    }
+    let kind = circuit_model::ShapeKind::Qr {
+        position: point(at)?,
+        size: units(size)?,
+        text: words.join(" "),
+    };
+    let (tx, _) = crate::annotations::add_shape(context.doc, kind, None)?;
+    Ok(vec![Request::Edit(tx)])
+}
+
+fn shape(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    use circuit_model::ShapeKind;
+    let usage = || CommandLineError::Usage(command.usage);
+    let kind = match rest {
+        ["rect" | "rectangle", from, to] => ShapeKind::Rectangle {
+            from: point(from)?,
+            to: point(to)?,
+        },
+        ["cloud", from, to, mark @ ..] if mark.len() <= 1 => ShapeKind::Cloud {
+            from: point(from)?,
+            to: point(to)?,
+            revision: mark.first().map(|mark| (*mark).to_owned()),
+        },
+        ["circle", center, radius] => ShapeKind::Circle {
+            center: point(center)?,
+            radius: units(radius)?,
+        },
+        ["arc", center, radius, start, sweep] => ShapeKind::Arc {
+            center: point(center)?,
+            radius: units(radius)?,
+            start: u16::try_from(units(start)?).map_err(|_| usage())?,
+            sweep: u16::try_from(units(sweep)?).map_err(|_| usage())?,
+        },
+        ["line" | "polyline", points @ ..] if points.len() >= 2 => ShapeKind::Polyline {
+            points: points
+                .iter()
+                .map(|word| point(word))
+                .collect::<Result<_, _>>()?,
+            closed: false,
+        },
+        _ => return Err(usage()),
+    };
+    let (tx, _) = crate::annotations::add_shape(context.doc, kind, None)?;
+    Ok(vec![Request::Edit(tx)])
+}
+
+fn device_view(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    let (reference, at, size) = match rest {
+        [reference, at] => (*reference, *at, (6, 8)),
+        [reference, at, width, height] => (*reference, *at, (units(width)?, units(height)?)),
+        _ => return Err(CommandLineError::Usage(command.usage)),
+    };
+    let device = context
+        .doc
+        .devices
+        .iter()
+        .find(|device| device.reference.0.eq_ignore_ascii_case(reference))
+        .ok_or_else(|| {
+            CommandLineError::Refused(CommandError::InvalidReference(reference.to_owned()))
+        })?;
+    let (tx, _) = crate::annotations::add_view(context.doc, device.id, point(at)?, size.0, size.1)?;
+    Ok(vec![Request::Edit(tx)])
+}
+
+fn sheet_kind(
+    number: &str,
+    kind: &str,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    let usage = || CommandLineError::Usage("sheets kind number schematic|single_line|panel_layout");
+    let number: u32 = number.parse().map_err(|_| usage())?;
+    let kind = circuit_model::SheetKind::from_name(kind).ok_or_else(usage)?;
+    let sheet = context
+        .doc
+        .sheets
+        .iter()
+        .find(|sheet| sheet.number == number)
+        .ok_or_else(usage)?;
+    Ok(vec![Request::Edit(crate::sheets::set_sheet(
+        context.doc,
+        circuit_model::Sheet {
+            kind,
+            ..sheet.clone()
+        },
+    )?)])
+}
+
 fn delete_selection(
     rest: &[&str],
     context: &Context<'_>,
@@ -947,6 +1213,77 @@ mod tests {
     fn requests(line: &str) -> Result<Vec<Request>, CommandLineError> {
         let (doc, catalog, selection) = empty();
         run(line, &context(&doc, &catalog, &selection))
+    }
+
+    #[test]
+    fn the_commands_of_schema_5_ask_for_one_edit_each() {
+        let catalog = ComponentCatalog::builtin();
+        let mut b = SchematicBuilder::new("v5");
+        let device = b.device("K1", "contactor.generic", &[]).unwrap();
+        let symbol = b
+            .symbol(device, "coil", None, GridPoint::new(0, 0))
+            .unwrap();
+        let mut doc = b.finish();
+        doc.sheets.push(circuit_model::Sheet {
+            id: circuit_model::SheetId(doc.next_id),
+            number: 1,
+            title: String::new(),
+            origin: GridPoint::new(100, 0),
+            size: circuit_model::SheetSize::A4,
+            orientation: circuit_model::Orientation::Landscape,
+            zones: circuit_model::Zones {
+                columns: 8,
+                rows: 6,
+            },
+            kind: circuit_model::SheetKind::Schematic,
+        });
+        doc.next_id += 1;
+        let none = BTreeSet::new();
+        let selected = BTreeSet::from([Subject::Symbol(symbol)]);
+        let one = |line: &str, selection: &BTreeSet<Subject>| {
+            let requests = run(line, &context(&doc, &catalog, selection))
+                .unwrap_or_else(|error| panic!("{line}: {error}"));
+            assert!(
+                matches!(&requests[..], [Request::Edit(tx)] if !tx.edits.is_empty()),
+                "{line}"
+            );
+        };
+        for line in [
+            "shape rect 0,10 8,14",
+            "shape cloud 0,10 8,14 B",
+            "shape circle 20,10 3",
+            "shape arc 30,10 3 0 90",
+            "shape line 0,20 10,20 10,25",
+            "qr 40,10 6 https://example.com",
+            "view K1 110,10",
+            "view k1 110,10 4 4",
+            "sheets kind 1 panel_layout",
+            "comment about the project",
+        ] {
+            one(line, &none);
+        }
+        for line in ["mirror", "comment check the coil", "group Coil"] {
+            one(line, &selected);
+        }
+        for line in [
+            "shape",
+            "shape rect 0,0",
+            "shape circle 0,0 x",
+            "qr 0,0 6",
+            "view",
+            "sheets kind 9 schematic",
+            "sheets kind 1 drawing",
+        ] {
+            assert!(
+                run(line, &context(&doc, &catalog, &none)).is_err(),
+                "{line}"
+            );
+        }
+        assert_eq!(
+            run("mirror", &context(&doc, &catalog, &none)),
+            Err(CommandLineError::NothingSelected)
+        );
+        assert!(run("shape circle 0,0 0", &context(&doc, &catalog, &none)).is_err());
     }
 
     #[test]

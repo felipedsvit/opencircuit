@@ -127,6 +127,43 @@ pub enum Edit {
         /// The new waypoints.
         route: Vec<GridPoint>,
     },
+    /// Add a shape (ADR-0018).
+    InsertShape(circuit_model::Shape),
+    /// Remove a shape (ADR-0018).
+    RemoveShape(circuit_model::ShapeId),
+    /// Replace a shape (ADR-0018).
+    SetShape(circuit_model::Shape),
+    /// Add a comment (ADR-0018).
+    InsertComment(circuit_model::Comment),
+    /// Remove a comment (ADR-0018).
+    RemoveComment(circuit_model::CommentId),
+    /// Replace a comment (ADR-0018).
+    SetComment(circuit_model::Comment),
+    /// Add a group (ADR-0018).
+    InsertGroup(circuit_model::Group),
+    /// Remove a group (ADR-0018).
+    RemoveGroup(circuit_model::GroupId),
+    /// Replace a group (ADR-0018).
+    SetGroup(circuit_model::Group),
+    /// Add a device view (ADR-0018).
+    InsertView(circuit_model::DeviceView),
+    /// Remove a device view (ADR-0018).
+    RemoveView(circuit_model::ViewId),
+    /// Replace a device view (ADR-0018).
+    SetView(circuit_model::DeviceView),
+    /// Add a PLC module (ADR-0018).
+    InsertPlc(circuit_model::PlcModule),
+    /// Remove a PLC module (ADR-0018).
+    RemovePlc(circuit_model::PlcId),
+    /// Replace a PLC module (ADR-0018).
+    SetPlc(circuit_model::PlcModule),
+    /// Mirror (`true`) or unmirror a symbol (ADR-0018).
+    SetMirror {
+        /// The symbol.
+        symbol: SymbolId,
+        /// Whether it is mirrored.
+        mirrored: bool,
+    },
     /// Set (`Some`) or clear (`None`) what a wire is made of (ADR-0018).
     SetWireSpec {
         /// The wire.
@@ -484,6 +521,99 @@ impl Edit {
                 Ok(Self::SetRoute {
                     wire,
                     route: previous,
+                })
+            }
+            Self::InsertShape(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.shapes, item, |x| x.id) {
+                    Ok(Self::RemoveShape(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Shape(id)))
+                }
+            }
+            Self::RemoveShape(id) => sorted::remove(&mut doc.shapes, &id, |x| x.id)
+                .map(Self::InsertShape)
+                .ok_or_else(|| missing(Subject::Shape(id))),
+            Self::SetShape(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.shapes, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Shape(id)))?;
+                Ok(Self::SetShape(std::mem::replace(slot, item)))
+            }
+            Self::InsertComment(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.comments, item, |x| x.id) {
+                    Ok(Self::RemoveComment(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Comment(id)))
+                }
+            }
+            Self::RemoveComment(id) => sorted::remove(&mut doc.comments, &id, |x| x.id)
+                .map(Self::InsertComment)
+                .ok_or_else(|| missing(Subject::Comment(id))),
+            Self::SetComment(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.comments, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Comment(id)))?;
+                Ok(Self::SetComment(std::mem::replace(slot, item)))
+            }
+            Self::InsertGroup(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.groups, item, |x| x.id) {
+                    Ok(Self::RemoveGroup(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Group(id)))
+                }
+            }
+            Self::RemoveGroup(id) => sorted::remove(&mut doc.groups, &id, |x| x.id)
+                .map(Self::InsertGroup)
+                .ok_or_else(|| missing(Subject::Group(id))),
+            Self::SetGroup(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.groups, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Group(id)))?;
+                Ok(Self::SetGroup(std::mem::replace(slot, item)))
+            }
+            Self::InsertView(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.views, item, |x| x.id) {
+                    Ok(Self::RemoveView(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::View(id)))
+                }
+            }
+            Self::RemoveView(id) => sorted::remove(&mut doc.views, &id, |x| x.id)
+                .map(Self::InsertView)
+                .ok_or_else(|| missing(Subject::View(id))),
+            Self::SetView(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.views, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::View(id)))?;
+                Ok(Self::SetView(std::mem::replace(slot, item)))
+            }
+            Self::InsertPlc(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.plcs, item, |x| x.id) {
+                    Ok(Self::RemovePlc(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Plc(id)))
+                }
+            }
+            Self::RemovePlc(id) => sorted::remove(&mut doc.plcs, &id, |x| x.id)
+                .map(Self::InsertPlc)
+                .ok_or_else(|| missing(Subject::Plc(id))),
+            Self::SetPlc(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.plcs, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Plc(id)))?;
+                Ok(Self::SetPlc(std::mem::replace(slot, item)))
+            }
+            Self::SetMirror { symbol, mirrored } => {
+                let found = sorted::find_mut(&mut doc.symbols, &symbol, |s| s.id)
+                    .ok_or_else(|| missing(Subject::Symbol(symbol)))?;
+                Ok(Self::SetMirror {
+                    symbol,
+                    mirrored: std::mem::replace(&mut found.mirrored, mirrored),
                 })
             }
             Self::SetWireSpec { wire, spec } => {

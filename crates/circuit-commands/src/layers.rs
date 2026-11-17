@@ -118,7 +118,11 @@ pub(crate) fn ensure_movable_unlocked(
         subjects.iter().filter(|subject| {
             matches!(
                 subject,
-                Subject::Symbol(_) | Subject::Device(_) | Subject::Text(_)
+                Subject::Symbol(_)
+                    | Subject::Device(_)
+                    | Subject::Text(_)
+                    | Subject::Shape(_)
+                    | Subject::View(_)
             )
         }),
     )

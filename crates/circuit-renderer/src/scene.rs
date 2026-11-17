@@ -143,6 +143,8 @@ pub enum Shape {
         /// Radius in subunits.
         radius: i64,
     },
+    /// A filled rectangle, such as a module of a QR code (ADR-0018).
+    Block(SceneRect),
     /// A line of text, always horizontal.
     Text {
         /// Anchor point.
@@ -162,7 +164,7 @@ impl Shape {
         match self {
             Self::Line { from, to } => Some(SceneRect::from_corners(*from, *to)),
             Self::Polyline(points) => SceneRect::around(points.iter().copied()),
-            Self::Rect(rect) => Some(*rect),
+            Self::Rect(rect) | Self::Block(rect) => Some(*rect),
             Self::Circle { center, radius } | Self::Dot { center, radius } => {
                 let r = radius.saturating_abs();
                 Some(SceneRect::from_corners(

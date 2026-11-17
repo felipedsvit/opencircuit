@@ -145,10 +145,10 @@ elements with their kind and ID.
 | `connect` | `from`, `to`, `via`, `as` | a wire; an end is `{ "symbol": ..., "terminal": "a1" }`, `{ "junction": name or ID }` or `{ "wire": name or ID, "at": [x, y] }` (a branch); `via` are waypoints; without them the route has at most one bend |
 | `move` | `elements`, `by` | moves symbols, junctions or `{ "device": "K1" }` by `[dx, dy]`; wires follow |
 | `rotate` | `symbols` | a quarter turn clockwise |
-| `delete` | `elements` | deletes elements and the wires that hang on them; a note is `{ "text": name or ID }` here and in `move` |
+| `delete` | `elements` | deletes elements and the wires that hang on them; a note is `{ "text": name or ID }` here and in `move`; a shape is `{ "shape": ... }` and a view `{ "view": ... }` |
 | `add_sheet` | `number`, `title`, `origin`, `size`, `orientation`, `zones` | a sheet; the next number unless given; `size` is `a4` (default), `a3`, `a2` or `{ "custom": { "width": w, "height": h } }`; `zones` is `[columns, rows]`, `[8, 6]` by default |
 | `remove_sheet` | `number` | removes a sheet; what was drawn on it stays |
-| `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it |
+| `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location`, `datasheet` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it; `datasheet` is an `http`, `https` or `file` link or a relative path (ADR-0018) |
 | `set_wire_number` | `wire` (name or ID), `number` | the number that replaces the generated one on a wire; `null` or no `number` clears it |
 | `set_wire_spec` | `wire` (name or ID), `colour`, `cross_section`, `kind`, `material`, `insulation` | what a wire is made of (ADR-0018), each field at most 32 characters; a field left out is kept and `null` clears it |
 | `numbering` | `prefix`, `start`, `step`, `per_sheet`, `enabled` | the rule that numbers the wires: what is left out keeps its value (an empty prefix, 1, 1 and one counter for a new rule); `"enabled": false` removes it |
@@ -164,6 +164,15 @@ elements with their kind and ID.
 | `set_layer` | `layer` (name or ID), `name`, `visible`, `locked` | renames, shows, hides, locks or unlocks a layer; what is left out stays |
 | `remove_layer` | `layer` | removes a layer that nothing is on |
 | `assign_layer` | `layer` (name or ID, or `null` for the default layer), `elements` | puts symbols, wires, notes and the symbols of `{ "device": ... }` on a layer; junctions have no layer |
+| `add_shape` | `shape`, `layer`, `as` | a shape of ADR-0018 written as the project file writes it: `{ "rectangle": { "from": { "x", "y" }, "to": ... } }`, `circle`, `arc`, `polyline`, `cloud` or `qr` |
+| `add_comment` | `subject`, `text`, `author`, `as` | a comment about an element; `subject` as `waive` takes it |
+| `group` | `name`, `elements`, `as` | a group: a click on a member selects them all; an element is in one group at most |
+| `ungroup` | `group` (name or ID) | takes a group apart; its elements stay |
+| `mirror` | `symbols` | mirrors symbols about their vertical axis, or undoes it |
+| `set_sheet_kind` | `number`, `kind` | `schematic`, `single_line` or `panel_layout` |
+| `add_view` | `device`, `at`, `size`, `as` | shows a device again on a panel layout or single-line sheet; `size` is `[width, height]`, `[6, 8]` by default |
+| `add_plc` | `name`, `description`, `at`, `channels` | a PLC module; a channel is `{ "address", "direction": "input" or "output", "device", "label" }`; `at` places the box that lists them |
+| `set_plc` | `plc` (its name), `description`, `at`, `channels` | changes a PLC module: what is given replaces what it has; `"at": null` takes the box off the drawing |
 
 A name given with `as` lasts for the one file; a later file refers to a note or
 a wire by its ID (the layers also by their own name). An operation that changes

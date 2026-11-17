@@ -108,10 +108,7 @@ pub fn loose_geometry(doc: &Schematic, catalog: &ComponentCatalog) -> Vec<Diagno
             continue;
         };
         for terminal in definition.terminals() {
-            let at = symbol
-                .rotation
-                .rotate(terminal.offset)
-                .and_then(|offset| offset.checked_add(symbol.position));
+            let at = symbol.place(terminal.offset);
             if let Some(at) = at {
                 points.push(Point {
                     kind: Kind::Pin(symbol.id, &terminal.key),

@@ -175,6 +175,34 @@ pub struct SymbolInstance {
     pub mirrored: bool,
 }
 
+impl SymbolInstance {
+    /// Where a point of the symbol's own drawing lands on the sheet: mirrored
+    /// about the vertical axis when the symbol is (ADR-0018), rotated, then
+    /// moved to the symbol's position. `None` beyond the coordinate range.
+    #[must_use]
+    pub fn place(&self, local: GridPoint) -> Option<GridPoint> {
+        let local = if self.mirrored {
+            GridPoint::new(local.x.checked_neg()?, local.y)
+        } else {
+            local
+        };
+        self.rotation.rotate(local)?.checked_add(self.position)
+    }
+
+    /// The area of a local rectangle of the symbol on the sheet, as
+    /// [`place`](Self::place) maps it.
+    #[must_use]
+    pub fn place_rect(
+        &self,
+        local: crate::geometry::GridRect,
+    ) -> Option<crate::geometry::GridRect> {
+        Some(crate::geometry::GridRect::from_corners(
+            self.place(local.min)?,
+            self.place(local.max)?,
+        ))
+    }
+}
+
 /// Whether a flag is off, so that it is left out of the file.
 #[allow(clippy::trivially_copy_pass_by_ref)] // The signature serde asks for.
 const fn is_false(flag: &bool) -> bool {

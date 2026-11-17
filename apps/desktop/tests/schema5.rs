@@ -22,7 +22,6 @@ fn harness() -> Harness<'static, DesktopApp> {
     harness
 }
 
-#[allow(dead_code)]
 fn command(harness: &mut Harness<'_, DesktopApp>, line: &str) {
     let field = harness.get_by_label("Command");
     field.focus();
@@ -106,4 +105,76 @@ fn the_data_of_a_wire_is_typed_in_its_closed_section() {
     assert_eq!(spec.colour.as_deref(), Some("BU"));
     assert_eq!(spec.cross_section.as_deref(), Some("1.5 mm²"));
     assert_eq!(spec.kind, None);
+}
+
+#[test]
+fn shapes_qr_codes_and_views_are_added_from_the_command_line() {
+    let mut harness = starter();
+    command(&mut harness, "shape rect 0,40 10,46");
+    command(&mut harness, "shape cloud 20,40 30,46 B");
+    command(&mut harness, "qr 40,40 8 https://example.com");
+    command(&mut harness, "view K1 60,40");
+    let doc = document(&harness);
+    assert_eq!(doc.shapes.len(), 3);
+    assert_eq!(doc.views.len(), 1);
+    // A view off a panel layout or single-line sheet is a warning.
+    assert!(
+        harness
+            .state()
+            .session()
+            .expect("open")
+            .diagnostics()
+            .iter()
+            .any(|d| d.code().as_str() == "OC-STR-024")
+    );
+    // Delete takes the selected shape away, and undo brings it back.
+    let shape = doc.shapes[0].id;
+    harness
+        .state_mut()
+        .select(circuit_model::Subject::Shape(shape));
+    harness.run();
+    command(&mut harness, "delete");
+    assert_eq!(document(&harness).shapes.len(), 2);
+    command(&mut harness, "undo");
+    assert_eq!(document(&harness).shapes.len(), 3);
+}
+
+#[test]
+fn m_mirrors_the_selected_symbol_and_the_modify_menu_groups_it() {
+    let mut harness = starter();
+    let symbol = document(&harness).symbols[0].id;
+    harness
+        .state_mut()
+        .select(circuit_model::Subject::Symbol(symbol));
+    harness.run();
+    harness.key_press(Key::M);
+    harness.run();
+    assert!(document(&harness).symbols[0].mirrored);
+
+    harness.get_by_label("Modify").click();
+    harness.run();
+    harness.get_by_label("Group selection").click();
+    harness.run();
+    let doc = document(&harness);
+    assert_eq!(doc.groups.len(), 1);
+    assert_eq!(doc.groups[0].name, "Group 1");
+}
+
+#[test]
+fn a_comment_is_added_and_deleted_in_the_comments_section() {
+    let mut harness = harness();
+    open_in_project_tree(&mut harness, "Comments");
+    assert!(harness.query_by_label("No comment").is_some());
+    let field = harness.get_by_label("New comment");
+    field.focus();
+    field.type_text("Check the client");
+    harness.run();
+    harness.key_press(Key::Enter);
+    harness.run();
+    let doc = document(&harness);
+    assert_eq!(doc.comments.len(), 1);
+    assert_eq!(doc.comments[0].subject, circuit_model::Subject::Document);
+    harness.get_by_label("×").click();
+    harness.run();
+    assert!(document(&harness).comments.is_empty());
 }

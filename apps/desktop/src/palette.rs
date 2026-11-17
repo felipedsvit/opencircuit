@@ -19,6 +19,7 @@ pub(crate) const KEYS: &[(&str, &str)] = &[
     ("Esc", "cancel, then select tool, then clear"),
     ("Arrows", "move the selection (Shift: 5)"),
     ("R", "rotate"),
+    ("M", "mirror"),
     ("Del", "delete"),
     ("Ctrl+A", "select all"),
     ("Ctrl+C / Ctrl+V", "copy / paste"),
@@ -409,6 +410,13 @@ fn paint_preview(ui: &Ui, area: Rect, scene: &Scene) {
                 painter.circle_filled(
                     to_screen(*center),
                     (to_points(*radius) * scale).max(1.2),
+                    look.color,
+                );
+            }
+            Shape::Block(rect) => {
+                painter.rect_filled(
+                    Rect::from_two_pos(to_screen(rect.min), to_screen(rect.max)),
+                    0.0,
                     look.color,
                 );
             }

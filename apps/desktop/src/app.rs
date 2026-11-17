@@ -2310,6 +2310,9 @@ impl DesktopApp {
         if keys.pressed(ui, Action::Rotate) {
             actions.push(Key::Rotate);
         }
+        if keys.pressed(ui, Action::Mirror) {
+            actions.push(Key::Mirror);
+        }
         for (key, action) in [
             (egui::Key::Delete, Key::Delete),
             (egui::Key::Backspace, Key::Delete),
@@ -2704,6 +2707,35 @@ impl DesktopApp {
                     {
                         ui.close();
                         self.edit_label();
+                    }
+                    ui.separator();
+                    let selected = editing && !self.editor.selection().is_empty();
+                    if ui
+                        .add_enabled(selected, egui::Button::new(tr("Mirror selection")))
+                        .on_hover_text("M")
+                        .clicked()
+                    {
+                        ui.close();
+                        self.run_command("mirror");
+                    }
+                    if ui
+                        .add_enabled(selected, egui::Button::new(tr("Group selection")))
+                        .clicked()
+                    {
+                        ui.close();
+                        let number = self
+                            .session
+                            .as_ref()
+                            .map_or(0, |session| session.document().groups.len())
+                            .saturating_add(1);
+                        self.run_command(&format!("group Group {number}"));
+                    }
+                    if ui
+                        .add_enabled(selected, egui::Button::new(tr("Ungroup selection")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.run_command("ungroup");
                     }
                 });
                 ui.menu_button(tr("View"), |ui| {

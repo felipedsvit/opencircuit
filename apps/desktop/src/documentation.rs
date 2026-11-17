@@ -217,6 +217,7 @@ pub fn catalog_section(
                     info.description.as_deref(),
                 ),
                 ("location", tr("Location"), info.location.as_deref()),
+                ("datasheet", tr("Datasheet"), info.datasheet.as_deref()),
             ];
             for (key, label, current) in fields {
                 let Some(text) = state.text_field(
@@ -233,12 +234,47 @@ pub fn catalog_section(
                     "manufacturer" => changed.manufacturer = value,
                     "part_no" => changed.part_no = value,
                     "description" => changed.description = value,
+                    "datasheet" => changed.datasheet = value,
                     _ => changed.location = value,
                 }
                 request = Some(edits::set_device_info(doc, device.id, changed));
             }
+            // The datasheet opens with the system, never in the window
+            // (ADR-0018).
+            if let Some(url) = info
+                .datasheet
+                .as_deref()
+                .and_then(|link| datasheet_url(link, session.path()))
+                && ui
+                    .button(tr("Open datasheet"))
+                    .on_hover_text(url.as_str())
+                    .clicked()
+            {
+                ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+            }
         });
     request
+}
+
+/// The URL a datasheet link opens: a web or file URL as it is, and a path
+/// relative to the folder of the project as a file URL. `None` for a link
+/// of any other kind, or a relative path of a project never saved.
+pub fn datasheet_url(link: &str, project: Option<&std::path::Path>) -> Option<String> {
+    if !circuit_model::annotations::is_valid_datasheet(link) {
+        return None;
+    }
+    let lower = link.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("file:") {
+        return Some(link.to_owned());
+    }
+    let folder = project?.parent()?;
+    let path = folder.join(link);
+    let text = path.to_str()?.replace('\\', "/");
+    Some(if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    })
 }
 
 /// The number of the selected wire, and the text that overrides it.
@@ -473,4 +509,26 @@ pub fn numbering_block(
         ));
     }
     request
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_datasheet_opens_as_a_web_or_file_url_and_a_path_beside_the_project() {
+        assert_eq!(
+            datasheet_url("https://example.com/k1.pdf", None).as_deref(),
+            Some("https://example.com/k1.pdf")
+        );
+        let project = std::path::Path::new("/work/pump/pump.ocircuit");
+        assert_eq!(
+            datasheet_url("docs/k1.pdf", Some(project)).as_deref(),
+            Some("file:///work/pump/docs/k1.pdf")
+        );
+        // A relative path needs a saved project; anything else is refused.
+        assert_eq!(datasheet_url("docs/k1.pdf", None), None);
+        assert_eq!(datasheet_url("javascript:alert(1)", Some(project)), None);
+        assert_eq!(datasheet_url("/etc/passwd", Some(project)), None);
+    }
 }

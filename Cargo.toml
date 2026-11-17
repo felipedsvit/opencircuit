@@ -32,6 +32,8 @@ circuit-renderer = { path = "crates/circuit-renderer", version = "0.0.2-dev" }
 circuit-report = { path = "crates/circuit-report", version = "0.0.2-dev" }
 circuit-sim = { path = "crates/circuit-sim", version = "0.0.2-dev" }
 proptest = { version = "1", default-features = false, features = ["std"] }
+# QR codes of ADR-0018 (MIT, no dependencies).
+qrcodegen = "1.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

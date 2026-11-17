@@ -111,6 +111,29 @@ here when it lands.
   in `{ "op": "set_wire_spec" }` of edit files. The `wires` report gets five
   columns for them in a project that has any; the report of any other
   project is as before.
+- **Annotations** (ADR-0018): rectangles, circles, arcs, lines, revision
+  clouds with a revision mark, and QR codes, drawn in SVG and PDF and picked
+  on their lines, moved, deleted and put on layers like notes. They are added
+  on the command line of the window (`shape rect|circle|arc|line|cloud`, `qr`)
+  and with `{ "op": "add_shape" }` in edit files.
+- **Comments on an element** (Project tree > Comments in the inspector,
+  `comment` on the command line, `add_comment` in edit files). A comment is
+  not drawn; deleting the element deletes its comments.
+- **Groups** (Modify > Group selection, Ungroup selection; `group` and
+  `ungroup`): a click on a member selects the whole group.
+- **Mirrored symbols** (M, Modify > Mirror selection, `mirror`): a symbol is
+  flipped about its vertical axis; its wires follow and its connections do
+  not change.
+- **Datasheets**: a link per device in its catalog data (`datasheet`), opened
+  with the system from the inspector.
+- **Sheet kinds, device views and PLC modules** (ADR-0018): a sheet can be a
+  single-line diagram or a panel layout (`sheets kind`, `set_sheet_kind`); a
+  device of the schematic is shown there again as a view (`view`,
+  `add_view`) with its designator and where it is on the schematic, as a
+  footprint or a single-line glyph. PLC modules list their channels and the
+  devices they read or drive (`add_plc`, `set_plc`). `OC-STR-024` warns about
+  a view off those sheets or a symbol on them, and `OC-STR-025` about two
+  channels on one address or one device.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

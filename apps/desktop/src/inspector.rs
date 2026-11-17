@@ -15,7 +15,7 @@ use circuit_model::{
     DeviceClass, DeviceId, GridPoint, LayoutIndex, ParamType, ParamValue, QuarterTurn, Subject,
     SupplyKind, SupplyProfile,
 };
-use eframe::egui::{self, Ui};
+use eframe::egui::{self, RichText, Ui};
 
 use crate::documentation::{self, Goto};
 use crate::i18n::{tr, trf};
@@ -190,7 +190,68 @@ pub fn show(
                         request = Some(change);
                     }
                 });
+            egui::CollapsingHeader::new(tr("Comments"))
+                .default_open(false)
+                .show(ui, |ui| {
+                    if let Some(change) = comments_section(ui, session, selection, state) {
+                        request = Some(change);
+                    }
+                });
         });
+    request
+}
+
+/// The comments about the selected element, or about the project when
+/// nothing is selected (ADR-0018): each with a button that deletes it, and a
+/// field that adds one.
+fn comments_section(
+    ui: &mut Ui,
+    session: &Session,
+    selection: &BTreeSet<Subject>,
+    state: &mut InspectorState,
+) -> Option<Request> {
+    let doc = session.document();
+    let mut selected = selection.iter();
+    let subject = match (selected.next(), selected.next()) {
+        (None, _) => Subject::Document,
+        (Some(subject), None) => subject.clone(),
+        (Some(_), Some(_)) => {
+            ui.label(tr("Select one element to see its comments."));
+            return None;
+        }
+    };
+    let mut request = None;
+    let comments = circuit_commands::annotations::comments_of(doc, &subject);
+    if comments.is_empty() {
+        ui.label(RichText::new(tr("No comment")).weak());
+    }
+    for comment in comments {
+        ui.horizontal(|ui| {
+            let text = match &comment.author {
+                Some(author) => format!("{author}: {}", comment.text),
+                None => comment.text.clone(),
+            };
+            ui.label(text);
+            if ui
+                .small_button("×")
+                .on_hover_text(tr("Delete this comment"))
+                .clicked()
+            {
+                request = Some(circuit_commands::ops::delete(
+                    doc,
+                    session.catalog(),
+                    &BTreeSet::from([Subject::Comment(comment.id)]),
+                ));
+            }
+        });
+    }
+    if let Some(text) =
+        state.text_field(ui, format!("comment:new:{subject}"), tr("New comment"), "")
+    {
+        request = Some(
+            circuit_commands::annotations::add_comment(doc, subject, &text, None).map(|(tx, _)| tx),
+        );
+    }
     request
 }
 

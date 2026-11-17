@@ -277,13 +277,14 @@ fn translate(
                     }
                     if let Some(info) = &device.info {
                         operations.push(json!({
-                            "op": "set_device_info",
-                            "device": device.reference.0,
-                            "manufacturer": info.manufacturer,
-                            "part_no": info.part_no,
-                            "description": info.description,
-                            "location": info.location,
-                        }));
+                                "op": "set_device_info",
+                                "device": device.reference.0,
+                                "manufacturer": info.manufacturer,
+                                "part_no": info.part_no,
+                                "description": info.description,
+                                "location": info.location,
+                        "datasheet": info.datasheet,
+                            }));
                     }
                 } else {
                     operations.push(json!({
@@ -365,8 +366,17 @@ fn translate(
                     "part_no": info.part_no,
                     "description": info.description,
                     "location": info.location,
+                    "datasheet": info.datasheet,
                 }));
             }
+            Edit::InsertShape(shape) => operations.push(json!({
+                "op": "add_shape",
+                "shape": serde_json::to_value(&shape.kind).ok()?,
+            })),
+            Edit::SetMirror { symbol, .. } => operations.push(json!({
+                "op": "mirror",
+                "symbols": [names.symbol(*symbol)],
+            })),
             Edit::SetWireSpec { wire, spec } => {
                 let spec = spec.clone().unwrap_or_default();
                 operations.push(json!({
@@ -635,6 +645,31 @@ mod tests {
                 },
             )
             .unwrap()
+        }));
+        assert_eq!(s.recorder.left_out(), 0);
+        let played = script::apply(start, &s.catalog, &s.recorder.to_edit_file()).unwrap();
+        assert_eq!(played.doc, s.doc);
+    }
+
+    #[test]
+    fn shapes_and_mirrored_symbols_are_recorded_and_played_back() {
+        let start = Schematic::new("macro");
+        let mut s = session(start.clone());
+        let h1 = s.symbol_of("H1");
+        assert!(
+            s.commit(|doc, catalog| { ops::mirror(doc, catalog, &BTreeSet::from([h1])).unwrap() })
+        );
+        assert!(s.commit(|doc, _| {
+            crate::annotations::add_shape(
+                doc,
+                circuit_model::ShapeKind::Circle {
+                    center: GridPoint::new(5, 40),
+                    radius: 3,
+                },
+                None,
+            )
+            .unwrap()
+            .0
         }));
         assert_eq!(s.recorder.left_out(), 0);
         let played = script::apply(start, &s.catalog, &s.recorder.to_edit_file()).unwrap();

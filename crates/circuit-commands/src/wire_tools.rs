@@ -145,7 +145,7 @@ pub fn trim(
         route,
         number: found.number.clone(),
         layer: found.layer,
-        spec: None,
+        spec: found.spec.clone(),
     }));
     tx.next_id = ids.next_id();
     Ok(tx)
@@ -279,7 +279,7 @@ pub fn extend(
         route: wire.route.clone(),
         number: wire.number.clone(),
         layer: wire.layer,
-        spec: None,
+        spec: wire.spec.clone(),
     }));
     tx.next_id = ids.next_id();
     Ok(tx)
@@ -350,7 +350,7 @@ pub fn parallel_copy(
             route: found.route.iter().map(shift).collect::<Result<_, _>>()?,
             number: None,
             layer: found.layer,
-            spec: None,
+            spec: found.spec.clone(),
         }));
     }
     tx.next_id = ids.next_id();

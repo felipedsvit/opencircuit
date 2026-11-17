@@ -88,10 +88,7 @@ impl<'a> LayoutIndex<'a> {
             .terminals()
             .iter()
             .find(|terminal| terminal.key == pin.terminal)?;
-        instance
-            .rotation
-            .rotate(terminal.offset)?
-            .checked_add(instance.position)
+        instance.place(terminal.offset)
     }
 
     /// Position of a wire endpoint.
@@ -121,10 +118,7 @@ impl<'a> LayoutIndex<'a> {
     pub fn symbol_bounds(&self, id: SymbolId) -> Option<GridRect> {
         let instance = self.symbol(id)?;
         let definition = self.definition(id)?;
-        definition
-            .kind()
-            .bounds()
-            .placed(instance.rotation, instance.position)
+        instance.place_rect(definition.kind().bounds())
     }
 
     /// The symbol whose area contains the point. When several do, the one

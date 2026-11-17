@@ -1461,3 +1461,78 @@ mod layers {
         );
     }
 }
+
+// The documentation of schema version 5 (ADR-0018).
+
+impl Bench {
+    fn commit(&mut self, tx: circuit_commands::Transaction) {
+        self.history.execute(&mut self.doc, tx).unwrap();
+    }
+
+    fn rectangle(&mut self, from: GridPoint, to: GridPoint) -> circuit_model::ShapeId {
+        let (tx, id) = circuit_commands::annotations::add_shape(
+            &self.doc,
+            circuit_model::ShapeKind::Rectangle { from, to },
+            None,
+        )
+        .unwrap();
+        self.commit(tx);
+        id
+    }
+}
+
+#[test]
+fn a_shape_is_picked_on_its_edge_not_inside_and_dragged() {
+    let mut bench = Bench::new();
+    let shape = bench.rectangle(point(0, 0), point(20, 10));
+    assert_eq!(
+        hit_test(&bench.doc, &bench.catalog, point(10, 0)),
+        Some(Hit::Shape(shape))
+    );
+    assert_eq!(hit_test(&bench.doc, &bench.catalog, point(10, 5)), None);
+
+    bench.drag(point(10, 0), point(13, 2));
+    assert_eq!(
+        bench.doc.shapes[0].kind.anchor(),
+        Some(point(3, 2)),
+        "the drag moved the rectangle"
+    );
+    bench.key(Key::Delete);
+    assert!(bench.doc.shapes.is_empty());
+}
+
+#[test]
+fn a_box_selects_shapes_and_a_click_on_a_member_selects_its_group() {
+    let mut bench = Bench::new();
+    let lamp = bench.place("lamp.generic", "lamp", point(40, 0));
+    let shape = bench.rectangle(point(0, 0), point(10, 10));
+    bench.drag(point(-2, -2), point(12, 12));
+    assert_eq!(
+        bench.editor.selection().iter().cloned().collect::<Vec<_>>(),
+        [Subject::Shape(shape)]
+    );
+
+    let members = BTreeSet::from([Subject::Shape(shape), Subject::Symbol(lamp)]);
+    let (tx, _) = circuit_commands::annotations::group(&bench.doc, "Lamp", &members).unwrap();
+    bench.commit(tx);
+    bench.key(Key::Escape);
+    bench.click(point(5, 0));
+    assert_eq!(bench.editor.selection(), &members);
+    // Shift-click on a member takes the whole group out.
+    bench.click_with(point(5, 0), Modifiers { shift: true });
+    assert!(bench.editor.selection().is_empty());
+    bench.key(Key::SelectAll);
+    assert!(bench.editor.selection().contains(&Subject::Shape(shape)));
+}
+
+#[test]
+fn m_mirrors_the_selected_symbols() {
+    let mut bench = Bench::new();
+    let lamp = bench.place("lamp.generic", "lamp", point(0, 0));
+    bench.click(point(0, 0));
+    assert!(bench.editor.selection().contains(&Subject::Symbol(lamp)));
+    bench.key(Key::Mirror);
+    assert!(bench.doc.symbols[0].mirrored);
+    bench.key(Key::Mirror);
+    assert!(!bench.doc.symbols[0].mirrored);
+}

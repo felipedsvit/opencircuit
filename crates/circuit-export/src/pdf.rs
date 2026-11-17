@@ -294,6 +294,18 @@ fn draw(content: &mut Content, page: &Page, subset: Option<&Subset>, shape: &Sha
             circle(content, page.point(*center), real(radius.saturating_abs()));
             content.stroke();
         }
+        Shape::Block(rect) => {
+            let Rgb(red, green, blue) = look.color;
+            content.set_fill_rgb(channel(red), channel(green), channel(blue));
+            let (left, bottom) = page.point(ScenePoint::new(rect.min.x, rect.max.y));
+            content.rect(
+                left,
+                bottom,
+                real(rect.max.x.saturating_sub(rect.min.x)),
+                real(rect.max.y.saturating_sub(rect.min.y)),
+            );
+            content.fill_nonzero();
+        }
         Shape::Dot { center, radius } => {
             let Rgb(red, green, blue) = look.color;
             content.set_fill_rgb(channel(red), channel(green), channel(blue));

@@ -433,10 +433,12 @@ Decisions, to be confirmed in #118:
 - [x] Wires: a stored colour, cross-section, type, material and insulation, in
   the wires report (`set_wire_spec`; inspector Wire data;
   `apps/desktop/tests/schema5.rs`).
-- [ ] Revision clouds, comments on an element, and shapes (polyline,
-  rectangle, circle, arc) as annotations.
-- [ ] Groups of elements, and mirrored symbols.
-- [ ] QR codes as annotations.
+- [x] Revision clouds, comments on an element, and shapes (polyline,
+  rectangle, circle, arc) as annotations (`circuit_commands::annotations`,
+  `shape` and `comment` commands, inspector Project tree > Comments).
+- [x] Groups of elements, and mirrored symbols (Modify menu, M,
+  `group`/`ungroup`/`mirror`).
+- [x] QR codes as annotations (`qrcodegen`, `qr` command).
 - [ ] Manufacturer data imported from CSV into the catalog data of devices, and
   a datasheet link per device opened by the system.
 - [ ] Sheet kinds: single-line diagram and panel layout, with cross-references

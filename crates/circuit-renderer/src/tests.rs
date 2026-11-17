@@ -1784,3 +1784,212 @@ fn the_client_and_the_kind_of_a_sheet_get_a_row_above_the_title_block_only_when_
         plain
     );
 }
+
+// The documentation of schema version 5 (ADR-0018).
+
+fn items_of(scene: &Scene, subject: &Subject) -> Vec<Shape> {
+    scene
+        .items
+        .iter()
+        .filter(|item| item.subject.as_ref() == Some(subject))
+        .map(|item| item.shape.clone())
+        .collect()
+}
+
+#[test]
+fn shapes_clouds_and_qr_codes_are_drawn_and_hidden_with_their_layer() {
+    use circuit_model::{Shape as DocShape, ShapeId, ShapeKind};
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = starter().doc;
+    let base = doc.next_id;
+    let kinds = [
+        ShapeKind::Rectangle {
+            from: GridPoint::new(0, 30),
+            to: GridPoint::new(10, 36),
+        },
+        ShapeKind::Circle {
+            center: GridPoint::new(20, 30),
+            radius: 3,
+        },
+        ShapeKind::Arc {
+            center: GridPoint::new(30, 30),
+            radius: 3,
+            start: 0,
+            sweep: 180,
+        },
+        ShapeKind::Cloud {
+            from: GridPoint::new(40, 30),
+            to: GridPoint::new(50, 36),
+            revision: Some("B".to_owned()),
+        },
+        ShapeKind::Qr {
+            position: GridPoint::new(60, 30),
+            size: 10,
+            text: "https://example.com/k1".to_owned(),
+        },
+    ];
+    for (offset, kind) in (0..).zip(kinds) {
+        doc.shapes.push(DocShape {
+            id: ShapeId(base + offset),
+            kind,
+            layer: None,
+        });
+    }
+    doc.next_id = base + 5;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let of = |offset: u64| items_of(&scene, &Subject::Shape(ShapeId(base + offset)));
+    assert!(matches!(of(0)[..], [Shape::Rect(_)]));
+    assert!(matches!(of(1)[..], [Shape::Circle { radius: 30, .. }]));
+    assert!(matches!(of(2)[..], [Shape::Polyline(_)]));
+    let cloud = of(3);
+    assert!(
+        cloud
+            .iter()
+            .any(|shape| matches!(shape, Shape::Text { text, .. } if text == "B"))
+    );
+    let modules = of(4)
+        .iter()
+        .filter(|shape| matches!(shape, Shape::Block(_)))
+        .count();
+    assert!(modules > 100, "{modules} modules");
+    // Every module is inside the square of the code.
+    for shape in of(4) {
+        let area = shape.bounds().unwrap();
+        assert!(area.min.x >= 600 && area.max.x <= 700 && area.min.y >= 300 && area.max.y <= 400);
+    }
+    // The same text always draws the same code.
+    assert_eq!(
+        build_scene(&doc, &catalog, None, &SceneOptions::default()),
+        scene
+    );
+
+    // A hidden layer hides its shapes.
+    let layer = circuit_model::LayerId(base + 5);
+    doc.layers.push(circuit_model::Layer {
+        id: layer,
+        name: "Notes".to_owned(),
+        visible: false,
+        locked: false,
+    });
+    doc.shapes[0].layer = Some(layer);
+    doc.next_id = base + 6;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    assert!(items_of(&scene, &Subject::Shape(ShapeId(base))).is_empty());
+}
+
+#[test]
+fn a_device_view_shows_the_designator_and_where_the_device_is_on_the_schematic() {
+    use circuit_model::{DeviceView, SheetKind, ViewId};
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = two_sheets();
+    doc.sheets[1].kind = SheetKind::PanelLayout;
+    let k1 = doc
+        .devices
+        .iter()
+        .find(|device| device.reference.0 == "K1")
+        .unwrap()
+        .id;
+    let view = ViewId(doc.next_id);
+    doc.views.push(DeviceView {
+        id: view,
+        device_id: k1,
+        position: GridPoint::new(210, 0),
+        width: 6,
+        height: 8,
+        layer: None,
+    });
+    doc.next_id += 1;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let drawn = items_of(&scene, &Subject::View(view));
+    assert!(drawn.iter().any(|shape| matches!(shape, Shape::Rect(_))));
+    let words: Vec<&str> = drawn
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(words.first(), Some(&"K1"));
+    assert!(
+        words.get(1).is_some_and(|place| place.starts_with("/1/")),
+        "{words:?}"
+    );
+
+    // On a single-line sheet the contactor is a square with a diagonal.
+    doc.sheets[1].kind = SheetKind::SingleLine;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let drawn = items_of(&scene, &Subject::View(view));
+    assert!(
+        drawn
+            .iter()
+            .any(|shape| matches!(shape, Shape::Line { .. }))
+    );
+
+    // Selected, it is outlined.
+    let options = SceneOptions {
+        selected: [Subject::View(view)].into_iter().collect(),
+        ..SceneOptions::default()
+    };
+    let scene = build_scene(&doc, &catalog, None, &options);
+    assert!(
+        scene
+            .items
+            .iter()
+            .any(|item| item.style == StyleKey::Selected
+                && item.subject == Some(Subject::View(view)))
+    );
+}
+
+#[test]
+fn a_placed_plc_module_lists_its_channels() {
+    use circuit_model::{PlcChannel, PlcDirection, PlcId, PlcModule};
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = starter().doc;
+    let k1 = doc.devices[0].id;
+    let id = PlcId(doc.next_id);
+    doc.plcs.push(PlcModule {
+        id,
+        name: "A1".to_owned(),
+        description: Some("DI/DO".to_owned()),
+        position: Some(GridPoint::new(0, 40)),
+        channels: vec![PlcChannel {
+            address: "Q0.0".to_owned(),
+            direction: PlcDirection::Output,
+            device: Some(k1),
+            label: Some("run".to_owned()),
+        }],
+    });
+    doc.next_id += 1;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let words: Vec<String> = items_of(&scene, &Subject::Plc(id))
+        .into_iter()
+        .filter_map(|shape| match shape {
+            Shape::Text { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    let reference = doc.devices[0].reference.0.clone();
+    assert_eq!(
+        words,
+        ["A1 DI/DO".to_owned(), format!("Q0.0 > {reference} run")]
+    );
+
+    // Without a position, nothing is drawn.
+    doc.plcs[0].position = None;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    assert!(items_of(&scene, &Subject::Plc(id)).is_empty());
+}
+
+#[test]
+fn a_mirrored_symbol_is_drawn_flipped() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = starter().doc;
+    let symbol = doc.symbols[0].id;
+    let plain = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    doc.symbols[0].mirrored = true;
+    let flipped = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    assert_ne!(
+        items_of(&plain, &Subject::Symbol(symbol)),
+        items_of(&flipped, &Subject::Symbol(symbol))
+    );
+}

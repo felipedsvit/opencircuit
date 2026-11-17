@@ -378,6 +378,241 @@ impl ShapeKind {
     }
 }
 
+/// The sine of 0 to 90 whole degrees, times 10 000, rounded. A table rather
+/// than floating point, so that every platform draws the same points.
+const SINE: [i64; 91] = [
+    0, 175, 349, 523, 698, 872, 1045, 1219, 1392, 1564, 1736, 1908, 2079, 2250, 2419, 2588, 2756,
+    2924, 3090, 3256, 3420, 3584, 3746, 3907, 4067, 4226, 4384, 4540, 4695, 4848, 5000, 5150, 5299,
+    5446, 5592, 5736, 5878, 6018, 6157, 6293, 6428, 6561, 6691, 6820, 6947, 7071, 7193, 7314, 7431,
+    7547, 7660, 7771, 7880, 7986, 8090, 8192, 8290, 8387, 8480, 8572, 8660, 8746, 8829, 8910, 8988,
+    9063, 9135, 9205, 9272, 9336, 9397, 9455, 9511, 9563, 9613, 9659, 9703, 9744, 9781, 9816, 9848,
+    9877, 9903, 9925, 9945, 9962, 9976, 9986, 9994, 9998, 10000,
+];
+
+/// The sine and cosine of `degrees`, times 10 000.
+fn sin_cos(degrees: u32) -> (i64, i64) {
+    let degrees = degrees.checked_rem(360).unwrap_or(0);
+    let quarter = degrees.checked_div(90).unwrap_or(0);
+    let within = usize::try_from(degrees.checked_rem(90).unwrap_or(0)).unwrap_or(0);
+    let rest = 90_usize.saturating_sub(within);
+    let (a, b) = (
+        SINE.get(within).copied().unwrap_or(0),
+        SINE.get(rest).copied().unwrap_or(0),
+    );
+    match quarter {
+        0 => (a, b),
+        1 => (b, a.saturating_neg()),
+        2 => (a.saturating_neg(), b.saturating_neg()),
+        _ => (b.saturating_neg(), a),
+    }
+}
+
+/// Points of an arc, `scale` units to a grid unit, one every 5 degrees and
+/// at both ends: counter-clockwise as seen on the sheet, whose y grows
+/// downwards.
+fn arc_points(
+    center: GridPoint,
+    radius: u32,
+    start: u32,
+    sweep: u32,
+    scale: i64,
+) -> Vec<(i64, i64)> {
+    let cx = i64::from(center.x).saturating_mul(scale);
+    let cy = i64::from(center.y).saturating_mul(scale);
+    let r = i64::from(radius).saturating_mul(scale);
+    let sweep = sweep.min(360);
+    let mut angles: Vec<u32> = (0..sweep)
+        .step_by(5)
+        .map(|a| start.saturating_add(a))
+        .collect();
+    angles.push(start.saturating_add(sweep));
+    angles
+        .into_iter()
+        .map(|angle| {
+            let (sin, cos) = sin_cos(angle);
+            (
+                cx.saturating_add(r.saturating_mul(cos).saturating_div(10_000)),
+                cy.saturating_sub(r.saturating_mul(sin).saturating_div(10_000)),
+            )
+        })
+        .collect()
+}
+
+/// Whether `p` is within `tolerance` of the segment from `a` to `b`. The
+/// products are taken in `i128`, where coordinates of a document cannot
+/// overflow; saturating arithmetic keeps a hostile value from panicking.
+fn near_segment(a: (i64, i64), b: (i64, i64), p: (i64, i64), tolerance: i64) -> bool {
+    let (ax, ay) = (i128::from(a.0), i128::from(a.1));
+    let (bx, by) = (i128::from(b.0), i128::from(b.1));
+    let (px, py) = (i128::from(p.0), i128::from(p.1));
+    let (dx, dy) = (bx.saturating_sub(ax), by.saturating_sub(ay));
+    let tolerance = i128::from(tolerance);
+    let limit = tolerance.saturating_mul(tolerance);
+    let square = |x: i128, y: i128| x.saturating_mul(x).saturating_add(y.saturating_mul(y));
+    let length = square(dx, dy);
+    let dot = px
+        .saturating_sub(ax)
+        .saturating_mul(dx)
+        .saturating_add(py.saturating_sub(ay).saturating_mul(dy));
+    if length == 0 || dot <= 0 {
+        return square(px.saturating_sub(ax), py.saturating_sub(ay)) <= limit;
+    }
+    if dot >= length {
+        return square(px.saturating_sub(bx), py.saturating_sub(by)) <= limit;
+    }
+    let cross = px
+        .saturating_sub(ax)
+        .saturating_mul(dy)
+        .saturating_sub(py.saturating_sub(ay).saturating_mul(dx));
+    cross.saturating_mul(cross) <= limit.saturating_mul(length)
+}
+
+impl ShapeKind {
+    /// The lines of the shape, `scale` units to a grid unit: each a path
+    /// through its points (a closed outline ends where it starts). A QR code
+    /// has its border only; the modules are drawn by the renderer.
+    #[must_use]
+    pub fn paths(&self, scale: i64) -> Vec<Vec<(i64, i64)>> {
+        let at = |point: GridPoint| {
+            (
+                i64::from(point.x).saturating_mul(scale),
+                i64::from(point.y).saturating_mul(scale),
+            )
+        };
+        let rectangle = |from: GridPoint, to: GridPoint| {
+            let (a, b) = (at(from), at(to));
+            vec![(a.0, a.1), (b.0, a.1), (b.0, b.1), (a.0, b.1), (a.0, a.1)]
+        };
+        match self {
+            Self::Polyline { points, closed } => {
+                let mut path: Vec<(i64, i64)> = points.iter().map(|p| at(*p)).collect();
+                if *closed && let Some(first) = path.first().copied() {
+                    path.push(first);
+                }
+                vec![path]
+            }
+            Self::Rectangle { from, to } => vec![rectangle(*from, *to)],
+            Self::Circle { center, radius } => {
+                vec![arc_points(
+                    *center,
+                    (*radius).min(MAX_RADIUS),
+                    0,
+                    360,
+                    scale,
+                )]
+            }
+            Self::Arc {
+                center,
+                radius,
+                start,
+                sweep,
+            } => vec![arc_points(
+                *center,
+                (*radius).min(MAX_RADIUS),
+                u32::from(*start).checked_rem(360).unwrap_or(0),
+                u32::from(*sweep).clamp(1, 360),
+                scale,
+            )],
+            Self::Cloud { from, to, .. } => vec![cloud(at(*from), at(*to), scale)],
+            Self::Qr { position, size, .. } => {
+                let side = i32::try_from((*size).min(QR_SIDE.1)).unwrap_or(0);
+                let to = GridPoint::new(
+                    position.x.saturating_add(side),
+                    position.y.saturating_add(side),
+                );
+                vec![rectangle(*position, to)]
+            }
+        }
+    }
+
+    /// Whether `point` is on the shape: within one grid unit of a line, or
+    /// inside a QR code.
+    #[must_use]
+    pub fn touches(&self, point: GridPoint) -> bool {
+        if let Self::Qr { .. } = self {
+            return self.bounds().is_some_and(|area| area.contains(point));
+        }
+        const SCALE: i64 = 10;
+        let p = (
+            i64::from(point.x).saturating_mul(SCALE),
+            i64::from(point.y).saturating_mul(SCALE),
+        );
+        self.paths(SCALE).iter().any(|path| {
+            path.windows(2).any(|pair| match pair {
+                [a, b] => near_segment(*a, *b, p, SCALE),
+                _ => false,
+            }) || (path.len() == 1 && path.first().is_some_and(|a| near_segment(*a, *a, p, SCALE)))
+        })
+    }
+}
+
+/// A revision cloud around the rectangle from `a` to `b`: half circles of
+/// about two grid units along each side, bulging outwards, clockwise.
+fn cloud(a: (i64, i64), b: (i64, i64), scale: i64) -> Vec<(i64, i64)> {
+    let (left, right) = (a.0.min(b.0), a.0.max(b.0));
+    let (top, bottom) = (a.1.min(b.1), a.1.max(b.1));
+    let sides = [
+        ((left, top), (right, top)),
+        ((right, top), (right, bottom)),
+        ((right, bottom), (left, bottom)),
+        ((left, bottom), (left, top)),
+    ];
+    let bump = scale.saturating_mul(2).max(1);
+    let mut path = vec![(left, top)];
+    for ((x0, y0), (x1, y1)) in sides {
+        let (dx, dy) = (x1.saturating_sub(x0), y1.saturating_sub(y0));
+        let length = dx.saturating_abs().max(dy.saturating_abs());
+        // Bounded: a side of a valid cloud is at most the coordinate range.
+        let count = length.checked_div(bump).unwrap_or(0).clamp(1, 10_000);
+        let (ux, uy) = (dx.signum(), dy.signum());
+        // The outward normal of a side walked clockwise is to its left.
+        let (nx, ny) = (uy, ux.saturating_neg());
+        let step_x = dx.checked_div(count).unwrap_or(0);
+        let step_y = dy.checked_div(count).unwrap_or(0);
+        for step in 0..count {
+            let start = (
+                x0.saturating_add(step_x.saturating_mul(step)),
+                y0.saturating_add(step_y.saturating_mul(step)),
+            );
+            let end = if step.saturating_add(1) == count {
+                (x1, y1)
+            } else {
+                (
+                    start.0.saturating_add(step_x),
+                    start.1.saturating_add(step_y),
+                )
+            };
+            let half = end
+                .0
+                .saturating_sub(start.0)
+                .saturating_abs()
+                .max(end.1.saturating_sub(start.1).saturating_abs())
+                .saturating_div(2);
+            let middle = (
+                start.0.saturating_add(end.0).saturating_div(2),
+                start.1.saturating_add(end.1).saturating_div(2),
+            );
+            // A half circle from start to end through the outward bulge.
+            for degrees in (0..=180).step_by(30) {
+                let (sin, cos) = sin_cos(degrees);
+                let along = half.saturating_mul(cos).saturating_div(10_000);
+                let out = half.saturating_mul(sin).saturating_div(10_000);
+                path.push((
+                    middle
+                        .0
+                        .saturating_sub(ux.saturating_mul(along))
+                        .saturating_add(nx.saturating_mul(out)),
+                    middle
+                        .1
+                        .saturating_sub(uy.saturating_mul(along))
+                        .saturating_add(ny.saturating_mul(out)),
+                ));
+            }
+        }
+    }
+    path
+}
+
 /// A drawn shape: a line, a rectangle, a circle, an arc, a revision cloud or
 /// a QR code (ADR-0018). It is documentation only.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -650,6 +885,72 @@ mod tests {
         };
         assert!(far.bounds().is_none());
         assert!(far.problem().is_some());
+    }
+
+    #[test]
+    fn the_sine_table_gives_the_four_quarters() {
+        assert_eq!(sin_cos(0), (0, 10_000));
+        assert_eq!(sin_cos(90), (10_000, 0));
+        assert_eq!(sin_cos(180), (0, -10_000));
+        assert_eq!(sin_cos(270), (-10_000, 0));
+        assert_eq!(sin_cos(30), (5_000, 8_660));
+        assert_eq!(sin_cos(390), sin_cos(30));
+    }
+
+    #[test]
+    fn an_arc_goes_counter_clockwise_on_the_sheet() {
+        let arc = ShapeKind::Arc {
+            center: GridPoint::new(0, 0),
+            radius: 2,
+            start: 0,
+            sweep: 90,
+        };
+        let path = arc.paths(10).remove(0);
+        assert_eq!(path.first(), Some(&(20, 0)));
+        // Up the sheet is towards smaller y.
+        assert_eq!(path.last(), Some(&(0, -20)));
+        assert!(arc.touches(GridPoint::new(0, -2)));
+        assert!(!arc.touches(GridPoint::new(0, 2)));
+    }
+
+    #[test]
+    fn shapes_are_touched_near_their_lines_and_qr_codes_inside() {
+        let rect = ShapeKind::Rectangle {
+            from: GridPoint::new(0, 0),
+            to: GridPoint::new(10, 6),
+        };
+        assert!(rect.touches(GridPoint::new(5, 0)));
+        assert!(rect.touches(GridPoint::new(10, 3)));
+        assert!(!rect.touches(GridPoint::new(5, 3)));
+        let line = ShapeKind::Polyline {
+            points: vec![GridPoint::new(0, 0), GridPoint::new(10, 5)],
+            closed: false,
+        };
+        assert!(line.touches(GridPoint::new(4, 2)));
+        assert!(!line.touches(GridPoint::new(4, 6)));
+        let circle = ShapeKind::Circle {
+            center: GridPoint::new(0, 0),
+            radius: 5,
+        };
+        assert!(circle.touches(GridPoint::new(0, 5)));
+        assert!(!circle.touches(GridPoint::new(0, 0)));
+        let qr = ShapeKind::Qr {
+            position: GridPoint::new(0, 0),
+            size: 4,
+            text: "x".to_owned(),
+        };
+        assert!(qr.touches(GridPoint::new(2, 2)));
+        assert!(!qr.touches(GridPoint::new(5, 2)));
+        let cloud = ShapeKind::Cloud {
+            from: GridPoint::new(0, 0),
+            to: GridPoint::new(8, 4),
+            revision: None,
+        };
+        let path = cloud.paths(10).remove(0);
+        // The bumps bulge outside the rectangle, never inside.
+        assert!(path.iter().any(|(_, y)| *y < 0));
+        assert!(cloud.touches(GridPoint::new(4, 0)));
+        assert!(!cloud.touches(GridPoint::new(4, 2)));
     }
 
     #[test]

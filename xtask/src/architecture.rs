@@ -69,10 +69,12 @@ const PACKAGE_RULES: &[PackageRule] = &[
     // The renderer sees the simulation only through `SimSnapshot`, a type of
     // `circuit-model`; depending on `circuit-sim` would let drawing code
     // reach compiled indices and runtime state.
+    // `qrcodegen` turns the text of a QR code (ADR-0018) into its modules:
+    // pure computation, MIT, with no dependency of its own.
     PackageRule {
         name: "circuit-renderer",
         workspace: &["circuit-model"],
-        external: &[],
+        external: &["qrcodegen"],
         dev: &["proptest"],
         core: true,
     },

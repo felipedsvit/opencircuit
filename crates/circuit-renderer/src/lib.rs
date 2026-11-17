@@ -25,6 +25,7 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+mod annotations;
 mod build;
 mod frame;
 mod preview;
