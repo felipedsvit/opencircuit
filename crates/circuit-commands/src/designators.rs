@@ -40,7 +40,7 @@ fn split(reference: &str) -> Option<&str> {
 }
 
 /// Where a device's first symbol is in reading order, and that symbol's ID.
-type Place = ((u32, u8, u8, i32, i32), u64);
+type Place = (circuit_model::ReadingKey, u64);
 
 /// Renumber the designators of the devices in `scope`.
 ///

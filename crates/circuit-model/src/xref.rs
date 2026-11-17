@@ -76,10 +76,21 @@ const fn is_driven(kind: SymbolKind) -> bool {
 /// and its contacts point to the coil with the smallest symbol ID.
 #[must_use]
 pub fn cross_references(doc: &Schematic, catalog: &ComponentCatalog) -> CrossReferences {
-    let mut found = CrossReferences::default();
     if doc.sheets.is_empty() {
-        return found;
+        return CrossReferences::default();
     }
+    derive(doc, catalog).0
+}
+
+/// The cross-references, and for each contact symbol the coil symbol it
+/// points to, whether or not the document has sheets (without them nothing
+/// has a location).
+fn derive(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+) -> (CrossReferences, BTreeMap<SymbolId, SymbolId>) {
+    let mut found = CrossReferences::default();
+    let mut coil_of: BTreeMap<SymbolId, SymbolId> = BTreeMap::new();
     let location_of = |point: GridPoint| {
         let sheet = sheet_at(doc, point)?;
         Some(Location {
@@ -148,6 +159,7 @@ pub fn cross_references(doc: &Schematic, catalog: &ComponentCatalog) -> CrossRef
                 location: location_of(symbol.position),
             });
             found.coil.insert(symbol.id, coil_location);
+            coil_of.insert(symbol.id, first_coil.id);
         }
         // Located contacts first, in sheet and zone order, then the ones
         // outside every sheet, each group by symbol ID.
@@ -157,7 +169,47 @@ pub fn cross_references(doc: &Schematic, catalog: &ComponentCatalog) -> CrossRef
             found.contacts.insert(coil.id, contacts.clone());
         }
     }
-    found
+    (found, coil_of)
+}
+
+/// Somewhere to go from a symbol: the coil of a contact, or a contact of a
+/// coil.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Link {
+    /// The symbol it leads to.
+    pub symbol: SymbolId,
+    /// What to show: `13-14 2/4B` for a contact, `coil 1/3A` for a coil, with
+    /// the location left out when the document has no sheets.
+    pub text: String,
+}
+
+/// Where to go from `symbol`: for a coil, every contact of its device in the
+/// order of [`CrossReferences::contacts`]; for a contact, its coil; for
+/// anything else, nowhere. Unlike [`cross_references`] it works on a document
+/// without sheets, where the links have no location.
+#[must_use]
+pub fn links(doc: &Schematic, catalog: &ComponentCatalog, symbol: SymbolId) -> Vec<Link> {
+    let (found, coil_of) = derive(doc, catalog);
+    let with_location = |text: String, location: Option<Location>| match location {
+        Some(location) => format!("{text} {location}").trim().to_owned(),
+        None => text,
+    };
+    if let Some(contacts) = found.contacts.get(&symbol) {
+        return contacts
+            .iter()
+            .map(|contact| Link {
+                symbol: contact.symbol,
+                text: with_location(contact.terminals.clone(), contact.location),
+            })
+            .collect();
+    }
+    match (coil_of.get(&symbol), found.coil.get(&symbol)) {
+        (Some(coil), Some(location)) => vec![Link {
+            symbol: *coil,
+            text: with_location("coil".to_owned(), *location),
+        }],
+        _ => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -208,6 +260,52 @@ mod tests {
             });
         }
         (doc, [coil, near, far, lamp])
+    }
+
+    #[test]
+    fn links_go_from_a_coil_to_its_contacts_and_back_with_their_locations() {
+        let (doc, [coil, near, far, lamp]) = two_sheet_contactor();
+        let catalog = ComponentCatalog::builtin();
+
+        let from_coil = links(&doc, &catalog, coil);
+        assert_eq!(
+            from_coil,
+            [
+                Link {
+                    symbol: near,
+                    text: "13-14 1/4B".to_owned()
+                },
+                Link {
+                    symbol: far,
+                    text: "21-22 2/1E".to_owned()
+                },
+            ]
+        );
+        assert_eq!(
+            links(&doc, &catalog, far),
+            [Link {
+                symbol: coil,
+                text: "coil 1/1B".to_owned()
+            }]
+        );
+        assert_eq!(links(&doc, &catalog, lamp), []);
+    }
+
+    #[test]
+    fn links_work_without_sheets_and_then_have_no_location() {
+        let (mut doc, [coil, near, _, _]) = two_sheet_contactor();
+        doc.sheets.clear();
+        let catalog = ComponentCatalog::builtin();
+
+        assert_eq!(links(&doc, &catalog, coil)[0].text, "13-14");
+        assert_eq!(
+            links(&doc, &catalog, near),
+            [Link {
+                symbol: coil,
+                text: "coil".to_owned()
+            }]
+        );
+        assert_eq!(cross_references(&doc, &catalog), CrossReferences::default());
     }
 
     #[test]

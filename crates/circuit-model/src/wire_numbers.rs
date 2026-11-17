@@ -18,7 +18,7 @@ use crate::ids::WireId;
 use crate::layout::LayoutIndex;
 use crate::nets::{NetId, StaticNets};
 use crate::schematic::{Endpoint, Schematic};
-use crate::sheet::reading_key;
+use crate::sheet::{ReadingKey, reading_key};
 
 /// The numbers of the wires of a document.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -28,9 +28,9 @@ pub struct WireNumbers {
     sequence: Vec<(NetId, Option<u32>)>,
 }
 
-/// Where a net starts, for ordering: sheet number, zone row, zone column,
-/// `y`, `x`. A point outside every sheet sorts after all the others.
-type Start = (u32, u8, u8, i32, i32);
+/// Where a net starts, for ordering. A point outside every sheet sorts after
+/// all the others.
+type Start = ReadingKey;
 
 impl WireNumbers {
     /// The numbers of a document, from its nets and the rule in its project

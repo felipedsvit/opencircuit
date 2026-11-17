@@ -40,6 +40,7 @@ pub mod sheet;
 pub mod snapshot;
 pub mod supply;
 pub mod table;
+pub mod tree;
 mod validate;
 pub mod wire_numbers;
 pub mod xref;
@@ -60,7 +61,7 @@ pub use ids::{
     WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
-pub use labels::terminal_label;
+pub use labels::{pin_name, terminal_label};
 pub use layout::{
     Bend, LayoutIndex, is_orthogonal, orthogonal_route, orthogonal_route_bent, segment_at,
     segment_contains, stretch_route,
@@ -71,11 +72,12 @@ pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,
 };
-pub use sheet::{Orientation, Sheet, SheetSize, Zone, Zones, reading_key, sheet_at};
+pub use sheet::{Orientation, ReadingKey, Sheet, SheetSize, Zone, Zones, reading_key, sheet_at};
 pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingConnection};
 pub use supply::{
     Conductor, ConductorConflict, ConductorSet, PhaseSequence, SupplyKind, SupplyProfile,
 };
 pub use table::Table;
+pub use tree::{TreeDevice, TreeGroup, project_tree};
 pub use wire_numbers::WireNumbers;
-pub use xref::{ContactRef, CrossReferences, Location, cross_references};
+pub use xref::{ContactRef, CrossReferences, Link, Location, cross_references, links};

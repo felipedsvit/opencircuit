@@ -16,6 +16,7 @@ use circuit_model::{
 };
 use eframe::egui::{self, Ui};
 
+use crate::documentation::{self, Goto};
 use crate::session::Session;
 
 /// What the user asked for: the transaction of a change, or why it cannot
@@ -29,6 +30,9 @@ const NEXT_SYMBOL: GridPoint = GridPoint::new(6, 0);
 #[derive(Debug, Default)]
 pub struct InspectorState {
     texts: BTreeMap<String, String>,
+    /// Where a click in a documentation section asked to go; the window
+    /// takes it after drawing the inspector.
+    goto: Option<Goto>,
 }
 
 impl InspectorState {
@@ -38,9 +42,14 @@ impl InspectorState {
         self.texts.clear();
     }
 
+    /// Where a click asked to go since the last call, if anywhere.
+    pub fn take_goto(&mut self) -> Option<Goto> {
+        self.goto.take()
+    }
+
     /// A single-line text field showing `current` until the user types.
     /// Returns the text when the user leaves the field after changing it.
-    fn text_field(
+    pub(crate) fn text_field(
         &mut self,
         ui: &mut Ui,
         key: String,
@@ -118,6 +127,40 @@ pub fn show(
         .show(ui, |ui| {
             if let Some(change) = sheets_section(ui, session, state) {
                 request = Some(change);
+            }
+            if let Some(change) = documentation::numbering_block(ui, session, state) {
+                request = Some(change);
+            }
+        });
+    // What M7 added (ADR-0014), after what was always here.
+    let mut selected = selection.iter();
+    match (selected.next(), selected.next()) {
+        (Some(Subject::Symbol(symbol)), None) => {
+            egui::CollapsingHeader::new("Connections")
+                .default_open(false)
+                .show(ui, |ui| {
+                    state.goto = documentation::connections_section(ui, session, *symbol)
+                        .or(state.goto.take());
+                });
+            if let Some(go) = documentation::xref_section(ui, session, *symbol) {
+                state.goto = Some(go);
+            }
+            if let Some(change) = documentation::catalog_section(ui, session, *symbol, state) {
+                request = Some(change);
+            }
+        }
+        (Some(Subject::Wire(wire)), None) => {
+            if let Some(change) = documentation::wire_section(ui, session, *wire, state) {
+                request = Some(change);
+            }
+        }
+        _ => {}
+    }
+    egui::CollapsingHeader::new("Project tree")
+        .default_open(false)
+        .show(ui, |ui| {
+            if let Some(go) = documentation::project_section(ui, session, selection) {
+                state.goto = Some(go);
             }
         });
     request

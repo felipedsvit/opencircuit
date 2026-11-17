@@ -172,12 +172,16 @@ pub fn sheet_at(doc: &Schematic, point: GridPoint) -> Option<&Sheet> {
         .min_by_key(|sheet| sheet.number)
 }
 
+/// The place of a point in reading order: sheet number, zone row, zone column,
+/// `y`, `x`.
+pub type ReadingKey = (u32, u8, u8, i32, i32);
+
 /// Where a point comes in reading order: the number of its sheet (a point
 /// outside every sheet comes last), then the row and the column of its zone,
 /// then `y`, then `x`. Wire numbers (ADR-0014) and the renumbering of
 /// designators both follow it.
 #[must_use]
-pub fn reading_key(doc: &Schematic, point: GridPoint) -> (u32, u8, u8, i32, i32) {
+pub fn reading_key(doc: &Schematic, point: GridPoint) -> ReadingKey {
     let (sheet, row, column) = sheet_at(doc, point).map_or((u32::MAX, 0, 0), |sheet| {
         let (row, column) = sheet
             .zone_of(point)
