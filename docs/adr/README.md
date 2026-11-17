@@ -25,3 +25,4 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0011](0011-sheets-as-frames.md) | Sheets as frames over the single canvas: paper size, zones and title block; simulator unchanged |
 | [0012](0012-pdf-font.md) | Embedded Liberation Mono subset in the PDF export, with a small font reader instead of an unmaintained crate |
 | [0013](0013-symbolic-devices.md) | Symbol-only devices: class `symbolic` and block kinds, no behaviour in the simulation, informational `OC-SEM-011` |
+| [0014](0014-derived-documentation.md) | Derived documentation (nets, wire numbers, reports, geometry diagnostics) with only overrides, device catalog data, the numbering rule and waivers stored; schema version 3 |
