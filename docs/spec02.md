@@ -1153,6 +1153,8 @@ Regras:
 | OC-STR-015 | `DuplicateSheetNumber` | Error | não | Número de folha zero ou repetido (ADR-0011) |
 | OC-STR-016 | `InvalidSheet` | Error | não | Moldura sem zonas, de tamanho inválido, fora do intervalo de coordenadas ou sobreposta a outra |
 | OC-STR-017 | `WireCrossesSheet` | Warning | não | Fio que atravessa a borda de uma folha; a impressão o cortaria |
+| OC-STR-018 | `LooseConnection` | Warning | não | Terminal ou junção sobre outro terminal, outra junção ou o meio de um fio que não é da sua net: parece ligado e não está (ADR-0014) |
+| OC-STR-019 | `OverlappingWires` | Warning | não | Dois fios de nets diferentes sobre o mesmo trecho de uma reta: parecem um só (ADR-0014) |
 | OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
 | OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
 | OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |
