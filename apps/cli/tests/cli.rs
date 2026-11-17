@@ -1737,3 +1737,148 @@ fn a_waived_warning_is_marked_with_its_reason_and_no_longer_fails_deny_warnings(
         stdout(&report)
     );
 }
+
+const DOCUMENTATION_EDIT: &str = "examples/edit/documentation.edit.json";
+
+#[test]
+fn m7_exit_a_project_documented_through_the_command_line_reports_numbers_and_exports() {
+    let directory = scratch("m7-exit");
+    let project = directory.join("documentation.ocircuit");
+    let path = project.to_str().expect("UTF-8 path");
+
+    // Made only through the command line: the starter on two sheets, then the
+    // numbering rule and the catalog data of its parts.
+    assert_eq!(
+        code(&opencircuit(&["new", path, "--name", "Partida direta"])),
+        0
+    );
+    let edited = opencircuit(&[
+        "edit",
+        path,
+        "--apply",
+        DOCUMENTATION_EDIT,
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&edited), 0, "{}{}", stdout(&edited), stderr(&edited));
+    let report = json(&edited);
+    assert_eq!(report["operations"], 62);
+    assert_eq!(
+        (report["errors"].clone(), report["warnings"].clone()),
+        (0.into(), 0.into())
+    );
+    let validate = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&validate), 0, "{}", stdout(&validate));
+
+    // The reports are the ones committed next to the example that the
+    // generator draws: the same bill of materials, wires, terminals,
+    // cross-reference exceptions and I/O map.
+    for kind in ["bom", "wires", "terminals", "xref", "io"] {
+        let made = opencircuit(&["report", path, "--kind", kind, "--format", "csv"]);
+        assert_eq!(code(&made), 0, "{kind}: {}", stderr(&made));
+        let golden = fs::read_to_string(root().join(format!("examples/documentation/{kind}.csv")))
+            .expect("a committed report");
+        assert_eq!(stdout(&made), golden, "{kind}");
+    }
+    // The wires are numbered on each sheet and say where they go.
+    let wires = stdout(&opencircuit(&[
+        "report", path, "--kind", "wires", "--format", "csv",
+    ]));
+    assert!(wires.contains("W1.1,1,F1:95,P24:out"), "{wires}");
+    assert!(wires.contains("W2.1,2,L1:out,Q1:1"), "{wires}");
+    // The bill of materials carries the catalog data.
+    let bom = stdout(&opencircuit(&[
+        "report", path, "--kind", "bom", "--format", "csv",
+    ]));
+    assert!(bom.contains("CTR-9"), "{bom}");
+
+    // All the reports as one PDF, and the drawing with its wire numbers.
+    let reports = directory.join("reports.pdf");
+    let made = opencircuit(&[
+        "report",
+        path,
+        "--kind",
+        "all",
+        "--output",
+        reports.to_str().expect("UTF-8 path"),
+    ]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+    assert!(fs::read(&reports).expect("written").starts_with(b"%PDF-"));
+    let drawing = directory.join("documentation.pdf");
+    let exported = opencircuit(&[
+        "export",
+        path,
+        "--output",
+        drawing.to_str().expect("UTF-8 path"),
+    ]);
+    assert_eq!(code(&exported), 0, "{}", stderr(&exported));
+
+    // Renumbering the designators keeps them unique, and the second time
+    // changes nothing.
+    let renumber = directory.join("renumber.json");
+    fs::write(
+        &renumber,
+        r#"{ "schema_version": 1, "operations": [ { "op": "renumber" } ] }"#,
+    )
+    .expect("write");
+    let apply = |file: &Path| {
+        let done = opencircuit(&["edit", path, "--apply", file.to_str().expect("UTF-8 path")]);
+        assert_eq!(code(&done), 0, "{}{}", stdout(&done), stderr(&done));
+        fs::read_to_string(&project).expect("written")
+    };
+    let once = apply(&renumber);
+    assert_eq!(apply(&renumber), once);
+    assert_eq!(
+        code(&opencircuit(&["validate", path, "--deny-warnings"])),
+        0
+    );
+
+    // A drawing that looks connected and is not fails --deny-warnings, until
+    // the warning is waived with a reason; the waiver is listed in the
+    // problems report.
+    let touching = directory.join("touching.json");
+    fs::write(
+        &touching,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [300, 300],
+              "reference": "S50", "as": "jig_a" },
+            { "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [300, 304],
+              "reference": "S51", "as": "jig_b" }
+        ] }"#,
+    )
+    .expect("write");
+    apply(&touching);
+    let failing = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&failing), 1);
+    assert!(
+        stdout(&failing).contains("OC-STR-018"),
+        "{}",
+        stdout(&failing)
+    );
+
+    let waive = directory.join("waive.json");
+    fs::write(
+        &waive,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "waive", "code": "OC-STR-018", "reason": "test jig, wired on site",
+              "subject": { "symbol": { "device": "S50", "symbol": "contact" }, "terminal": "p2" } }
+        ] }"#,
+    )
+    .expect("write");
+    apply(&waive);
+    let accepted = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&accepted), 0, "{}", stdout(&accepted));
+    assert!(
+        stdout(&accepted).ends_with("1 waived\n"),
+        "{}",
+        stdout(&accepted)
+    );
+    let problems = stdout(&opencircuit(&[
+        "report", path, "--kind", "problems", "--format", "csv",
+    ]));
+    assert!(
+        problems.contains(",yes,test jig, wired on site")
+            || problems.contains(",yes,\"test jig, wired on site\""),
+        "{problems}"
+    );
+}

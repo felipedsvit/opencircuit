@@ -103,7 +103,50 @@ pub(crate) fn outputs() -> Vec<Result<(String, Vec<u8>), String>> {
             .map(|text| (example.path.to_owned(), text.into_bytes()))
     });
     let drawings = EXAMPLES.iter().flat_map(Example::drawings);
-    projects.chain(drawings).collect()
+    projects.chain(drawings).chain(reports()).collect()
+}
+
+/// The project whose reports are committed next to it as CSV: the goldens of
+/// `circuit-report` and of `opencircuit report`.
+const REPORTED: &str = "examples/documentation/documentation.ocircuit";
+
+/// The reports of the documented example, one CSV file each. They are made
+/// with the standard catalog, as the command line does.
+fn reports() -> Vec<Result<(String, Vec<u8>), String>> {
+    let Some(example) = EXAMPLES.iter().find(|example| example.path == REPORTED) else {
+        return vec![Err(format!("{REPORTED} is not an example"))];
+    };
+    let doc = match (example.build)() {
+        Ok(doc) => doc,
+        Err(error) => return vec![Err(format!("{REPORTED}: {error}"))],
+    };
+    let catalog = circuit_project::stdlib::catalog();
+    let directory = REPORTED
+        .rsplit_once('/')
+        .map_or("", |(directory, _)| directory);
+    [
+        circuit_report::Kind::Bom,
+        circuit_report::Kind::Wires,
+        circuit_report::Kind::Terminals,
+        circuit_report::Kind::Xref,
+        circuit_report::Kind::Io,
+    ]
+    .into_iter()
+    .map(|kind| {
+        let table = match kind {
+            circuit_report::Kind::Bom => circuit_report::bom(&doc, &catalog),
+            circuit_report::Kind::Wires => circuit_report::wires(&doc, &catalog),
+            circuit_report::Kind::Terminals => circuit_report::terminals(&doc, &catalog),
+            circuit_report::Kind::Xref => circuit_report::xref(&doc, &catalog),
+            circuit_report::Kind::Io => circuit_report::io(&doc, &catalog),
+            circuit_report::Kind::Problems => circuit_report::problems(&doc, &[]),
+        };
+        Ok((
+            format!("{directory}/{}.csv", kind.name()),
+            table.to_csv().into_bytes(),
+        ))
+    })
+    .collect()
 }
 
 /// Every generated project file.
@@ -121,6 +164,11 @@ pub(crate) const EXAMPLES: &[Example] = &[
     Example {
         path: "examples/sheets/starter-sheets.ocircuit",
         build: starter_sheets,
+        library: None,
+    },
+    Example {
+        path: "examples/documentation/documentation.ocircuit",
+        build: documentation,
         library: None,
     },
     Example {
@@ -439,6 +487,52 @@ fn starter_sheets() -> Built<Schematic> {
                 rows: 6,
             },
         });
+    }
+    Ok(doc)
+}
+
+/// The two-sheet starter with its documentation (ADR-0014): wire numbers that
+/// restart on each sheet, and the catalog data of the parts. The edit file
+/// `examples/edit/documentation.edit.json` makes the same project through the
+/// command line, and the reports committed beside it are what
+/// `opencircuit report` gives for it.
+fn documentation() -> Built<Schematic> {
+    let mut doc = starter_sheets()?;
+    doc.project.wire_numbering = Some(circuit_model::WireNumbering {
+        prefix: "W".to_owned(),
+        start: 1,
+        step: std::num::NonZeroU32::MIN,
+        per_sheet: true,
+    });
+    let parts = [
+        ("K1", "Acme", "CTR-9", "Contactor 9 A, 24 V coil", "Panel 1"),
+        (
+            "F1",
+            "Acme",
+            "OL-12",
+            "Thermal overload relay 9-12 A",
+            "Panel 1",
+        ),
+        ("Q1", "Acme", "MS-3P", "Main switch, 3 poles", "Panel 1"),
+        (
+            "M1",
+            "Motors Co",
+            "M-075",
+            "Three-phase motor 0.75 kW",
+            "Field",
+        ),
+        ("S1", "Acme", "PB-G", "Pushbutton, green", "Door"),
+        ("S2", "Acme", "PB-R", "Pushbutton, red", "Door"),
+    ];
+    for (reference, manufacturer, part_no, description, location) in parts {
+        if let Some(device) = doc.devices.iter_mut().find(|d| d.reference.0 == reference) {
+            device.info = Some(circuit_model::DeviceInfo {
+                manufacturer: Some(manufacturer.to_owned()),
+                part_no: Some(part_no.to_owned()),
+                description: Some(description.to_owned()),
+                location: Some(location.to_owned()),
+            });
+        }
     }
     Ok(doc)
 }

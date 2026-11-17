@@ -149,6 +149,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
+            "circuit-report",
             "circuit-sim",
         ],
         external: &["serde_json"],

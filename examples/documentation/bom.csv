@@ -1,0 +1,7 @@
+Item,Qty,References,Model,Manufacturer,Part no,Description
+1,1,F1,thermal_overload.generic v1,Acme,OL-12,Thermal overload relay 9-12 A
+2,1,K1,contactor.generic v1,Acme,CTR-9,"Contactor 9 A, 24 V coil"
+3,1,M1,motor.3ph v1,Motors Co,M-075,Three-phase motor 0.75 kW
+4,1,Q1,main_switch.3p v1,Acme,MS-3P,"Main switch, 3 poles"
+5,1,S1,pushbutton_no v1,Acme,PB-G,"Pushbutton, green"
+6,1,S2,pushbutton_nc v1,Acme,PB-R,"Pushbutton, red"
