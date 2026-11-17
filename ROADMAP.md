@@ -311,6 +311,133 @@ colour, colours and line types per layer, a "current layer", rotated or
 several-line text, other languages and a stored language setting, and a
 translated command line. New work starts with an issue.
 
+## M9 — Work safety, productivity and new document views (in progress; version 0.0.2)
+
+Version 0.0.2 closes M9. The scope comes from a triage of the features of
+electrical CAD tools against this repository: what already exists was left
+out, and what conflicts with the discrete model, the clean room or the scope
+below is listed at the end of this section. Clean room as for M5 to M8: other
+tools shaped the scope only; no code, strings, artwork or symbol files are
+copied.
+
+Decisions, to be confirmed in the tracking issue:
+
+- **PLC:** modules with channels and an I/O mapping, documentation only. A
+  PLC program still runs outside OpenCircuit, against the Modbus server; "real
+  PLC execution" stays out of scope.
+- **Single-line diagram and panel layout** are kinds of sheet in the same
+  project, sharing its devices (the K1 of the panel is the K1 of the
+  schematic). They take no part in the simulation.
+- **Recovery copies** live in a per-user data folder (browser storage in the
+  web build), never next to the person's file; backups next to the project
+  are opt-in.
+- **Interface:** every addition keeps a fresh window as it is (same default
+  tab, panels, sizes and mode). Docking, toolbars, themes and workspaces are
+  opt-in, and the window tests in `apps/desktop/tests/` pass unchanged.
+- **One schema change for the milestone:** version 5 (ADR-0018), with a
+  migration from version 4. Documentation fields never change compilation,
+  energization or faults.
+- **No new workspace crate:** the work fits the crates that exist (the
+  window, the command line, `circuit-model`, `circuit-commands`,
+  `circuit-report`, `circuit-export`).
+
+### M9.0 — Resilience (done, except where marked)
+
+- [x] No crash on a command-line argument that is not UTF-8 or on a standard
+  stream that cannot be written.
+- [x] Saves: exclusive temporary file with a short name, the directory flushed
+  after the rename, permissions, group and links of the replaced file kept.
+- [x] A command never writes over a file it reads (`simulate --trace`,
+  `--snapshot-json`, `edit --output`, `test --update-golden`).
+- [x] A byte order mark at the start of a file is accepted.
+- [x] The files of v0.0.1 (`tests/compat/v0.0.1`) open, migrate and reproduce
+  their traces; a truncated project is refused, never read as another one.
+- [x] Load tests of the Modbus server; hostile-input property tests of the MCP
+  server and of scenarios.
+- [x] CI runs locally with `act` (`docs/local-ci.md`).
+- [ ] The Modbus server frees the slots of closed connections before it
+  refuses a new client.
+- [ ] CI, in its own pull request: clippy on Windows, actions pinned by
+  commit, a `cargo test --release` job and a coverage threshold.
+- [ ] macOS: reproduce the native file dialogs opened inside the event loop;
+  switch to asynchronous dialogs if it is confirmed.
+
+### M9.1 — Work safety (window and command line, no schema change)
+
+- [ ] Autosave to a recovery copy, recovery offered after an unexpected exit,
+  and an indicator in the status bar.
+- [ ] A panic in the window writes the recovery copy before the process ends.
+- [ ] Optional rotating backups next to the project.
+- [ ] Project lock: a second window or process on the same file is warned; a
+  stale lock is recognized.
+- [ ] Version history: a copy per save in the data folder, restored as a new
+  document.
+- [ ] Semantic comparison of two projects (`opencircuit diff`, and in the
+  window): devices, symbols, wires and parameters added, removed or changed.
+
+### M9.2 — Productivity (no schema change)
+
+- [ ] Recent projects, project templates (File > New from template) and a
+  saved copy of a project.
+- [ ] Command palette (Ctrl+K) and search over the whole project.
+- [ ] Reports: `devices` (one row per device) and renumbering of sheets.
+- [ ] Navigation: previous view, highlight of the element under the pointer,
+  snapping to wire ends, middles and crossings, coordinates typed at the
+  pointer, rulers.
+- [ ] Print preview; export of several projects in one command.
+- [ ] Find and replace (designators, notes, parameters); editing every common
+  field of a selection; editing a label on the canvas.
+- [ ] Wire tools: trim, extend and a parallel copy.
+- [ ] Macros: record the edits of a session as an edit file and play it back.
+- [ ] Customizable shortcuts, themes, a collapsible sidebar, toolbars, dockable
+  panels, saved workspaces.
+- [ ] Several open projects, in tabs.
+- [ ] Wire routing on request: an orthogonal route around symbols, undone in
+  one step.
+
+### M9.3 — Schema version 5 (ADR-0018)
+
+- [ ] The client in the project data.
+- [ ] Wires: a stored colour, cross-section, type, material and insulation, in
+  the wires report.
+- [ ] Revision clouds, comments on an element, and shapes (polyline,
+  rectangle, circle, arc) as annotations.
+- [ ] Groups of elements, and mirrored symbols.
+- [ ] QR codes as annotations.
+- [ ] Manufacturer data imported from CSV into the catalog data of devices, and
+  a datasheet link per device opened by the system.
+- [ ] Sheet kinds: single-line diagram and panel layout, with cross-references
+  to the schematic.
+- [ ] PLC modules with channels and an I/O mapping report (with the Modbus
+  map).
+
+### M9.4 — Symbols and exchange
+
+- [ ] A symbol editor that writes extension libraries (`LIBRARY.md`).
+- [ ] Symbol sets in an IEC-like and an ANSI-like style, drawn for this
+  project, with no claim of conformance.
+- [ ] DXF export from the neutral scene.
+
+**Exit criterion:** a project is drawn in the window with autosave on; the
+process is killed and the project is recovered with no edit lost; a second
+window on the same file is warned; the project gets a single-line sheet and a
+panel-layout sheet that share its devices, wire data and a PLC module; it
+exports to PDF, SVG and DXF, and its `devices`, wires and I/O reports list
+the new data; a v0.0.1 and a v0.0.2-dev project open and simulate to their
+traces; every check of `docs/releasing.md` passes. The tests are named in this
+section when each item lands.
+
+Order of work: M9.0, then M9.1, M9.2, M9.3 (ADR-0018 before any field) and
+M9.4, in stacked pull requests of one item each, as in M7 and M8.
+
+Considered and not done in M9: free drawing, scaling, fillet, chamfer, explode
+and polar tracking (they do not fit the orthogonal, quantized drawing);
+voltage drop, cable sizing, short-circuit current and load calculations
+(outside the discrete model, and a risk of being read as certification);
+cabinet layout in 3D, collaboration, user permissions and cloud
+synchronization (local-first); DWG export (proprietary format); copied IEC or
+ANSI symbol files.
+
 ## Out of scope for the MVP
 
 Analog simulation, rigorous voltage/current/impedance calculation, transients,

@@ -28,6 +28,8 @@ The desktop application needs Rust 1.95; the other crates keep the MSRV 1.85
 (`cargo +1.85 test --workspace --exclude opencircuit-desktop --locked`). The
 browser build is checked with
 `cargo clippy --locked --target wasm32-unknown-unknown -p opencircuit-desktop -- -D warnings`.
+The whole CI workflow also runs on your machine, in Docker, with `act`
+(`docs/local-ci.md`).
 
 ## Rules
 

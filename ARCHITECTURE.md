@@ -200,3 +200,6 @@ confined to one root directory. The window speaks the language of the environmen
 or the Help menu through a catalog that has English as its keys (`i18n`); the core,
 the diagnostics and the command line do not know about languages.
 
+M9 is in progress (`ROADMAP.md`); it adds no workspace crate, and schema
+version 5 waits for ADR-0018.
+
