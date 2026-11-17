@@ -5,6 +5,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use circuit_commands::commandline::{
+    self, ModeRequest, Request, SimRequest, ToolRequest, ViewRequest,
+};
 use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
@@ -20,6 +23,7 @@ use eframe::egui::{self, Align, KeyboardShortcut, Layout, RichText, Ui};
 use crate::camera::Camera;
 use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
+use crate::cmdline::CommandLine;
 use crate::dialogs;
 use crate::icons::{self, Icon};
 use crate::inspector::{self, InspectorState};
@@ -74,6 +78,8 @@ pub struct DesktopApp {
     inspector: InspectorState,
     /// The tab and the search of the palette.
     palette: palette::PaletteState,
+    /// The command line over the drawing.
+    command_line: CommandLine,
     /// Text of the path field.
     path_input: String,
     /// The last error, shown until the next successful action.
@@ -201,6 +207,18 @@ impl DesktopApp {
     #[must_use]
     pub const fn problems_shown(&self) -> bool {
         !self.diagnostics_hidden
+    }
+
+    /// What the command line has said, oldest first.
+    #[must_use]
+    pub fn command_log(&self) -> Vec<&str> {
+        self.command_line.lines()
+    }
+
+    /// The tool of the editor.
+    #[must_use]
+    pub const fn tool(&self) -> &Tool {
+        self.editor.tool()
     }
 
     /// The tab of the palette that is open.
@@ -613,6 +631,14 @@ impl DesktopApp {
             if session.is_running() {
                 ui.ctx().request_repaint();
             }
+        }
+        if ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::COMMAND,
+                egui::Key::Num9,
+            ))
+        }) {
+            self.command_line.focus();
         }
         if self.mode == Mode::Edit {
             self.shortcuts(ui);
@@ -1251,6 +1277,112 @@ impl DesktopApp {
         });
     }
 
+    /// The command line over the bottom of the drawing.
+    fn command_line_overlay(&mut self, ui: &mut Ui, origin: [f32; 2], size: [f32; 2]) {
+        let width = 480.0_f32.min(size[0] - 20.0);
+        if width < 200.0 {
+            return;
+        }
+        // Its bottom edge sits a little above the bottom of the drawing and
+        // it grows upwards with the lines it shows.
+        let at = egui::pos2(origin[0] + size[0] / 2.0, origin[1] + size[1] - 14.0);
+        let sent = {
+            let catalog = self.session.as_ref().map(Session::catalog);
+            self.command_line.show(ui, at, |line| {
+                catalog.map_or_else(Vec::new, |catalog| commandline::suggest(line, catalog))
+            })
+        };
+        if let Some(line) = sent {
+            self.run_command(&line);
+        }
+    }
+
+    /// Read a typed line and carry out what it asks.
+    fn run_command(&mut self, line: &str) {
+        self.command_line.say(&format!("> {line}"));
+        let Some(session) = &self.session else {
+            self.command_line.say("Open a project first.");
+            return;
+        };
+        let context = commandline::Context {
+            doc: session.document(),
+            catalog: session.catalog(),
+            selection: self.editor.selection(),
+        };
+        match commandline::run(line, &context) {
+            Ok(requests) => {
+                for request in requests {
+                    self.carry_out(request);
+                }
+            }
+            Err(error) => self.command_line.say(&format!("error: {error}")),
+        }
+    }
+
+    /// Carry out one request of the command line.
+    fn carry_out(&mut self, request: Request) {
+        if request.needs_editing() && self.mode != Mode::Edit {
+            self.command_line
+                .say("That works while drawing: type `mode edit` first.");
+            return;
+        }
+        match request {
+            Request::Edit(transaction) => {
+                let label = transaction.label.clone();
+                self.commit(Ok(transaction));
+                match &self.error {
+                    Some(error) => self.command_line.say(&format!("error: {error}")),
+                    None => self.command_line.say(&label),
+                }
+            }
+            Request::Tool(tool) => self.editor.set_tool(match tool {
+                ToolRequest::Select => Tool::Select,
+                ToolRequest::Wire => Tool::Wire,
+                ToolRequest::Place {
+                    model,
+                    symbol,
+                    rotation,
+                } => Tool::Place {
+                    model,
+                    symbol,
+                    rotation,
+                },
+            }),
+            Request::View(view) => match view {
+                ViewRequest::Extents => self.fit_pending = true,
+                ViewRequest::Selection => self.frame_selection = true,
+                ViewRequest::ZoomIn => self.zoom_request = Some(KEY_ZOOM),
+                ViewRequest::ZoomOut => self.zoom_request = Some(1.0 / KEY_ZOOM),
+            },
+            Request::Mode(mode) => self.set_mode(match mode {
+                ModeRequest::Edit => Mode::Edit,
+                ModeRequest::Simulate => Mode::Simulate,
+            }),
+            Request::Simulation(action) => {
+                let simulating = self.mode == Mode::Simulate;
+                match &mut self.session {
+                    Some(session) if simulating && session.can_simulate() => match action {
+                        SimRequest::Play => session.play(),
+                        SimRequest::Pause => session.pause(),
+                        SimRequest::Step => session.step(),
+                        SimRequest::Reset => session.reset(),
+                    },
+                    _ => self
+                        .command_line
+                        .say("The simulation runs in simulation mode: type `mode simulate`."),
+                }
+            }
+            Request::Undo => self.undo(),
+            Request::Redo => self.redo(),
+            Request::Save => {
+                if self.save() {
+                    self.command_line.say("Saved.");
+                }
+            }
+            Request::Message(text) => self.command_line.say(&text),
+        }
+    }
+
     /// Zoom buttons over the top right corner of the drawing.
     fn navigation(&mut self, ui: &Ui, origin: [f32; 2], size: [f32; 2]) {
         let tokens = Tokens::of(ui);
@@ -1546,6 +1678,7 @@ impl DesktopApp {
             self.camera.fit(corners, events.size, canvas::FIT_MARGIN);
         }
         self.navigation(ui, events.origin, events.size);
+        self.command_line_overlay(ui, events.origin, events.size);
         match self.mode {
             Mode::Edit => self.edit_on_canvas(ui, events),
             Mode::Simulate => self.operate_on_canvas(events),

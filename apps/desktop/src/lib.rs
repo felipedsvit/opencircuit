@@ -21,6 +21,7 @@ pub mod app;
 pub mod camera;
 mod canvas;
 pub mod clock;
+mod cmdline;
 mod dialogs;
 pub mod files;
 mod icons;
