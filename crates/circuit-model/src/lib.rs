@@ -33,6 +33,7 @@ pub mod labels;
 pub mod layout;
 pub mod library;
 pub mod limits;
+pub mod nets;
 pub mod schematic;
 pub mod sheet;
 pub mod snapshot;
@@ -61,6 +62,7 @@ pub use layout::{
     Bend, LayoutIndex, is_orthogonal, orthogonal_route, orthogonal_route_bent, segment_at,
     segment_contains, stretch_route,
 };
+pub use nets::{Net, NetId, StaticNets};
 pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,

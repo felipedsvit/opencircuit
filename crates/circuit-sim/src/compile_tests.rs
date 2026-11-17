@@ -1,5 +1,5 @@
 use circuit_model::builder::pin;
-use circuit_model::{GridPoint, ParamValue, QuarterTurn};
+use circuit_model::{Endpoint, GridPoint, ParamValue, QuarterTurn, StaticNets, Wire, WireId};
 use proptest::prelude::*;
 
 use super::*;
@@ -919,6 +919,89 @@ fn shuffled(doc: Schematic) -> impl Strategy<Value = Schematic> {
                 ..doc.clone()
             },
         )
+}
+
+/// The static nets of `circuit-model` (ADR-0014) number every pin, junction
+/// and wire exactly as the compiler does. The renderer and the reports rely on
+/// it, and the compiler is not allowed to change without this test saying so.
+fn assert_static_nets_agree(doc: &Schematic) {
+    let Some(circuit) = compile_doc(doc).circuit else {
+        return;
+    };
+    let nets = StaticNets::build(doc, &ComponentCatalog::builtin());
+
+    for compiled in circuit.pins() {
+        assert_eq!(
+            nets.net_of_pin(&compiled.pin).map(|net| net.0),
+            Some(compiled.net.0),
+            "pin {:?}",
+            compiled.pin
+        );
+    }
+    for (junction, net) in circuit.junctions() {
+        assert_eq!(
+            nets.net_of_junction(*junction).map(|net| net.0),
+            Some(net.0)
+        );
+    }
+    for (wire, net) in circuit.wires() {
+        assert_eq!(nets.net_of_wire(*wire).map(|net| net.0), Some(net.0));
+    }
+    let pins: usize = nets.nets().iter().map(|net| net.pins.len()).sum();
+    assert_eq!(pins, circuit.pins().len());
+}
+
+#[test]
+fn static_nets_number_the_example_circuits_as_the_compiler_does() {
+    for doc in [
+        command_circuit(),
+        direct_online_circuit(),
+        reversing_circuit(),
+        reversing_with(Interlocks {
+            electrical: false,
+            mechanical: true,
+        }),
+        two_sections("l1"),
+        transformer_circuit(Secondary::Own),
+    ] {
+        assert!(compile_doc(&doc).circuit.is_some());
+        assert_static_nets_agree(&doc);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn static_nets_follow_the_compiler_when_wires_are_added_at_random(
+        extra in prop::collection::vec((any::<prop::sample::Index>(), any::<prop::sample::Index>()), 0..6)
+    ) {
+        let mut doc = direct_online_circuit();
+        let nets = StaticNets::build(&doc, &ComponentCatalog::builtin());
+        let mut ends: Vec<Endpoint> = nets
+            .nets()
+            .iter()
+            .flat_map(|net| net.pins.iter().cloned().map(Endpoint::Terminal))
+            .collect();
+        ends.extend(doc.junctions.iter().map(|junction| Endpoint::Junction(junction.id)));
+        prop_assume!(!ends.is_empty());
+        for (a, b) in extra {
+            let id = WireId(doc.next_id);
+            doc.next_id += 1;
+            doc.wires.push(Wire {
+                id,
+                from: a.get(&ends).clone(),
+                to: b.get(&ends).clone(),
+                route: Vec::new(),
+                number: None,
+            });
+        }
+
+        // A document that does not compile proves nothing; too many of them
+        // would fail the run instead of passing it vacuously.
+        prop_assume!(compile_doc(&doc).circuit.is_some());
+        assert_static_nets_agree(&doc);
+    }
 }
 
 /// Two contactors and a relay with their coils wired, and interlocks between
