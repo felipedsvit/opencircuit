@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>OpenCircuit</title>
+  <!-- A contactor coil and a normally open contact it drives, with the
+       linkage between them. Drawn for this project. -->
+  <rect width="1024" height="1024" rx="224" fill="#22262e"/>
+  <g fill="none" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#369cd8">
+      <path d="M312 168V322"/>
+      <rect x="232" y="322" width="160" height="380" rx="20"/>
+      <path d="M312 702V856"/>
+    </g>
+    <g stroke="#e6e9ee">
+      <path d="M712 168V372"/>
+      <path d="M712 652V856"/>
+      <path d="M712 652L598 396"/>
+    </g>
+    <path d="M440 512H600" stroke="#8a93a1" stroke-dasharray="26 34"/>
+  </g>
+  <g fill="#f2c56b">
+    <circle cx="312" cy="168" r="34"/>
+    <circle cx="312" cy="856" r="34"/>
+    <circle cx="712" cy="168" r="34"/>
+    <circle cx="712" cy="856" r="34"/>
+  </g>
+</svg>

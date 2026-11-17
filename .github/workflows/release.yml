@@ -1,0 +1,225 @@
+name: Release
+
+# A tag `vX.Y.Z` builds the packages on Linux, macOS and Windows and creates
+# a draft release with them. A pull request that changes the packaging builds
+# the same packages without publishing anything, so the workflow is tested
+# before a tag is pushed. See docs/releasing.md.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "packaging/**"
+      - "assets/icons/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  PROGRAMS: -p opencircuit-desktop -p opencircuit-cli
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        shell: bash
+        run: |
+          # The first `version =` of the root manifest is [workspace.package].
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "::error::no version in Cargo.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::the tag $GITHUB_REF_NAME is not v$version, the version of Cargo.toml"
+            exit 1
+          fi
+
+  linux:
+    name: Linux (.deb, .rpm, AppImage)
+    needs: version
+    # The oldest runner with a Rust toolchain: the binaries need the C
+    # library of the build machine, and this one is old enough for Debian 12,
+    # Ubuntu 22.04 and Fedora.
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked ${{ env.PROGRAMS }}
+      - name: Tools
+        run: |
+          # Pinned releases, checked against the digests GitHub publishes for
+          # them.
+          mkdir -p "$RUNNER_TEMP/tools"
+          cd "$RUNNER_TEMP/tools"
+          curl -fsSL -o nfpm.tar.gz \
+            "https://github.com/goreleaser/nfpm/releases/download/v2.49.0/nfpm_2.49.0_Linux_x86_64.tar.gz"
+          echo "2afaa5ffb5e3493402e31e7c67a5a1fb42133e3f66fc315ca0051934125561c7  nfpm.tar.gz" | sha256sum -c -
+          tar xzf nfpm.tar.gz nfpm
+          curl -fsSL -o appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
+          chmod +x nfpm appimagetool
+          echo "$PWD" >> "$GITHUB_PATH"
+      - name: Packages
+        run: |
+          mkdir -p dist
+          nfpm package --packager deb --config packaging/linux/nfpm.yaml \
+            --target "dist/opencircuit_${VERSION}_amd64.deb"
+          nfpm package --packager rpm --config packaging/linux/nfpm.yaml \
+            --target "dist/opencircuit-${VERSION}-1.x86_64.rpm"
+          packaging/linux/build-appimage.sh "$VERSION" dist
+          name="opencircuit-${VERSION}-linux-x86_64"
+          mkdir -p "stage/$name"
+          cp target/release/opencircuit-desktop target/release/opencircuit "stage/$name/"
+          cp LICENSE-MIT LICENSE-APACHE "stage/$name/"
+          cp assets/fonts/liberation-mono/LICENSE "stage/$name/LICENSE-LiberationMono"
+          sed "s/@VERSION@/$VERSION/g" packaging/README.txt > "stage/$name/README.txt"
+          cp -R examples "stage/$name/examples"
+          tar -C stage -czf "dist/$name.tar.gz" "$name"
+          ls -la dist
+      - name: Check the packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb | grep -E 'bin/opencircuit|opencircuit.desktop|opencircuit.png|LICENSE'
+          rpm -qpi dist/*.rpm
+          rpm -qpl dist/*.rpm | grep -E 'bin/opencircuit|opencircuit.desktop|opencircuit.png|LICENSE'
+          # The .deb installs, and the command line in it runs on an example.
+          sudo apt-get install -y ./dist/opencircuit_${VERSION}_amd64.deb
+          opencircuit validate /usr/share/doc/opencircuit/examples/direct-starter/starter.ocircuit
+          test -x /usr/bin/opencircuit-desktop
+          # The AppImage runs the command line too (no FUSE on the runner).
+          chmod +x "dist/OpenCircuit-${VERSION}-x86_64.AppImage"
+          "dist/OpenCircuit-${VERSION}-x86_64.AppImage" --appimage-extract-and-run \
+            validate examples/direct-starter/starter.ocircuit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS (.dmg)
+    needs: version
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Build both architectures
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin ${{ env.PROGRAMS }}
+          cargo build --release --locked --target x86_64-apple-darwin ${{ env.PROGRAMS }}
+      - name: Packages
+        run: packaging/macos/package.sh "$VERSION"
+      - name: Check the packages
+        run: |
+          mount_point="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount_point" "dist/OpenCircuit-${VERSION}-macos-universal.dmg"
+          test -d "$mount_point/OpenCircuit.app"
+          plutil -lint "$mount_point/OpenCircuit.app/Contents/Info.plist"
+          lipo -archs "$mount_point/OpenCircuit.app/Contents/MacOS/opencircuit-desktop"
+          "$mount_point/OpenCircuit.app/Contents/MacOS/opencircuit" validate examples/direct-starter/starter.ocircuit
+          hdiutil detach "$mount_point"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows (.zip)
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked ${{ env.PROGRAMS }}
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "opencircuit-$env:VERSION-windows-x86_64"
+          New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
+          Copy-Item target/release/opencircuit-desktop.exe, target/release/opencircuit.exe "dist/$name/"
+          Copy-Item LICENSE-MIT, LICENSE-APACHE "dist/$name/"
+          Copy-Item assets/fonts/liberation-mono/LICENSE "dist/$name/LICENSE-LiberationMono"
+          (Get-Content packaging/README.txt -Raw).Replace('@VERSION@', $env:VERSION) | Set-Content "dist/$name/README.txt"
+          Copy-Item -Recurse examples "dist/$name/examples"
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
+          Remove-Item -Recurse -Force "dist/$name"
+          Get-ChildItem dist
+      - name: Check the package
+        shell: pwsh
+        run: |
+          Expand-Archive -Path "dist/opencircuit-$env:VERSION-windows-x86_64.zip" -DestinationPath check
+          $dir = "check/opencircuit-$env:VERSION-windows-x86_64"
+          & "$dir/opencircuit.exe" validate "$dir/examples/direct-starter/starter.ocircuit"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "$dir/opencircuit-desktop.exe")) { throw "no desktop program" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    # Only for a tag; a pull request stops after the packages.
+    if: github.ref_type == 'tag'
+    needs: [version, linux, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and notes
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+          cd ..
+          sed "s/@VERSION@/$VERSION/g" packaging/release-notes.md > notes.md
+      - name: Draft release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft --verify-tag \
+            --title "OpenCircuit $VERSION" \
+            --notes-file notes.md \
+            dist/*

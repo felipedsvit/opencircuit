@@ -1,6 +1,9 @@
 //! `opencircuit-desktop [PROJECT]`: open the window, optionally with a
 //! project.
 
+// A release build for Windows is a window program: no console behind it.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> std::process::ExitCode {
     native::main()
@@ -40,6 +43,9 @@ mod native {
         let options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_title("OpenCircuit")
+                // The name of the desktop file, so that a desktop finds the
+                // icon of the window.
+                .with_app_id("opencircuit")
                 .with_inner_size([1200.0, 800.0]),
             ..Default::default()
         };
