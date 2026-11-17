@@ -121,7 +121,17 @@ const PACKAGE_RULES: &[PackageRule] = &[
         // `rfd` gives the native file dialogs (portal over libdbus on Linux).
         // On wasm32, `web-sys`, `js-sys` and `wasm-bindgen-futures` start the
         // application on its canvas, read dropped files and offer downloads.
-        external: &["eframe", "js-sys", "rfd", "wasm-bindgen-futures", "web-sys"],
+        // `serde` and `serde_json` write the small description next to a
+        // recovery copy (M9.1); the workspace already pins both.
+        external: &[
+            "eframe",
+            "js-sys",
+            "rfd",
+            "serde",
+            "serde_json",
+            "wasm-bindgen-futures",
+            "web-sys",
+        ],
         dev: &["egui_kittest"],
         core: false,
     },
