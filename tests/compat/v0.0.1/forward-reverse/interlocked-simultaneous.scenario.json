@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit": "interlocked.ocircuit",
+  "config": { "fault_policy": "halt" },
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 2, "action": "press", "device": "S3" },
+    { "tick": 6, "action": "release", "device": "S3" }
+  ],
+  "until_tick": 10,
+  "expect": { "trace": "interlocked-simultaneous.trace", "diagnostics": [] }
+}

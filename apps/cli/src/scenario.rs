@@ -323,4 +323,107 @@ mod tests {
         assert!(Scenario::parse("{").is_err());
         assert!(Scenario::parse(r#"{ "schema_version": 1.5 }"#).is_err());
     }
+
+    mod hostile {
+        use proptest::prelude::*;
+        use serde_json::{Map, Value};
+
+        use super::*;
+
+        const KEYS: &[&str] = &[
+            "schema_version",
+            "circuit",
+            "libraries",
+            "config",
+            "events",
+            "until_tick",
+            "expect",
+            "tick_us",
+            "pickup_ticks",
+            "dropout_ticks",
+            "fault_policy",
+            "tick",
+            "action",
+            "device",
+            "trace",
+            "diagnostics",
+        ];
+        const TEXTS: &[&str] = &[
+            "a.ocircuit",
+            "../a.ocircuit",
+            "/etc/passwd",
+            "a/../../b",
+            "press",
+            "release",
+            "halt",
+            "continue",
+            "S1",
+            "",
+            "C:\\x",
+            "nested/x.oclib",
+        ];
+
+        fn hostile_value() -> impl Strategy<Value = Value> {
+            let leaf = prop_oneof![
+                Just(Value::Null),
+                any::<bool>().prop_map(Value::Bool),
+                any::<u64>().prop_map(Value::from),
+                (0_u64..20).prop_map(Value::from),
+                any::<i64>().prop_map(Value::from),
+                prop::sample::select(TEXTS.to_vec()).prop_map(Value::from),
+            ];
+            leaf.prop_recursive(4, 64, 8, |inner| {
+                prop_oneof![
+                    prop::collection::vec(inner.clone(), 0..6).prop_map(Value::Array),
+                    prop::collection::vec((prop::sample::select(KEYS.to_vec()), inner), 0..8)
+                        .prop_map(|pairs| {
+                            Value::Object(
+                                pairs
+                                    .into_iter()
+                                    .map(|(key, value)| (key.to_owned(), value))
+                                    .collect::<Map<String, Value>>(),
+                            )
+                        }),
+                ]
+            })
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(512))]
+
+            /// Whatever is read keeps the limits and stays in its directory.
+            #[test]
+            fn any_scenario_that_is_read_keeps_its_limits(
+                value in hostile_value(),
+                version in 0_u64..4,
+                until in prop_oneof![0_u64..100, any::<u64>()],
+            ) {
+                let mut object = match value {
+                    Value::Object(map) => map,
+                    other => {
+                        let mut map = Map::new();
+                        map.insert("events".to_owned(), other);
+                        map
+                    }
+                };
+                object.insert("schema_version".to_owned(), Value::from(version));
+                object.entry("circuit").or_insert_with(|| Value::from("a.ocircuit"));
+                object.insert("until_tick".to_owned(), Value::from(until));
+
+                if let Ok(scenario) = Scenario::parse(&Value::Object(object).to_string()) {
+                    prop_assert!(scenario.until_tick <= MAX_UNTIL_TICK);
+                    prop_assert!(scenario.events.len() <= MAX_EVENTS);
+                    prop_assert!(scenario.libraries.len() <= MAX_SCENARIO_LIBRARIES);
+                    prop_assert!(scenario.events.iter().all(|e| e.tick <= scenario.until_tick));
+                    prop_assert!(is_plain_relative(&scenario.circuit));
+                    prop_assert!(scenario.libraries.iter().all(|l| is_plain_relative(l)));
+                }
+            }
+
+            #[test]
+            fn arbitrary_text_never_panics(text in ".{0,300}") {
+                let _ = Scenario::parse(&text);
+            }
+        }
+    }
 }

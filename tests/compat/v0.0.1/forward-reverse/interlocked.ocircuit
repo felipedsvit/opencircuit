@@ -1,0 +1,1063 @@
+{
+  "schema_version": 2,
+  "next_id": 82,
+  "project": {
+    "name": "Reversing starter with full interlocking",
+    "grid_unit": 10,
+    "author": null,
+    "company": null,
+    "revision": null,
+    "date": null
+  },
+  "sheets": [],
+  "supplies": [
+    {
+      "id": 1,
+      "kind": "dc",
+      "nominal_voltage_mv": 24000,
+      "phase_voltage_mv": null,
+      "frequency_millihz": null,
+      "phase_sequence": null
+    },
+    {
+      "id": 6,
+      "kind": "three_phase",
+      "nominal_voltage_mv": 400000,
+      "phase_voltage_mv": 230000,
+      "frequency_millihz": 50000,
+      "phase_sequence": "l1_l2_l3"
+    }
+  ],
+  "devices": [
+    {
+      "id": 2,
+      "reference": "P24",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_pos",
+        "supply": 1
+      }
+    },
+    {
+      "id": 4,
+      "reference": "P0",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_neg",
+        "supply": 1
+      }
+    },
+    {
+      "id": 7,
+      "reference": "L1",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "l1",
+        "supply": 6
+      }
+    },
+    {
+      "id": 9,
+      "reference": "L2",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "l2",
+        "supply": 6
+      }
+    },
+    {
+      "id": 11,
+      "reference": "L3",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "l3",
+        "supply": 6
+      }
+    },
+    {
+      "id": 13,
+      "reference": "S2",
+      "model": {
+        "id": "pushbutton_nc",
+        "version": 1
+      },
+      "params": {}
+    },
+    {
+      "id": 15,
+      "reference": "S1",
+      "model": {
+        "id": "pushbutton.combined",
+        "version": 1
+      },
+      "params": {}
+    },
+    {
+      "id": 18,
+      "reference": "S3",
+      "model": {
+        "id": "pushbutton.combined",
+        "version": 1
+      },
+      "params": {}
+    },
+    {
+      "id": 21,
+      "reference": "K1",
+      "model": {
+        "id": "contactor.generic",
+        "version": 1
+      },
+      "params": {
+        "connection": "dc",
+        "rated_voltage_mv": 24000
+      }
+    },
+    {
+      "id": 26,
+      "reference": "K2",
+      "model": {
+        "id": "contactor.generic",
+        "version": 1
+      },
+      "params": {
+        "connection": "dc",
+        "rated_voltage_mv": 24000
+      }
+    },
+    {
+      "id": 31,
+      "reference": "M1",
+      "model": {
+        "id": "motor.3ph",
+        "version": 1
+      },
+      "params": {
+        "rated_voltage_mv": 400000
+      }
+    },
+    {
+      "id": 33,
+      "reference": "KX1",
+      "model": {
+        "id": "interlock.mechanical",
+        "version": 1
+      },
+      "params": {
+        "first": 21,
+        "second": 26
+      }
+    }
+  ],
+  "symbols": [
+    {
+      "id": 3,
+      "device_id": 2,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 5,
+      "device_id": 4,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 39
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 8,
+      "device_id": 7,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 30,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 10,
+      "device_id": 9,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 34,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 12,
+      "device_id": 11,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 38,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 14,
+      "device_id": 13,
+      "symbol_key": "contact",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 3
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 16,
+      "device_id": 15,
+      "symbol_key": "no",
+      "slot": null,
+      "position": {
+        "x": -12,
+        "y": 11
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 17,
+      "device_id": 15,
+      "symbol_key": "nc",
+      "slot": null,
+      "position": {
+        "x": 8,
+        "y": 19
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 19,
+      "device_id": 18,
+      "symbol_key": "no",
+      "slot": null,
+      "position": {
+        "x": 12,
+        "y": 11
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 20,
+      "device_id": 18,
+      "symbol_key": "nc",
+      "slot": null,
+      "position": {
+        "x": -8,
+        "y": 19
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 22,
+      "device_id": 21,
+      "symbol_key": "coil",
+      "slot": null,
+      "position": {
+        "x": -8,
+        "y": 31
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 23,
+      "device_id": 21,
+      "symbol_key": "main",
+      "slot": null,
+      "position": {
+        "x": 34,
+        "y": 10
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 24,
+      "device_id": 21,
+      "symbol_key": "aux_no",
+      "slot": 1,
+      "position": {
+        "x": -4,
+        "y": 11
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 25,
+      "device_id": 21,
+      "symbol_key": "aux_nc",
+      "slot": 2,
+      "position": {
+        "x": 8,
+        "y": 25
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 27,
+      "device_id": 26,
+      "symbol_key": "coil",
+      "slot": null,
+      "position": {
+        "x": 8,
+        "y": 31
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 28,
+      "device_id": 26,
+      "symbol_key": "main",
+      "slot": null,
+      "position": {
+        "x": 50,
+        "y": 10
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 29,
+      "device_id": 26,
+      "symbol_key": "aux_no",
+      "slot": 1,
+      "position": {
+        "x": 4,
+        "y": 11
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 30,
+      "device_id": 26,
+      "symbol_key": "aux_nc",
+      "slot": 2,
+      "position": {
+        "x": -8,
+        "y": 25
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 32,
+      "device_id": 31,
+      "symbol_key": "motor",
+      "slot": null,
+      "position": {
+        "x": 34,
+        "y": 21
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 34,
+      "device_id": 33,
+      "symbol_key": "link",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 31
+      },
+      "rotation": "deg0"
+    }
+  ],
+  "junctions": [
+    {
+      "id": 35,
+      "position": {
+        "x": 0,
+        "y": 7
+      }
+    },
+    {
+      "id": 36,
+      "position": {
+        "x": -8,
+        "y": 15
+      }
+    },
+    {
+      "id": 37,
+      "position": {
+        "x": 8,
+        "y": 15
+      }
+    },
+    {
+      "id": 38,
+      "position": {
+        "x": 0,
+        "y": 36
+      }
+    },
+    {
+      "id": 58,
+      "position": {
+        "x": 30,
+        "y": 4
+      }
+    },
+    {
+      "id": 59,
+      "position": {
+        "x": 34,
+        "y": 4
+      }
+    },
+    {
+      "id": 60,
+      "position": {
+        "x": 38,
+        "y": 4
+      }
+    },
+    {
+      "id": 61,
+      "position": {
+        "x": 30,
+        "y": 17
+      }
+    },
+    {
+      "id": 62,
+      "position": {
+        "x": 34,
+        "y": 17
+      }
+    },
+    {
+      "id": 63,
+      "position": {
+        "x": 38,
+        "y": 17
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 39,
+      "from": {
+        "terminal": {
+          "symbol_id": 3,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 14,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 40,
+      "from": {
+        "terminal": {
+          "symbol_id": 14,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 35
+      },
+      "route": []
+    },
+    {
+      "id": 41,
+      "from": {
+        "junction": 35
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 16,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": -12,
+          "y": 7
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "from": {
+        "junction": 35
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 24,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": -4,
+          "y": 7
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "from": {
+        "terminal": {
+          "symbol_id": 16,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 36
+      },
+      "route": [
+        {
+          "x": -12,
+          "y": 15
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "from": {
+        "terminal": {
+          "symbol_id": 24,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 36
+      },
+      "route": [
+        {
+          "x": -4,
+          "y": 15
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "from": {
+        "junction": 36
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 20,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 46,
+      "from": {
+        "terminal": {
+          "symbol_id": 20,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 30,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 47,
+      "from": {
+        "terminal": {
+          "symbol_id": 30,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 22,
+          "terminal": "a1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 48,
+      "from": {
+        "terminal": {
+          "symbol_id": 22,
+          "terminal": "a2"
+        }
+      },
+      "to": {
+        "junction": 38
+      },
+      "route": [
+        {
+          "x": -8,
+          "y": 36
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "from": {
+        "junction": 35
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 19,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": 12,
+          "y": 7
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "from": {
+        "junction": 35
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 29,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": 4,
+          "y": 7
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "from": {
+        "terminal": {
+          "symbol_id": 19,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 37
+      },
+      "route": [
+        {
+          "x": 12,
+          "y": 15
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "from": {
+        "terminal": {
+          "symbol_id": 29,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 37
+      },
+      "route": [
+        {
+          "x": 4,
+          "y": 15
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "from": {
+        "junction": 37
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 17,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 54,
+      "from": {
+        "terminal": {
+          "symbol_id": 17,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 25,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 55,
+      "from": {
+        "terminal": {
+          "symbol_id": 25,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 27,
+          "terminal": "a1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 56,
+      "from": {
+        "terminal": {
+          "symbol_id": 27,
+          "terminal": "a2"
+        }
+      },
+      "to": {
+        "junction": 38
+      },
+      "route": [
+        {
+          "x": 8,
+          "y": 36
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "from": {
+        "junction": 38
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 5,
+          "terminal": "out"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 64,
+      "from": {
+        "terminal": {
+          "symbol_id": 8,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 58
+      },
+      "route": []
+    },
+    {
+      "id": 65,
+      "from": {
+        "terminal": {
+          "symbol_id": 10,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 59
+      },
+      "route": []
+    },
+    {
+      "id": 66,
+      "from": {
+        "terminal": {
+          "symbol_id": 12,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 60
+      },
+      "route": []
+    },
+    {
+      "id": 67,
+      "from": {
+        "junction": 61
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 32,
+          "terminal": "u1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 68,
+      "from": {
+        "junction": 62
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 32,
+          "terminal": "v1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 69,
+      "from": {
+        "junction": 63
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 32,
+          "terminal": "w1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 70,
+      "from": {
+        "junction": 58
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 23,
+          "terminal": "pole1.in"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 71,
+      "from": {
+        "terminal": {
+          "symbol_id": 23,
+          "terminal": "pole1.out"
+        }
+      },
+      "to": {
+        "junction": 61
+      },
+      "route": []
+    },
+    {
+      "id": 72,
+      "from": {
+        "junction": 60
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 28,
+          "terminal": "pole1.in"
+        }
+      },
+      "route": [
+        {
+          "x": 38,
+          "y": 3
+        },
+        {
+          "x": 46,
+          "y": 3
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "from": {
+        "terminal": {
+          "symbol_id": 28,
+          "terminal": "pole1.out"
+        }
+      },
+      "to": {
+        "junction": 61
+      },
+      "route": [
+        {
+          "x": 46,
+          "y": 14
+        },
+        {
+          "x": 30,
+          "y": 14
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "from": {
+        "junction": 59
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 23,
+          "terminal": "pole2.in"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 75,
+      "from": {
+        "terminal": {
+          "symbol_id": 23,
+          "terminal": "pole2.out"
+        }
+      },
+      "to": {
+        "junction": 62
+      },
+      "route": []
+    },
+    {
+      "id": 76,
+      "from": {
+        "junction": 59
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 28,
+          "terminal": "pole2.in"
+        }
+      },
+      "route": [
+        {
+          "x": 34,
+          "y": 2
+        },
+        {
+          "x": 50,
+          "y": 2
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "from": {
+        "terminal": {
+          "symbol_id": 28,
+          "terminal": "pole2.out"
+        }
+      },
+      "to": {
+        "junction": 62
+      },
+      "route": [
+        {
+          "x": 50,
+          "y": 15
+        },
+        {
+          "x": 34,
+          "y": 15
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "from": {
+        "junction": 60
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 23,
+          "terminal": "pole3.in"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 79,
+      "from": {
+        "terminal": {
+          "symbol_id": 23,
+          "terminal": "pole3.out"
+        }
+      },
+      "to": {
+        "junction": 63
+      },
+      "route": []
+    },
+    {
+      "id": 80,
+      "from": {
+        "junction": 58
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 28,
+          "terminal": "pole3.in"
+        }
+      },
+      "route": [
+        {
+          "x": 30,
+          "y": 1
+        },
+        {
+          "x": 54,
+          "y": 1
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "from": {
+        "terminal": {
+          "symbol_id": 28,
+          "terminal": "pole3.out"
+        }
+      },
+      "to": {
+        "junction": 63
+      },
+      "route": [
+        {
+          "x": 54,
+          "y": 16
+        },
+        {
+          "x": 38,
+          "y": 16
+        }
+      ]
+    }
+  ]
+}

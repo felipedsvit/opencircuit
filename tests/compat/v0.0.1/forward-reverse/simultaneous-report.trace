@@ -1,0 +1,37 @@
+# opencircuit trace v1
+# fingerprint ccc64670fe2c88ea
+# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=report
+t=2 input S1.pressed 0->1
+t=2 input S3.pressed 0->1
+t=2 load K1.coil on
+t=2 load K2.coil on
+t=3 signal K1.active 0->1
+t=3 signal K2.active 0->1
+t=3 load K1.coil off
+t=3 load K2.coil off
+t=3 fault OC-ELEC-001 started L1,L3
+t=4 signal K1.active 1->0
+t=4 signal K2.active 1->0
+t=4 load K1.coil on
+t=4 load K2.coil on
+t=4 fault OC-ELEC-001 cleared L1,L3
+t=5 signal K1.active 0->1
+t=5 signal K2.active 0->1
+t=5 load K1.coil off
+t=5 load K2.coil off
+t=5 fault OC-ELEC-001 started L1,L3
+t=6 signal K1.active 1->0
+t=6 signal K2.active 1->0
+t=6 load K1.coil on
+t=6 load K2.coil on
+t=6 fault OC-ELEC-001 cleared L1,L3
+t=7 input S1.pressed 1->0
+t=7 input S3.pressed 1->0
+t=7 signal K1.active 0->1
+t=7 signal K2.active 0->1
+t=7 load K1.coil off
+t=7 load K2.coil off
+t=7 fault OC-ELEC-001 started L1,L3
+t=8 signal K1.active 1->0
+t=8 signal K2.active 1->0
+t=8 fault OC-ELEC-001 cleared L1,L3

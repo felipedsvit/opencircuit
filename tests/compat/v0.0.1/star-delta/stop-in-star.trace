@@ -1,0 +1,19 @@
+# opencircuit trace v1
+# fingerprint 4bd23e4e1f474b44
+# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=halt
+t=2 input S1.pressed 0->1
+t=2 load KM3.coil on
+t=2 load KT1.coil on
+t=3 signal KM3.active 0->1
+t=3 load KM1.coil on
+t=4 signal KM1.active 0->1
+t=4 load M1.motor forward-star
+t=6 input S1.pressed 1->0
+t=8 input S0.pressed 0->1
+t=8 load KM1.coil off
+t=8 load KM3.coil off
+t=8 load KT1.coil off
+t=9 input S0.pressed 1->0
+t=9 signal KM1.active 1->0
+t=9 signal KM3.active 1->0
+t=9 load M1.motor off
