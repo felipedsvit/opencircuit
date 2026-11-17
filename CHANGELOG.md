@@ -83,6 +83,11 @@ here when it lands.
   operations is left out and counted in the status bar. The reader of edit
   files moved from the command line to `circuit_commands::script`, so that
   the window shares it.
+- **Wire routing on request** (Modify > Route the selected wires, `route` on
+  the command line of the window, `{ "op": "route" }` in edit files): each
+  selected wire gets an orthogonal route with few bends around symbols,
+  junctions and terminals, without running along another wire; one undo
+  takes it back.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

@@ -114,6 +114,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "Turn the selected symbols a quarter turn clockwise.",
     },
     CommandSpec {
+        name: "route",
+        aliases: &[],
+        usage: "route",
+        help: "Give the selected wires an orthogonal route around the symbols.",
+    },
+    CommandSpec {
         name: "save",
         aliases: &[],
         usage: "save",
@@ -369,6 +375,27 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
                 crate::wire_tools::trim(context.doc, context.catalog, wire, at)?
             };
             Ok(vec![Request::Edit(tx)])
+        }
+        "route" => {
+            if !rest.is_empty() {
+                return Err(CommandLineError::Usage(command.usage));
+            }
+            let wires: Vec<circuit_model::WireId> = context
+                .selection
+                .iter()
+                .filter_map(|subject| match subject {
+                    Subject::Wire(id) => Some(*id),
+                    _ => None,
+                })
+                .collect();
+            if wires.is_empty() {
+                return Err(CommandLineError::NothingSelected);
+            }
+            Ok(vec![Request::Edit(crate::route::route(
+                context.doc,
+                context.catalog,
+                &wires,
+            )?)])
         }
         "offset" => {
             let [word] = rest else {

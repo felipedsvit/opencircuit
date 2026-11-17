@@ -50,6 +50,7 @@ mod history;
 pub mod layers;
 pub mod ops;
 pub mod record;
+pub mod route;
 pub mod script;
 pub mod sheets;
 mod sorted;

@@ -413,8 +413,9 @@ Decisions, to be confirmed in #118:
 - [ ] Customizable shortcuts, themes, a collapsible sidebar, toolbars, dockable
   panels, saved workspaces.
 - [ ] Several open projects, in tabs.
-- [ ] Wire routing on request: an orthogonal route around symbols, undone in
-  one step.
+- [x] Wire routing on request: an orthogonal route around symbols, undone in
+  one step (`circuit_commands::route`; Modify > Route the selected wires,
+  `route` on the command line and in edit files; `apps/desktop/tests/route.rs`).
 
 ### M9.3 — Schema version 5 (ADR-0018)
 

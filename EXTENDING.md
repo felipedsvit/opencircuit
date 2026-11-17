@@ -155,6 +155,7 @@ elements with their kind and ID.
 | `unwaive` | `code`, `subject` | takes a waiver away |
 | `renumber` | `sheet` | gives the designators the next numbers in reading order, on every sheet or on the sheet with this number |
 | `renumber_sheets` | | numbers the sheets 1, 2, 3… in reading order of their frames (top to bottom, then left to right); the cross-references follow |
+| `route` | `wires` (names or IDs) | gives each wire an orthogonal route around symbols, junctions and other wires, with few bends; refused when none is found within 20 grid units of its ends |
 | `replace` | `find`, `with`, `designators`, `notes`, `parameters` | replaces `find` (exactly, with its case) by `with` in the designators, the text notes and the text parameters; each kind is on unless set to `false`. Refused as a whole when a designator would be invalid or taken twice, or a value would not fit |
 | `add_text` | `at`, `text`, `anchor`, `as` | a text note (ADR-0015): one line of 1 to 120 characters; `anchor` is `left` (default) or `center` |
 | `set_text` | `text` (name or ID), `to` | changes the words of a note |

@@ -201,6 +201,8 @@ enum Operation {
     Renumber { sheet: Option<u32> },
     /// Number the sheets 1, 2, 3 in reading order of their frames.
     RenumberSheets {},
+    /// Give wires an orthogonal route around symbols, by name or ID.
+    Route { wires: Vec<Value> },
     /// Replace a text in the designators, the text notes and the text
     /// parameters; each kind can be left out.
     Replace {
@@ -266,6 +268,7 @@ impl Operation {
             Self::Renumber { .. } => "renumber",
             Self::RenumberSheets {} => "renumber_sheets",
             Self::Replace { .. } => "replace",
+            Self::Route { .. } => "route",
             Self::AddText { .. } => "add_text",
             Self::SetText { .. } => "set_text",
             Self::AddLayer { .. } => "add_layer",
@@ -884,6 +887,14 @@ impl Run<'_> {
                 self.commit(&tx)
             }
             Operation::RenumberSheets {} => self.commit(&sheets::renumber_sheets(&self.doc)),
+            Operation::Route { wires } => {
+                let ids = wires
+                    .iter()
+                    .map(|wire| self.named_or_id(wire, "wire").map(WireId))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let tx = crate::route::route(&self.doc, self.catalog, &ids).map_err(refused)?;
+                self.commit(&tx)
+            }
             Operation::Replace {
                 find,
                 with,
@@ -1505,6 +1516,27 @@ mod tests {
         history.undo(&mut doc).unwrap();
         assert_eq!(doc.devices, start.devices);
         assert_eq!(doc.wires, start.wires);
+    }
+
+    #[test]
+    fn route_gives_a_named_wire_a_way_around_a_symbol() {
+        let doc = run(
+            fresh(),
+            r#"[
+              { "op": "junction", "at": [0, 0], "as": "left" },
+              { "op": "junction", "at": [20, 0], "as": "right" },
+              { "op": "place", "model": "lamp.generic", "symbol": "lamp", "at": [10, 0], "rotation": 90 },
+              { "op": "connect", "from": { "junction": "left" }, "to": { "junction": "right" },
+                "via": [], "as": "line" },
+              { "op": "route", "wires": ["line"] }
+            ]"#,
+        )
+        .unwrap()
+        .doc;
+
+        assert!(!doc.wires[0].route.is_empty());
+        let (_, message) = refused(run(fresh(), r#"[ { "op": "route", "wires": [99] } ]"#));
+        assert!(message.contains("does not exist"), "{message}");
     }
 
     #[test]

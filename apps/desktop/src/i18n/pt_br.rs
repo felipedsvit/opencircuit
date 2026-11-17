@@ -49,6 +49,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "An open-source editor and simulator for industrial control circuits.",
         "Um editor e simulador de código aberto para circuitos de comando industriais.",
     ),
+    (
+        "An orthogonal route around the symbols, undone in one step",
+        "Uma rota ortogonal em volta dos símbolos, desfeita em um passo",
+    ),
     ("Arrows", "Setas"),
     ("As PDF…", "Como PDF…"),
     ("As SVG…", "Como SVG…"),
@@ -325,6 +329,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Rotate all", "Girar todos"),
     ("Rotate selection", "Girar seleção"),
     ("Rotate symbol", "Girar símbolo"),
+    ("Route the selected wires", "Rotear os fios selecionados"),
     ("Run", "Executar"),
     ("Runtime faults", "Falhas de execução"),
     ("SVG drawing", "Desenho SVG"),

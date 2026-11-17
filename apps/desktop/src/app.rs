@@ -2154,6 +2154,35 @@ impl DesktopApp {
                             self.commit(request);
                         }
                     }
+                    let wires: Vec<circuit_model::WireId> = self
+                        .editor
+                        .selection()
+                        .iter()
+                        .filter_map(|subject| match subject {
+                            Subject::Wire(id) => Some(*id),
+                            _ => None,
+                        })
+                        .collect();
+                    if ui
+                        .add_enabled(
+                            editing && !wires.is_empty(),
+                            egui::Button::new(tr("Route the selected wires")),
+                        )
+                        .on_hover_text(tr(
+                            "An orthogonal route around the symbols, undone in one step",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        if let Some(session) = &self.session {
+                            let request = circuit_commands::route::route(
+                                session.document(),
+                                session.catalog(),
+                                &wires,
+                            );
+                            self.commit(request);
+                        }
+                    }
                     let recording = self.macro_steps().is_some();
                     if !recording
                         && ui
