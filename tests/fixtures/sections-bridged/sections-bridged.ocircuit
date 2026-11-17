@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "next_id": 44,
   "project": {
     "name": "Fixture - supply sections bridged",

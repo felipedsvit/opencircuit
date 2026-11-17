@@ -395,6 +395,7 @@ mod tests {
                 version: 1,
             },
             params: BTreeMap::new(),
+            info: None,
         }
     }
 
@@ -422,6 +423,7 @@ mod tests {
             from,
             to,
             route: Vec::new(),
+            number: None,
         }
     }
 

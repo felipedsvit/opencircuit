@@ -7,6 +7,7 @@
 //! | From | To | Change |
 //! | --- | --- | --- |
 //! | 1 | 2 | sheets (ADR-0011) and the title-block fields of `project` |
+//! | 2 | 3 | nothing is added: the new fields of ADR-0014 are all optional |
 
 use circuit_model::CURRENT_SCHEMA_VERSION;
 use serde_json::Value;
@@ -17,7 +18,7 @@ use crate::ProjectError;
 pub(crate) type Migration = (u32, fn(Value) -> Result<Value, String>);
 
 /// Migrations of the shipped schema versions, in ascending order.
-const MIGRATIONS: &[Migration] = &[(1, v1_to_v2)];
+const MIGRATIONS: &[Migration] = &[(1, v1_to_v2), (2, v2_to_v3)];
 
 /// Version 2 adds `sheets` (none: the drawing stays one page sized to its
 /// content) and the title-block fields `author`, `company`, `revision` and
@@ -42,6 +43,39 @@ fn v1_to_v2(mut value: Value) -> Result<Value, String> {
     }
     document.insert("sheets".to_owned(), Value::Array(Vec::new()));
     document.insert("schema_version".to_owned(), Value::from(2_u32));
+    Ok(value)
+}
+
+/// Version 3 adds `Wire.number`, `Device.info`, `project.wire_numbering` and
+/// `waivers` (ADR-0014). Each is optional and omitted when empty, so a
+/// version 2 document is already a valid version 3 document and only the
+/// version changes. A version 2 document that already has one of them is
+/// refused rather than reinterpreted.
+fn v2_to_v3(mut value: Value) -> Result<Value, String> {
+    let document = value
+        .as_object_mut()
+        .ok_or("the document is not a JSON object")?;
+    if document.contains_key("waivers") {
+        return Err("a version 2 document has no `waivers`".to_owned());
+    }
+    let has = |collection: Option<&Value>, field: &str| {
+        collection
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| item.get(field).is_some()))
+    };
+    if has(document.get("wires"), "number") {
+        return Err("a version 2 wire has no `number`".to_owned());
+    }
+    if has(document.get("devices"), "info") {
+        return Err("a version 2 device has no `info`".to_owned());
+    }
+    if document
+        .get("project")
+        .is_some_and(|project| project.get("wire_numbering").is_some())
+    {
+        return Err("a version 2 `project` has no `wire_numbering`".to_owned());
+    }
+    document.insert("schema_version".to_owned(), Value::from(3_u32));
     Ok(value)
 }
 
@@ -203,6 +237,38 @@ mod tests {
                 schema_version(&value),
                 Err(ProjectError::MissingSchemaVersion),
                 "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn version_2_only_changes_its_version_to_become_version_3() {
+        let v2 = json!({
+            "schema_version": 2,
+            "project": { "name": "demo" },
+            "devices": [{ "id": 1 }],
+            "wires": [{ "id": 2 }]
+        });
+        let mut expected = v2.clone();
+        expected["schema_version"] = json!(3);
+
+        assert_eq!(migrate(v2), Ok(expected));
+    }
+
+    #[test]
+    fn version_2_with_a_version_3_field_is_refused() {
+        for document in [
+            json!({ "schema_version": 2, "waivers": [] }),
+            json!({ "schema_version": 2, "wires": [{ "id": 1, "number": "5" }] }),
+            json!({ "schema_version": 2, "devices": [{ "id": 1, "info": {} }] }),
+            json!({ "schema_version": 2, "project": { "wire_numbering": null } }),
+        ] {
+            assert!(
+                matches!(
+                    migrate(document.clone()),
+                    Err(ProjectError::Migration { from: 2, .. })
+                ),
+                "{document}"
             );
         }
     }

@@ -8,8 +8,8 @@
 use std::cmp::{Ordering, Reverse};
 use std::fmt;
 
-use serde::Serialize;
 use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
 
 use crate::ids::{DeviceId, JunctionId, SheetId, SupplyId, SymbolId, WireId};
 use crate::schematic::PinRef;
@@ -223,7 +223,7 @@ impl Serialize for DiagnosticCode {
 }
 
 /// The document element a diagnostic is about.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Subject {
     /// The document as a whole.

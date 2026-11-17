@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use circuit_model::builder::pin;
 use circuit_model::{
-    ComponentCatalog, Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef,
-    ParamValue, PhaseSequence, PinRef, ProjectMeta, QuarterTurn, ReferenceDesignator,
+    ComponentCatalog, Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId,
+    ModelRef, ParamValue, PhaseSequence, PinRef, ProjectMeta, QuarterTurn, ReferenceDesignator,
     SchematicBuilder, SupplyId, SupplyKind, SupplyProfile, SymbolId, SymbolInstance, SymbolKey,
-    TerminalKey, Wire, WireId,
+    TerminalKey, Waiver, Wire, WireId, WireNumbering,
 };
 use proptest::prelude::*;
 
@@ -14,7 +14,7 @@ use super::*;
 /// The canonical text of [`sample`]. It fixes field order, indentation,
 /// explicit nulls, line endings and the final newline.
 const SAMPLE: &str = r#"{
-  "schema_version": 2,
+  "schema_version": 3,
   "next_id": 6,
   "project": {
     "name": "demo",
@@ -204,7 +204,7 @@ fn sample_with(from: &str, to: &str) -> String {
 fn schema_message(result: Result<Schematic, ProjectError>) -> String {
     match result {
         Err(ProjectError::Schema {
-            version: 2,
+            version: 3,
             message,
         }) => message,
         other => panic!("expected a schema error, got {other:?}"),
@@ -212,7 +212,7 @@ fn schema_message(result: Result<Schematic, ProjectError>) -> String {
 }
 
 #[test]
-fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_2() {
+fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_3() {
     let loaded = from_str(SAMPLE_V1).unwrap();
 
     assert_eq!(loaded, sample());
@@ -234,6 +234,121 @@ fn a_version_1_file_that_already_has_version_2_fields_is_refused() {
     assert!(matches!(
         from_str(&with_author),
         Err(ProjectError::Migration { from: 1, .. })
+    ));
+}
+
+#[test]
+fn a_version_2_file_loads_and_saves_as_version_3_with_only_the_version_changed() {
+    let v2 = sample_with("\"schema_version\": 3", "\"schema_version\": 2");
+
+    let loaded = from_str(&v2).unwrap();
+
+    assert_eq!(loaded, sample());
+    assert_eq!(to_string(&loaded).unwrap(), SAMPLE);
+}
+
+/// A document that uses every field of ADR-0014.
+fn documented() -> Schematic {
+    let mut doc = sample();
+    doc.project.wire_numbering = Some(WireNumbering {
+        prefix: "W".to_owned(),
+        start: 100,
+        step: std::num::NonZeroU32::new(10).unwrap(),
+        per_sheet: true,
+    });
+    doc.devices[0].info = Some(DeviceInfo {
+        manufacturer: Some("Acme".to_owned()),
+        part_no: Some("A-1".to_owned()),
+        ..DeviceInfo::default()
+    });
+    doc.wires[0].number = Some("12".to_owned());
+    doc.waivers = ["OC-STR-019", "OC-STR-018"]
+        .map(|code| Waiver {
+            code: code.to_owned(),
+            subject: circuit_model::Subject::Wire(WireId(5)),
+            reason: "checked on site".to_owned(),
+        })
+        .to_vec();
+    doc
+}
+
+#[test]
+fn documentation_fields_round_trip_in_canonical_form() {
+    let mut doc = documented();
+    doc.sort_canonical();
+
+    let text = to_string(&doc).unwrap();
+
+    assert_eq!(from_str(&text).unwrap(), doc);
+    assert_eq!(to_string(&from_str(&text).unwrap()).unwrap(), text);
+    for field in ["wire_numbering", "\"info\"", "\"number\"", "\"waivers\""] {
+        assert!(text.contains(field), "{field}");
+    }
+}
+
+#[test]
+fn a_document_that_uses_no_documentation_field_writes_none_of_them() {
+    for field in ["wire_numbering", "\"info\"", "\"number\"", "\"waivers\""] {
+        assert!(!SAMPLE.contains(field), "{field}");
+    }
+}
+
+#[test]
+fn waivers_are_saved_sorted_by_code_and_subject() {
+    let text = to_string(&documented()).unwrap();
+
+    let first = text.find("OC-STR-018");
+    let second = text.find("OC-STR-019");
+    assert!(first.is_some() && first < second, "{text}");
+}
+
+#[test]
+fn a_numbering_step_of_zero_and_unknown_documentation_fields_are_refused() {
+    let numbered = to_string(&documented()).unwrap();
+    for (from, to) in [
+        ("\"step\": 10", "\"step\": 0"),
+        ("\"part_no\": \"A-1\"", "\"price\": 1"),
+        ("\"start\": 100", "\"start\": 1.5"),
+    ] {
+        assert!(numbered.contains(from), "{from}");
+        let broken = numbered.replacen(from, to, 1);
+        assert!(
+            matches!(from_str(&broken), Err(ProjectError::Schema { .. })),
+            "{to}"
+        );
+    }
+}
+
+#[test]
+fn documentation_texts_and_waivers_have_limits() {
+    let mut doc = documented();
+    doc.waivers[0].reason = "x".repeat(MAX_TEXT_BYTES + 1);
+    assert!(matches!(
+        to_string(&doc),
+        Err(ProjectError::LimitExceeded {
+            what: "waiver reason",
+            ..
+        })
+    ));
+
+    let mut doc = documented();
+    doc.project.wire_numbering.as_mut().unwrap().prefix = "P".repeat(17);
+    assert!(matches!(
+        to_string(&doc),
+        Err(ProjectError::LimitExceeded {
+            what: "wire number prefix",
+            ..
+        })
+    ));
+
+    let mut doc = documented();
+    doc.wires[0].number = Some("n".repeat(MAX_TEXT_BYTES + 1));
+    assert!(matches!(
+        to_string(&doc),
+        Err(ProjectError::LimitExceeded {
+            what: "wire number",
+            ..
+        })
     ));
 }
 
@@ -405,13 +520,13 @@ fn negative_or_oversized_id_is_rejected() {
 
 #[test]
 fn newer_schema_is_refused_without_reading_the_rest() {
-    let text = r#"{ "schema_version": 3, "something": { "new": true } }"#;
+    let text = r#"{ "schema_version": 4, "something": { "new": true } }"#;
 
     assert_eq!(
         from_str(text),
         Err(ProjectError::NewerSchema {
-            found: 3,
-            supported: 2
+            found: 4,
+            supported: 3
         })
     );
 }
@@ -596,6 +711,7 @@ fn device() -> impl Strategy<Value = Device> {
             reference: ReferenceDesignator(reference),
             model: ModelRef { id: model, version },
             params: params.into_iter().collect::<BTreeMap<_, _>>(),
+            info: None,
         })
 }
 
@@ -637,6 +753,7 @@ fn wire() -> impl Strategy<Value = Wire> {
             from,
             to,
             route,
+            number: None,
         })
 }
 
@@ -678,6 +795,7 @@ fn schematic() -> impl Strategy<Value = Schematic> {
                         company: author.clone(),
                         revision: author.clone(),
                         date: author,
+                        wire_numbering: None,
                     },
                     sheets,
                     supplies,
@@ -685,6 +803,7 @@ fn schematic() -> impl Strategy<Value = Schematic> {
                     symbols,
                     junctions,
                     wires,
+                    waivers: Vec::new(),
                 }
             },
         )

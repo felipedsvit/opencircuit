@@ -1180,6 +1180,7 @@ mod hostile {
                 reference: ReferenceDesignator(reference),
                 model: ModelRef { id: model, version },
                 params,
+                info: None,
             })
     }
 
@@ -1255,7 +1256,7 @@ mod hostile {
                     author: None,
                     company: None,
                     revision: None,
-                    date: None,
+                    date: None, wire_numbering: None,
                 },
                 sheets: Vec::new(),
                 supplies,
@@ -1271,9 +1272,9 @@ mod hostile {
                         id: WireId(id),
                         from,
                         to,
-                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(),
+                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(), number: None,
                     })
-                    .collect(),
+                    .collect(), waivers: Vec::new(),
             }
         }
     }

@@ -149,7 +149,8 @@ pub fn remove_sheet(doc: &Schematic, id: SheetId) -> Result<Transaction, Command
 }
 
 /// Replace the project information: the name, and the author, company,
-/// revision and date of the title block. The grid unit is kept.
+/// revision and date of the title block. The grid unit and the wire
+/// numbering rule are kept.
 ///
 /// # Errors
 ///
@@ -170,6 +171,7 @@ pub fn set_project_info(
         company: company.map(str::to_owned),
         revision: revision.map(str::to_owned),
         date: date.map(str::to_owned),
+        wire_numbering: doc.project.wire_numbering.clone(),
     };
     let mut tx = Transaction::new("Edit project information", doc.next_id);
     if info != doc.project {

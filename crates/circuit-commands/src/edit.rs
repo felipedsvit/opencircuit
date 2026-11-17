@@ -6,9 +6,9 @@
 //! Whole-document rules are checked once per transaction.
 
 use circuit_model::{
-    Device, DeviceId, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue, ProjectMeta,
-    QuarterTurn, ReferenceDesignator, Schematic, Sheet, SheetId, Subject, SupplyId, SupplyProfile,
-    SymbolId, SymbolInstance, Wire, WireId,
+    Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue,
+    ProjectMeta, QuarterTurn, ReferenceDesignator, Schematic, Sheet, SheetId, Subject, SupplyId,
+    SupplyProfile, SymbolId, SymbolInstance, Waiver, Wire, WireId,
 };
 
 use crate::error::CommandError;
@@ -93,6 +93,30 @@ pub enum Edit {
         wire: WireId,
         /// The new waypoints.
         route: Vec<GridPoint>,
+    },
+    /// Set (`Some`) or clear (`None`) the override of the generated number of
+    /// a wire.
+    SetWireNumber {
+        /// The wire.
+        wire: WireId,
+        /// The new override, or `None` to use the generated number.
+        number: Option<String>,
+    },
+    /// Set (`Some`) or clear (`None`) the catalog data of a device.
+    SetDeviceInfo {
+        /// The device.
+        device: DeviceId,
+        /// The new catalog data, or `None` for none.
+        info: Option<DeviceInfo>,
+    },
+    /// Add a waiver; there is at most one for a code and a subject.
+    InsertWaiver(Waiver),
+    /// Remove the waiver of a code and a subject.
+    RemoveWaiver {
+        /// The diagnostic code.
+        code: String,
+        /// The element the diagnostic is about.
+        subject: Subject,
     },
 }
 
@@ -315,8 +339,49 @@ impl Edit {
                     route: previous,
                 })
             }
+            Self::SetWireNumber { wire, number } => {
+                let found = sorted::find_mut(&mut doc.wires, &wire, |w| w.id)
+                    .ok_or_else(|| missing(Subject::Wire(wire)))?;
+                Ok(Self::SetWireNumber {
+                    wire,
+                    number: std::mem::replace(&mut found.number, number),
+                })
+            }
+            Self::SetDeviceInfo { device, info } => {
+                let found = sorted::find_mut(&mut doc.devices, &device, |d| d.id)
+                    .ok_or_else(|| missing(Subject::Device(device)))?;
+                Ok(Self::SetDeviceInfo {
+                    device,
+                    info: std::mem::replace(&mut found.info, info),
+                })
+            }
+            Self::InsertWaiver(waiver) => {
+                let at = waiver_position(doc, &waiver.code, &waiver.subject);
+                match at {
+                    Ok(_) => Err(CommandError::AlreadyExists(waiver.subject)),
+                    Err(at) => {
+                        let inverse = Self::RemoveWaiver {
+                            code: waiver.code.clone(),
+                            subject: waiver.subject.clone(),
+                        };
+                        doc.waivers.insert(at, waiver);
+                        Ok(inverse)
+                    }
+                }
+            }
+            Self::RemoveWaiver { code, subject } => match waiver_position(doc, &code, &subject) {
+                Ok(at) => Ok(Self::InsertWaiver(doc.waivers.remove(at))),
+                Err(_) => Err(missing(subject)),
+            },
         }
     }
+}
+
+/// Where the waiver of a code and a subject is, or would be, in the sorted
+/// list of waivers.
+fn waiver_position(doc: &Schematic, code: &str, subject: &Subject) -> Result<usize, usize> {
+    doc.waivers
+        .binary_search_by(|waiver| waiver.sort_key().cmp(&(code, subject)))
 }
 
 #[cfg(test)]
@@ -426,15 +491,110 @@ mod tests {
                 from: pin(symbol.id, "p1"),
                 to: Endpoint::Junction(junction.id),
                 route: Vec::new(),
+                number: None,
             }),
             Edit::RemoveWire(wire.id),
             Edit::SetRoute {
                 wire: wire.id,
                 route: vec![GridPoint::new(0, 3)],
             },
+            Edit::SetWireNumber {
+                wire: wire.id,
+                number: Some("17".to_owned()),
+            },
+            Edit::SetDeviceInfo {
+                device: device.id,
+                info: Some(DeviceInfo {
+                    part_no: Some("A-1".to_owned()),
+                    ..DeviceInfo::default()
+                }),
+            },
+            Edit::InsertWaiver(waiver("OC-STR-018", Subject::Wire(wire.id))),
         ] {
             round_trip(edit);
         }
+    }
+
+    fn waiver(code: &str, subject: Subject) -> Waiver {
+        Waiver {
+            code: code.to_owned(),
+            subject,
+            reason: "accepted".to_owned(),
+        }
+    }
+
+    #[test]
+    fn waivers_stay_sorted_are_unique_and_are_removed_by_code_and_subject() {
+        let mut edited = doc();
+        let original = edited.clone();
+        let wire = |id| Subject::Wire(WireId(id));
+        let mut inverses = Vec::new();
+        for (code, subject) in [
+            ("OC-STR-019", wire(1)),
+            ("OC-STR-018", wire(9)),
+            ("OC-STR-018", wire(2)),
+        ] {
+            inverses.push(
+                Edit::InsertWaiver(waiver(code, subject))
+                    .apply(&mut edited)
+                    .unwrap(),
+            );
+        }
+        let order: Vec<_> = edited
+            .waivers
+            .iter()
+            .map(|w| (w.code.as_str(), w.subject.clone()))
+            .collect();
+        assert_eq!(
+            order,
+            [
+                ("OC-STR-018", wire(2)),
+                ("OC-STR-018", wire(9)),
+                ("OC-STR-019", wire(1)),
+            ]
+        );
+        assert!(edited.is_canonical());
+
+        assert!(matches!(
+            Edit::InsertWaiver(waiver("OC-STR-018", wire(9))).apply(&mut edited),
+            Err(CommandError::AlreadyExists(_))
+        ));
+        assert!(matches!(
+            Edit::RemoveWaiver {
+                code: "OC-STR-018".to_owned(),
+                subject: wire(5)
+            }
+            .apply(&mut edited),
+            Err(CommandError::Missing(_))
+        ));
+        assert_eq!(edited.waivers.len(), 3);
+
+        for inverse in inverses.into_iter().rev() {
+            inverse.apply(&mut edited).unwrap();
+        }
+        assert_eq!(edited, original);
+    }
+
+    #[test]
+    fn a_number_and_device_info_of_something_missing_are_refused() {
+        let mut edited = doc();
+
+        assert!(matches!(
+            Edit::SetWireNumber {
+                wire: WireId(900),
+                number: None
+            }
+            .apply(&mut edited),
+            Err(CommandError::Missing(Subject::Wire(_)))
+        ));
+        assert!(matches!(
+            Edit::SetDeviceInfo {
+                device: DeviceId(900),
+                info: None
+            }
+            .apply(&mut edited),
+            Err(CommandError::Missing(Subject::Device(_)))
+        ));
     }
 
     #[test]
@@ -577,6 +737,7 @@ mod tests {
                 from: Endpoint::Junction(junction),
                 to: Endpoint::Junction(junction),
                 route: Vec::new(),
+                number: None,
             })
             .apply(&mut edited),
             Err(CommandError::SelfLoop)
@@ -594,6 +755,7 @@ mod tests {
                 from: Endpoint::Junction(junction),
                 to: pin(SymbolId(77), "p1"),
                 route: Vec::new(),
+                number: None,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Symbol(SymbolId(77))))
