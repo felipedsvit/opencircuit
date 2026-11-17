@@ -127,6 +127,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Export drawing", "Exportar desenho"),
     ("Export drawing as PDF…", "Exportar desenho como PDF…"),
     ("Export drawing as SVG…", "Exportar desenho como SVG…"),
+    ("Extend wire end", "Estender ponta do fio"),
     ("F", "F"),
     ("F2", "F2"),
     (
@@ -241,6 +242,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("PDF document", "Documento PDF"),
     ("PDF…", "PDF…"),
     ("Page {0} of {1}", "Página {0} de {1}"),
+    ("Parallel copy of the wires", "Cópia paralela dos fios"),
     ("Parameters", "Parâmetros"),
     ("Parameters of {0} {1}", "Parâmetros de {0} {1}"),
     ("Part no", "Nº da peça"),
@@ -390,6 +392,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Trace the net of the selection",
         "Rastrear a rede da seleção",
     ),
+    ("Trim wire here", "Aparar fio aqui"),
     (
         "Type a point as x,y or @dx,dy.",
         "Digite um ponto como x,y ou @dx,dy.",

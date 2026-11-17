@@ -48,6 +48,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "Delete the selection.",
     },
     CommandSpec {
+        name: "extend",
+        aliases: &[],
+        usage: "extend x,y",
+        help: "Extend the free wire end at x,y to the next terminal, junction or wire.",
+    },
+    CommandSpec {
         name: "help",
         aliases: &["?"],
         usage: "help [command]",
@@ -70,6 +76,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &["m"],
         usage: "move dx,dy",
         help: "Move the selection by a number of grid units.",
+    },
+    CommandSpec {
+        name: "offset",
+        aliases: &[],
+        usage: "offset dx,dy",
+        help: "Copy the selected wires alongside, moved by dx,dy, connected to nothing.",
     },
     CommandSpec {
         name: "parts",
@@ -130,6 +142,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &[],
         usage: "text [x,y words]",
         help: "Choose the text tool, or add a note with the words at a point.",
+    },
+    CommandSpec {
+        name: "trim",
+        aliases: &[],
+        usage: "trim x,y",
+        help: "Cut the wire at x,y and remove the part toward its nearer end.",
     },
     CommandSpec {
         name: "undo",
@@ -338,6 +356,43 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
         "place" => place(rest, context),
         "move" => move_selection(rest, context),
         "renumber" => renumber_designators(rest, context),
+        "trim" | "extend" => {
+            let [word] = rest else {
+                return Err(CommandLineError::Usage(command.usage));
+            };
+            let at = point(word)?;
+            let tx = if command.name == "extend" {
+                crate::wire_tools::extend(context.doc, context.catalog, at)?
+            } else {
+                let wire = crate::wire_tools::wire_at(context.doc, context.catalog, at)
+                    .ok_or(crate::CommandError::NothingToReach(at))?;
+                crate::wire_tools::trim(context.doc, context.catalog, wire, at)?
+            };
+            Ok(vec![Request::Edit(tx)])
+        }
+        "offset" => {
+            let [word] = rest else {
+                return Err(CommandLineError::Usage(command.usage));
+            };
+            let delta = point(word)?;
+            let wires: Vec<circuit_model::WireId> = context
+                .selection
+                .iter()
+                .filter_map(|subject| match subject {
+                    Subject::Wire(id) => Some(*id),
+                    _ => None,
+                })
+                .collect();
+            if wires.is_empty() {
+                return Err(CommandLineError::NothingSelected);
+            }
+            Ok(vec![Request::Edit(crate::wire_tools::parallel_copy(
+                context.doc,
+                context.catalog,
+                &wires,
+                (delta.x, delta.y),
+            )?)])
+        }
         "sheets" => match rest {
             ["renumber"] => Ok(vec![Request::Edit(crate::sheets::renumber_sheets(
                 context.doc,
@@ -888,6 +943,41 @@ mod tests {
                 "{line}"
             );
         }
+    }
+
+    #[test]
+    fn trim_extend_and_offset_ask_for_one_transaction_each() {
+        let catalog = ComponentCatalog::builtin();
+        let mut b = SchematicBuilder::new("wires");
+        let left = b.junction(GridPoint::new(0, 0)).unwrap();
+        let right = b.junction(GridPoint::new(10, 0)).unwrap();
+        let wire = b.wire(left, right).unwrap();
+        let top = b.junction(GridPoint::new(20, -5)).unwrap();
+        let bottom = b.junction(GridPoint::new(20, 5)).unwrap();
+        b.wire(top, bottom).unwrap();
+        let doc = b.finish();
+        let none = BTreeSet::new();
+        let one_edit = |requests: Vec<Request>| matches!(&requests[..], [Request::Edit(tx)] if !tx.edits.is_empty());
+
+        assert!(one_edit(
+            run("trim 8,0", &context(&doc, &catalog, &none)).unwrap()
+        ));
+        assert!(one_edit(
+            run("extend 10,0", &context(&doc, &catalog, &none)).unwrap()
+        ));
+        assert!(run("trim 5,5", &context(&doc, &catalog, &none)).is_err());
+        assert_eq!(
+            run("offset 0,3", &context(&doc, &catalog, &none)),
+            Err(CommandLineError::NothingSelected)
+        );
+        let selected = BTreeSet::from([Subject::Wire(wire)]);
+        assert!(one_edit(
+            run("offset 0,3", &context(&doc, &catalog, &selected)).unwrap()
+        ));
+        assert_eq!(
+            run("trim", &context(&doc, &catalog, &none)),
+            Err(CommandLineError::Usage("trim x,y"))
+        );
     }
 
     #[test]

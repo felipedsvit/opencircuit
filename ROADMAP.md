@@ -404,7 +404,9 @@ Decisions, to be confirmed in #118:
   files); editing every common field of a selection (catalog data of devices
   of any model, besides the parameters of one model); editing a label on the
   canvas (F2) (`apps/desktop/tests/find_replace.rs`).
-- [ ] Wire tools: trim, extend and a parallel copy.
+- [x] Wire tools: trim, extend and a parallel copy (`circuit_commands::wire_tools`;
+  `trim`, `extend` and `offset` on the command line of the window and in the
+  context menu of the drawing; `apps/desktop/tests/wire_tools.rs`).
 - [ ] Macros: record the edits of a session as an edit file and play it back.
 - [ ] Customizable shortcuts, themes, a collapsible sidebar, toolbars, dockable
   panels, saved workspaces.

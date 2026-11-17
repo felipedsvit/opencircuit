@@ -52,6 +52,7 @@ pub mod sheets;
 mod sorted;
 mod transaction;
 pub mod waivers;
+pub mod wire_tools;
 
 #[cfg(test)]
 mod tests;

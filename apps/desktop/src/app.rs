@@ -267,6 +267,8 @@ pub struct DesktopApp {
     point_entry: Option<(String, GridPoint, egui::Pos2, bool)>,
     /// The print preview (File > Print preview).
     print_preview: crate::print_preview::PrintPreview,
+    /// The grid point the context menu was opened at.
+    context_point: Option<GridPoint>,
 }
 
 impl DesktopApp {
@@ -2585,6 +2587,59 @@ impl DesktopApp {
         );
     }
 
+    /// The wire tools the context menu offers at its point, in edit mode:
+    /// trim the wire there, extend a free end there, and copy the selected
+    /// wires alongside, two grid units across their first segment.
+    fn wire_tool_requests(&self) -> Vec<(&'static str, inspector::Request)> {
+        use circuit_commands::wire_tools;
+        let (Some(session), Some(at)) = (&self.session, self.context_point) else {
+            return Vec::new();
+        };
+        if self.mode != Mode::Edit {
+            return Vec::new();
+        }
+        let (doc, catalog) = (session.document(), session.catalog());
+        let mut offered = Vec::new();
+        if let Some(wire) = wire_tools::wire_at(doc, catalog, at) {
+            let trimmed = wire_tools::trim(doc, catalog, wire, at);
+            if trimmed.is_ok() {
+                offered.push((tr("Trim wire here"), trimmed));
+            }
+        }
+        let extended = wire_tools::extend(doc, catalog, at);
+        if extended.is_ok() {
+            offered.push((tr("Extend wire end"), extended));
+        }
+        let wires: Vec<circuit_model::WireId> = self
+            .editor
+            .selection()
+            .iter()
+            .filter_map(|subject| match subject {
+                Subject::Wire(id) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        if let Some(first) = wires.first() {
+            let layout = LayoutIndex::new(doc, catalog);
+            let across = doc
+                .wires
+                .iter()
+                .find(|wire| wire.id == *first)
+                .and_then(|wire| layout.wire_polyline(wire))
+                .and_then(|path| match path.get(..2) {
+                    Some([a, b]) if a.y == b.y => Some((0, 2)),
+                    Some(_) => Some((2, 0)),
+                    None => None,
+                })
+                .unwrap_or((0, 2));
+            offered.push((
+                tr("Parallel copy of the wires"),
+                wire_tools::parallel_copy(doc, catalog, &wires, across),
+            ));
+        }
+        offered
+    }
+
     /// Keep the view the drawing rested at, so that Previous view can go
     /// back to it: a zoom with the wheel or a pan with the pointer counts once,
     /// when it ends.
@@ -2714,6 +2769,7 @@ impl DesktopApp {
         if let Some(at) = events.context {
             let [left, top] = events.origin;
             self.context_menu = Some(egui::pos2(left + at[0], top + at[1]));
+            self.context_point = self.camera.to_grid(at);
             // A click on something that is not selected selects it, so the
             // menu acts on what was clicked.
             if self.mode == Mode::Edit
@@ -2733,6 +2789,8 @@ impl DesktopApp {
         let mut chosen: Option<Key> = None;
         let mut fit = false;
         let mut label = false;
+        let wire_tools = self.wire_tool_requests();
+        let mut wire_tool: Option<inspector::Request> = None;
         let area = egui::Area::new(ui.scope_id().with(egui::IdSalt::new("context menu")))
             .order(egui::Order::Foreground)
             .fixed_pos(at)
@@ -2761,6 +2819,11 @@ impl DesktopApp {
                     {
                         label = true;
                     }
+                    for (text, request) in wire_tools {
+                        if ui.button(text).clicked() {
+                            wire_tool = Some(request);
+                        }
+                    }
                     ui.separator();
                     if ui.button(tr("Zoom to the whole drawing")).clicked() {
                         fit = true;
@@ -2769,8 +2832,11 @@ impl DesktopApp {
             });
         // The click that opened the menu is not one that closes it.
         let outside = events.context.is_none() && area.response.clicked_elsewhere();
-        if chosen.is_some() || fit || label || outside {
+        if chosen.is_some() || fit || label || wire_tool.is_some() || outside {
             self.context_menu = None;
+        }
+        if let Some(request) = wire_tool {
+            self.commit(request);
         }
         if label {
             self.edit_label();

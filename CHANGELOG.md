@@ -70,6 +70,12 @@ here when it lands.
 - **Export of several projects**: `opencircuit export a.ocircuit b.ocircuit
   --output-dir out --to pdf` writes `out/a.pdf` and `out/b.pdf`; one that fails
   is reported and the others are written (exit code 1).
+- **Wire tools** (context menu of the drawing in edit mode, and the command
+  line of the window): *trim* cuts a wire at a point and removes the part
+  toward its nearer end (`trim x,y`); *extend* runs a free wire end along its
+  last segment to the next terminal, junction or wire and connects it
+  (`extend x,y`); *parallel copy* copies the selected wires alongside,
+  connected to nothing (`offset dx,dy`). Each is one undoable step.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

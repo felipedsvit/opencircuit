@@ -582,7 +582,7 @@ fn subject_of(endpoint: &Endpoint) -> Subject {
 
 /// The endpoint and position of an anchor, adding the edits that split a
 /// wire when the anchor is in the middle of one.
-fn resolve(
+pub(crate) fn resolve(
     doc: &Schematic,
     layout: &LayoutIndex<'_>,
     anchor: &Anchor,

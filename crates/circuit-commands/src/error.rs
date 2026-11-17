@@ -65,6 +65,9 @@ pub enum CommandError {
     /// The point where a wire should be split is not on it.
     #[error("the point is not on wire {0}")]
     NotOnWire(circuit_model::WireId),
+    /// No free end of a wire is at the point, or extending it meets nothing.
+    #[error("no free wire end at {0:?} reaches a terminal, junction or wire")]
+    NothingToReach(circuit_model::GridPoint),
     /// A position would leave the coordinate range.
     #[error("the result is beyond the coordinate range")]
     OutOfRange,
