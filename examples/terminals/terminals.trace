@@ -1,0 +1,11 @@
+# opencircuit trace v1
+# fingerprint 35a919e3c06c784f
+# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=halt
+t=2 input S1.pressed 0->1
+t=2 load K1.coil on
+t=3 signal K1.active 0->1
+t=6 input S1.pressed 1->0
+t=10 input S2.pressed 0->1
+t=10 load K1.coil off
+t=11 signal K1.active 1->0
+t=14 input S2.pressed 1->0

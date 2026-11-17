@@ -10,6 +10,7 @@
 //! | [`bom`] | kind of part: model, manufacturer, part number and description |
 //! | [`wires`] | net with a wire: its number and where it goes |
 //! | [`terminals`] | terminal of every symbol, with its wire and the terminals it meets |
+//! | [`strips`] | terminal of a terminal strip: where each side comes from and goes to |
 //! | [`xref`] | cross-reference exception: a coil with no contact, a contact with no coil, a symbol off the sheets |
 //! | [`io`] | address of the Modbus map (ADR-0009) |
 //! | [`problems`] | diagnostic |
@@ -37,8 +38,8 @@ use std::collections::BTreeMap;
 use circuit_io::IoMap;
 use circuit_model::{
     ComponentCatalog, Device, DeviceClass, DeviceId, Diagnostic, PinRef, Schematic, StaticNets,
-    SymbolId, SymbolInstance, SymbolKind, Table, WaiverIndex, WireNumbers, sheet_at,
-    terminal_label,
+    SymbolId, SymbolInstance, SymbolKind, Table, WaiverIndex, WireNumbers, natural_key as natural,
+    sheet_at, strip_terminals, terminal_label,
 };
 
 /// The reports, by the name the command line uses.
@@ -50,6 +51,8 @@ pub enum Kind {
     Wires,
     /// [`terminals`].
     Terminals,
+    /// [`strips`].
+    Strips,
     /// [`xref`].
     Xref,
     /// [`io`].
@@ -60,10 +63,11 @@ pub enum Kind {
 
 impl Kind {
     /// Every report, in the order the command line lists them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Bom,
         Self::Wires,
         Self::Terminals,
+        Self::Strips,
         Self::Xref,
         Self::Io,
         Self::Problems,
@@ -77,6 +81,7 @@ impl Kind {
             Self::Bom => "bom",
             Self::Wires => "wires",
             Self::Terminals => "terminals",
+            Self::Strips => "strips",
             Self::Xref => "xref",
             Self::Io => "io",
             Self::Problems => "problems",
@@ -88,24 +93,6 @@ impl Kind {
     pub fn parse(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
     }
-}
-
-/// A designator split for natural order: its letters, its number and what
-/// follows the number, so that `K2` sorts before `K10`.
-fn natural(text: &str) -> Natural {
-    let split = text
-        .find(|c: char| c.is_ascii_digit())
-        .unwrap_or(text.len());
-    let prefix = text.get(..split).unwrap_or_default();
-    let rest = text.get(split..).unwrap_or_default();
-    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
-    let number = if digits.is_empty() {
-        0
-    } else {
-        digits.parse::<u64>().unwrap_or(u64::MAX)
-    };
-    let tail = rest.get(digits.len()..).unwrap_or_default();
-    (prefix.to_owned(), number, tail.to_owned())
 }
 
 /// A designator in natural order.
@@ -349,6 +336,68 @@ pub fn terminals(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
                 others,
             ]);
         }
+    }
+    table
+}
+
+/// The terminal plan: one row for every terminal of a strip, by strip and
+/// number, with the number of the wire on each side and the terminals that
+/// side meets. `In` is the first terminal of the symbol (the upper one) and
+/// `Out` the second. The same table is the CSV for a manufacturer's import.
+#[must_use]
+pub fn strips(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
+    let view = View::new(doc, catalog);
+    let nets = StaticNets::build(doc, catalog);
+    let numbers = WireNumbers::build(doc, catalog, &nets);
+
+    let mut table = Table::new(
+        "Terminal plan",
+        &[
+            "Strip", "Terminal", "Device", "In wire", "In from", "Out wire", "Out to",
+        ],
+    );
+    for terminal in strip_terminals(doc, catalog) {
+        let reference = view
+            .devices
+            .get(&terminal.device)
+            .map(|device| device.reference.0.clone())
+            .unwrap_or_default();
+        let side = |key: &str| -> (String, String) {
+            let Some(symbol) = terminal.symbol else {
+                return (String::new(), String::new());
+            };
+            let pin = PinRef {
+                symbol_id: symbol,
+                terminal: circuit_model::TerminalKey(key.to_owned()),
+            };
+            let net = nets.net_of_pin(&pin).and_then(|id| nets.net(id));
+            match net {
+                Some(net) if !net.wires.is_empty() => {
+                    let others: Vec<PinRef> = net
+                        .pins
+                        .iter()
+                        .filter(|other| **other != pin)
+                        .cloned()
+                        .collect();
+                    (
+                        numbers.of_net(net.id).unwrap_or_default().to_owned(),
+                        view.names_in_order(&others).join(" "),
+                    )
+                }
+                _ => (String::new(), String::new()),
+            }
+        };
+        let (in_wire, in_from) = side("p1");
+        let (out_wire, out_to) = side("p2");
+        table.push(vec![
+            terminal.strip,
+            terminal.number.to_string(),
+            reference,
+            in_wire,
+            in_from,
+            out_wire,
+            out_to,
+        ]);
     }
     table
 }

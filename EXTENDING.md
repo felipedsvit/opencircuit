@@ -262,6 +262,7 @@ confirmation is written. Nothing is stored in the project: the tables are a func
 | `bom` | kind of part: model and version, manufacturer, part number and description; supply taps are not parts |
 | `wires` | net with a wire, in numbering order: number, sheet, `From`, `To` and the other terminals under `Also` |
 | `terminals` | terminal of every symbol, with the number of its wire and the terminals it meets |
+| `strips` | terminal of a terminal strip (class `terminal_block`, parameters `strip` and `number`), by strip and number: the wire and the terminals on each side. It is the terminal plan, and its CSV is the table for a manufacturer's import |
 | `xref` | exception: a coil with no contact, contacts whose coil is not drawn, a symbol outside every sheet |
 | `io` | address of the Modbus map |
 | `problems` | diagnostic of the project, compiled |

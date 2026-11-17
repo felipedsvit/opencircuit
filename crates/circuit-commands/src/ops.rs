@@ -143,7 +143,8 @@ pub(crate) fn still_fits(
 /// and relays, KT for timers, S for pushbuttons and switches, Q for a main
 /// switch, F for thermal relays and fuses, M for motors, H for lamps and
 /// buzzers, X for supply terminals, KX for mechanical interlocks, T for
-/// transformers, B for position and level switches.
+/// transformers, XT for terminals of a strip, B for position and level
+/// switches.
 #[must_use]
 pub fn designator_prefix(model: &ComponentModel) -> &'static str {
     match model.class() {
@@ -170,6 +171,7 @@ pub fn designator_prefix(model: &ComponentModel) -> &'static str {
         DeviceClass::PowerSupply => "X",
         DeviceClass::MechanicalInterlock => "KX",
         DeviceClass::Transformer => "T",
+        DeviceClass::TerminalBlock => "XT",
         DeviceClass::Symbolic => "A",
     }
 }

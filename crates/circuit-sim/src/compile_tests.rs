@@ -1511,3 +1511,133 @@ fn compile_reports_a_drawing_that_looks_connected_and_does_not_block_on_it() {
     assert!(found.contains(&DiagnosticCode::OverlappingWires));
     assert!(output.circuit.is_some());
 }
+
+mod terminal_blocks {
+    //! A terminal of a strip always conducts (ADR-0016).
+
+    use circuit_model::catalog::{
+        Category, ComponentModel, DeviceClass, ParamDefinition, ParamType, Provenance,
+        SymbolDefinition, SymbolKind,
+    };
+    use circuit_model::library::Library;
+
+    use super::*;
+
+    fn catalog_with_terminals() -> ComponentCatalog {
+        let provenance = Provenance {
+            origin: "test".to_owned(),
+            license: "MIT".to_owned(),
+            standard_reference: None,
+        };
+        let model = ComponentModel::new(
+            "std.terminal_block",
+            1,
+            DeviceClass::TerminalBlock,
+            vec![ParamDefinition {
+                key: "number".to_owned(),
+                ty: ParamType::Int { min: 1, max: 99 },
+                default: Some(ParamValue::Int(1)),
+            }],
+            vec![SymbolDefinition::new(
+                "terminal",
+                SymbolKind::TerminalPoint,
+                1,
+                1,
+                false,
+            )],
+            provenance.clone(),
+        )
+        .with_category(Category::Lines);
+        ComponentCatalog::builtin()
+            .with_library(Library {
+                id: "std".to_owned(),
+                version: 1,
+                name: "test".to_owned(),
+                provenance,
+                models: vec![model],
+            })
+            .unwrap()
+    }
+
+    /// 24 V, a terminal, a lamp, 0 V, in series.
+    fn lamp_through_a_terminal() -> Schematic {
+        let mut rig = Rig::new();
+        let (p24, p0) = rig.dc24();
+        let terminal = rig.part("XT1", "std.terminal_block", "terminal", &[]);
+        let lamp = rig.part("H1", "lamp.generic", "lamp", &load(24_000, "dc"));
+        rig.wire(out(p24), pin(terminal, "p1"));
+        rig.wire(pin(terminal, "p2"), pin(lamp, "x1"));
+        rig.wire(pin(lamp, "x2"), out(p0));
+        rig.finish()
+    }
+
+    #[test]
+    fn a_terminal_compiles_to_a_permanent_connection_between_its_two_nets() {
+        let doc = lamp_through_a_terminal();
+        let output = compile(&doc, &catalog_with_terminals());
+        let circuit = output.circuit.expect("compiles");
+
+        let device = doc
+            .devices
+            .iter()
+            .find(|device| device.reference.0 == "XT1")
+            .map(|device| device.id)
+            .unwrap();
+        let terminal = doc
+            .symbols
+            .iter()
+            .find(|symbol| symbol.device_id == device)
+            .map(|symbol| symbol.id)
+            .unwrap();
+        let owned: Vec<_> = circuit
+            .switches()
+            .iter()
+            .filter(|switch| switch.owner == terminal)
+            .collect();
+        assert_eq!(owned.len(), 1);
+        assert_eq!(owned[0].drive, Drive::Always);
+        assert_ne!(
+            owned[0].a, owned[0].b,
+            "its two sides are different copper nets"
+        );
+    }
+
+    #[test]
+    fn the_static_nets_still_agree_with_the_compiler_when_there_are_terminals() {
+        let doc = lamp_through_a_terminal();
+        let catalog = catalog_with_terminals();
+        let circuit = compile(&doc, &catalog).circuit.expect("compiles");
+        let nets = StaticNets::build(&doc, &catalog);
+
+        for compiled in circuit.pins() {
+            assert_eq!(
+                nets.net_of_pin(&compiled.pin).map(|net| net.0),
+                Some(compiled.net.0)
+            );
+        }
+        for (wire, net) in circuit.wires() {
+            assert_eq!(nets.net_of_wire(*wire).map(|net| net.0), Some(net.0));
+        }
+    }
+
+    #[test]
+    fn a_terminal_of_a_strip_is_not_an_error_or_a_series_load_and_gets_no_diagnostic_of_its_own() {
+        let doc = lamp_through_a_terminal();
+        let output = compile(&doc, &catalog_with_terminals());
+        let device = doc
+            .devices
+            .iter()
+            .find(|device| device.reference.0 == "XT1")
+            .map(|device| device.id)
+            .unwrap();
+
+        assert!(output.circuit.is_some(), "{:?}", output.diagnostics);
+        assert!(!output.has_errors());
+        assert!(
+            output
+                .diagnostics
+                .iter()
+                .all(|d| d.subject() != &Subject::Device(device))
+        );
+    }
+}

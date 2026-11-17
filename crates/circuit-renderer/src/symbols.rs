@@ -411,6 +411,17 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
             ));
             out.push((rect(-4, -12, 4, 12), StyleKey::Symbol));
         }
+        SymbolKind::TerminalPoint => {
+            // Two leads and a ring where they meet: a screw terminal.
+            leads(0, &mut out);
+            out.push((
+                Shape::Circle {
+                    center: point(0, 0),
+                    radius: 5,
+                },
+                StyleKey::Symbol,
+            ));
+        }
         SymbolKind::ThermalElement { poles } => {
             let style = if look.tripped {
                 StyleKey::Tripped
