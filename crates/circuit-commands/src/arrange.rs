@@ -78,6 +78,7 @@ pub fn align(
     subjects: &BTreeSet<Subject>,
     edge: Align,
 ) -> Result<Transaction, CommandError> {
+    crate::layers::ensure_movable_unlocked(doc, subjects)?;
     let elements = positions(doc, subjects)?;
     let coordinate = |point: GridPoint| match edge {
         Align::Left | Align::Right => point.x,
@@ -119,6 +120,7 @@ pub fn distribute(
     subjects: &BTreeSet<Subject>,
     axis: Axis,
 ) -> Result<Transaction, CommandError> {
+    crate::layers::ensure_movable_unlocked(doc, subjects)?;
     let mut elements = positions(doc, subjects)?;
     let coordinate = |point: GridPoint| match axis {
         Axis::Horizontal => i64::from(point.x),

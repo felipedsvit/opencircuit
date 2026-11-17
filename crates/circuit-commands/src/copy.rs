@@ -28,6 +28,15 @@ use crate::error::CommandError;
 use crate::ops::{designator_prefix, fits, model_of, movable};
 use crate::transaction::Transaction;
 
+/// The layer a pasted element stays on: its own, when the document has it (a
+/// copy pasted into another project has no such layer there).
+fn keep_layer(
+    doc: &Schematic,
+    layer: Option<circuit_model::LayerId>,
+) -> Option<circuit_model::LayerId> {
+    layer.filter(|id| doc.layers.iter().any(|candidate| candidate.id == *id))
+}
+
 /// Part of a document, with its original IDs: what a copy holds.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Fragment {
@@ -246,6 +255,7 @@ pub fn paste(
             slot,
             position,
             rotation: symbol.rotation,
+            layer: keep_layer(doc, symbol.layer),
         }));
     }
 
@@ -288,6 +298,7 @@ pub fn paste(
             to: endpoint(&wire.to)?,
             route,
             number: None,
+            layer: keep_layer(doc, wire.layer),
         }));
     }
 

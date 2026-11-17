@@ -1490,6 +1490,7 @@ mod text_notes {
             position: GridPoint::new(x, 6),
             text: text.to_owned(),
             anchor,
+            layer: None,
         }
     }
 
@@ -1598,5 +1599,150 @@ mod text_notes {
         let reversed = build_scene(&with_notes(notes), &catalog, None, &SceneOptions::default());
 
         assert_eq!(forward, reversed);
+    }
+}
+
+mod layers {
+    use circuit_model::{Layer, LayerId, TextAnchor, TextId, TextNote};
+
+    use super::*;
+
+    const HIDDEN: LayerId = LayerId(9_001);
+
+    fn layered(visible: bool) -> (Schematic, Starter) {
+        let starter = starter();
+        let mut doc = starter.doc.clone();
+        doc.layers.push(Layer {
+            id: HIDDEN,
+            name: "Hidden".to_owned(),
+            visible,
+            locked: false,
+        });
+        doc.texts.push(TextNote {
+            id: TextId(9_002),
+            position: GridPoint::new(3, 6),
+            text: "note".to_owned(),
+            anchor: TextAnchor::Left,
+            layer: Some(HIDDEN),
+        });
+        doc.next_id = doc.next_id.max(9_003);
+        (doc, starter)
+    }
+
+    fn drawn(scene: &Scene, subject: &Subject) -> bool {
+        scene
+            .items
+            .iter()
+            .any(|item| item.subject.as_ref() == Some(subject))
+    }
+
+    #[test]
+    fn nothing_on_a_hidden_layer_is_drawn_and_it_is_drawn_when_shown() {
+        let catalog = ComponentCatalog::builtin();
+        let (mut doc, starter) = layered(false);
+        let wire = doc.wires[0].id;
+        doc.wires[0].layer = Some(HIDDEN);
+        doc.symbols
+            .iter_mut()
+            .find(|s| s.id == starter.coil)
+            .unwrap()
+            .layer = Some(HIDDEN);
+
+        let hidden = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+        assert!(!drawn(&hidden, &Subject::Wire(wire)));
+        assert!(!drawn(&hidden, &Subject::Symbol(starter.coil)));
+        assert!(!drawn(&hidden, &Subject::Text(TextId(9_002))));
+        // What is on no layer is still there.
+        assert!(drawn(&hidden, &Subject::Wire(doc.wires[1].id)));
+
+        doc.layers[0].visible = true;
+        let shown = build_scene(&doc, &catalog, None, &SceneOptions::default());
+        assert!(drawn(&shown, &Subject::Wire(wire)));
+        assert!(drawn(&shown, &Subject::Symbol(starter.coil)));
+        assert!(drawn(&shown, &Subject::Text(TextId(9_002))));
+    }
+
+    #[test]
+    fn a_wire_still_reaches_a_pin_of_a_hidden_symbol() {
+        let catalog = ComponentCatalog::builtin();
+        let (mut doc, starter) = layered(false);
+        doc.symbols
+            .iter_mut()
+            .find(|s| s.id == starter.coil)
+            .unwrap()
+            .layer = Some(HIDDEN);
+        let wires_of_the_coil = doc
+            .wires
+            .iter()
+            .filter(|w| {
+                [&w.from, &w.to].iter().any(|end| {
+                    matches!(end, circuit_model::Endpoint::Terminal(pin) if pin.symbol_id == starter.coil)
+                })
+            })
+            .count();
+        assert!(wires_of_the_coil > 0);
+
+        let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+        for wire in &doc.wires {
+            assert!(drawn(&scene, &Subject::Wire(wire.id)), "{}", wire.id);
+        }
+    }
+
+    #[test]
+    fn a_hidden_element_is_not_outlined_when_selected_and_a_drawing_without_layers_is_unchanged() {
+        let catalog = ComponentCatalog::builtin();
+        let (doc, starter) = layered(false);
+        let mut hidden = doc.clone();
+        hidden
+            .symbols
+            .iter_mut()
+            .find(|s| s.id == starter.coil)
+            .unwrap()
+            .layer = Some(HIDDEN);
+        let options = SceneOptions {
+            selected: BTreeSet::from([Subject::Symbol(starter.coil), Subject::Text(TextId(9_002))]),
+            ..SceneOptions::default()
+        };
+
+        let scene = build_scene(&hidden, &catalog, None, &options);
+
+        assert!(!drawn(&scene, &Subject::Symbol(starter.coil)));
+        assert!(!drawn(&scene, &Subject::Text(TextId(9_002))));
+        // No layer at all: the same scene as before layers existed.
+        let plain = starter.doc;
+        let mut with_unused_layer = plain.clone();
+        with_unused_layer.layers.push(Layer {
+            id: HIDDEN,
+            name: "Unused".to_owned(),
+            visible: false,
+            locked: true,
+        });
+        assert_eq!(
+            build_scene(&plain, &catalog, None, &SceneOptions::default()),
+            build_scene(&with_unused_layer, &catalog, None, &SceneOptions::default())
+        );
+    }
+
+    #[test]
+    fn the_dot_of_a_junction_whose_wires_are_all_hidden_is_hidden_too() {
+        let catalog = ComponentCatalog::builtin();
+        let (mut doc, _) = layered(false);
+        let Some(junction) = doc.junctions.first().map(|j| j.id) else {
+            return;
+        };
+        for wire in &mut doc.wires {
+            let touches = [&wire.from, &wire.to]
+                .iter()
+                .any(|end| matches!(end, circuit_model::Endpoint::Junction(id) if *id == junction));
+            if touches {
+                wire.layer = Some(HIDDEN);
+            }
+        }
+
+        let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+
+        assert!(!drawn(&scene, &Subject::Junction(junction)));
     }
 }

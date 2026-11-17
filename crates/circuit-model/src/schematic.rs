@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use crate::diagnostics::Diagnostic;
 use crate::documentation::{DeviceInfo, TextNote, Waiver, WireNumbering};
 use crate::geometry::{GridPoint, QuarterTurn};
-use crate::ids::{DeviceId, JunctionId, SymbolId, WireId};
+use crate::ids::{DeviceId, JunctionId, LayerId, SymbolId, WireId};
+use crate::layers::Layer;
 use crate::sheet::Sheet;
 use crate::supply::SupplyProfile;
 use crate::validate;
@@ -164,6 +165,9 @@ pub struct SymbolInstance {
     pub position: GridPoint,
     /// Rotation of the symbol.
     pub rotation: QuarterTurn,
+    /// The layer the symbol is on (ADR-0015); absent: the default layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<LayerId>,
 }
 
 /// Explicit connection point between wires.
@@ -215,6 +219,9 @@ pub struct Wire {
     /// number is generated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub number: Option<String>,
+    /// The layer the wire is on (ADR-0015); absent: the default layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<LayerId>,
 }
 
 /// Document metadata without electrical meaning.
@@ -270,6 +277,10 @@ pub struct Schematic {
     /// Text notes on the drawing (ADR-0015); absent when there are none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub texts: Vec<TextNote>,
+    /// Layers (ADR-0015), sorted by ID; absent when there are none. Elements
+    /// with no layer are on the default layer, which always shows and edits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<Layer>,
 }
 
 impl Schematic {
@@ -296,6 +307,7 @@ impl Schematic {
             wires: Vec::new(),
             waivers: Vec::new(),
             texts: Vec::new(),
+            layers: Vec::new(),
         }
     }
 
@@ -310,6 +322,7 @@ impl Schematic {
             && self.junctions.is_sorted_by_key(|junction| junction.id)
             && self.wires.is_sorted_by_key(|wire| wire.id)
             && self.texts.is_sorted_by_key(|text| text.id)
+            && self.layers.is_sorted_by_key(|layer| layer.id)
             && self
                 .waivers
                 .is_sorted_by(|a, b| a.sort_key() <= b.sort_key())
@@ -324,6 +337,7 @@ impl Schematic {
         self.junctions.sort_by_key(|junction| junction.id);
         self.wires.sort_by_key(|wire| wire.id);
         self.texts.sort_by_key(|text| text.id);
+        self.layers.sort_by_key(|layer| layer.id);
         self.waivers.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
     }
 
@@ -415,6 +429,7 @@ mod tests {
                 to: Endpoint::Junction(JunctionId(2)),
                 route: Vec::new(),
                 number: None,
+                layer: None,
             })
             .to_vec();
 

@@ -77,6 +77,10 @@ impl Transaction {
                 | Edit::MoveJunction { .. }
                 | Edit::RemoveWire(_)
                 | Edit::RemoveText(_)
+                | Edit::InsertLayer(_)
+                | Edit::RemoveLayer(_)
+                | Edit::SetLayer(_)
+                | Edit::AssignLayer { .. }
                 | Edit::SetText { .. }
                 | Edit::MoveText { .. }
                 | Edit::SetRoute { .. }
@@ -278,6 +282,7 @@ mod tests {
             to: Endpoint::Junction(broken.junctions[0].id),
             route: Vec::new(),
             number: None,
+            layer: None,
         });
         broken.next_id += 1;
         let mut tx = Transaction::new("move", broken.next_id);

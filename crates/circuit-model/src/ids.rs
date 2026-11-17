@@ -66,6 +66,10 @@ entity_id!(
     /// A text note on the drawing (ADR-0015).
     TextId
 );
+entity_id!(
+    /// A layer of the drawing (ADR-0015).
+    LayerId
+);
 
 /// The document ran out of identifiers below [`MAX_ENTITY_ID`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]

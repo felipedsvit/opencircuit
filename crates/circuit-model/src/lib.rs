@@ -30,6 +30,7 @@ pub mod geometry;
 pub mod ids;
 pub mod input;
 pub mod labels;
+pub mod layers;
 pub mod layout;
 pub mod library;
 pub mod limits;
@@ -61,11 +62,12 @@ pub use documentation::{
 };
 pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
-    DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SheetId, SupplyId, SymbolId,
-    TextId, WireId,
+    DeviceId, IdAllocator, IdExhausted, JunctionId, LayerId, MAX_ENTITY_ID, SheetId, SupplyId,
+    SymbolId, TextId, WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
 pub use labels::{natural_key, pin_name, terminal_label};
+pub use layers::{Layer, LayerStates, MAX_LAYER_NAME_CHARS, MAX_LAYERS, hidden_junctions};
 pub use layout::{
     Bend, LayoutIndex, is_orthogonal, orthogonal_route, orthogonal_route_bent, segment_at,
     segment_contains, stretch_route, text_bounds,

@@ -108,6 +108,7 @@ pub fn renumber(doc: &Schematic, scope: Scope) -> Result<Transaction, CommandErr
         }
         taken.insert(reference);
         if designator != device.reference {
+            crate::layers::ensure_unlocked(doc, [&circuit_model::Subject::Device(device.id)])?;
             tx.edits.push(Edit::SetReference {
                 device: device.id,
                 reference: designator,

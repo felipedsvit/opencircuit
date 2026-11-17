@@ -164,6 +164,7 @@ impl SchematicBuilder {
             slot,
             position,
             rotation,
+            layer: None,
         });
         Ok(id)
     }
@@ -211,6 +212,7 @@ impl SchematicBuilder {
             to: to.into(),
             route: route.to_vec(),
             number: None,
+            layer: None,
         });
         Ok(id)
     }

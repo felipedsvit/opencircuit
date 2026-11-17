@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use crate::diagnostics::{Diagnostic, DiagnosticCode, Severity, Subject};
 use crate::geometry::GridPoint;
-use crate::ids::TextId;
+use crate::ids::{LayerId, TextId};
 use crate::schematic::Schematic;
 
 /// Longest prefix of a wire number, in bytes.
@@ -100,6 +100,9 @@ pub struct TextNote {
     pub text: String,
     /// Where the text sits on the point.
     pub anchor: TextAnchor,
+    /// The layer the note is on (ADR-0015); absent: the default layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<LayerId>,
 }
 
 impl TextNote {

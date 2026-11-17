@@ -32,6 +32,7 @@ pub fn set_device_info(
         .ok_or(CommandError::Missing(circuit_model::Subject::Device(
             device,
         )))?;
+    crate::layers::ensure_unlocked(doc, [&circuit_model::Subject::Device(device)])?;
     let info = DeviceInfo {
         manufacturer: clean(info.manufacturer),
         part_no: clean(info.part_no),
@@ -62,6 +63,7 @@ pub fn set_wire_number(
         .iter()
         .find(|candidate| candidate.id == wire)
         .ok_or(CommandError::Missing(circuit_model::Subject::Wire(wire)))?;
+    crate::layers::ensure_wire_unlocked(doc, wire)?;
     let number = clean(number.map(str::to_owned));
     let mut tx = Transaction::new("Set wire number", doc.next_id);
     if number != found.number {

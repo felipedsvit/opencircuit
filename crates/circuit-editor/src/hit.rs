@@ -2,8 +2,8 @@
 
 use circuit_commands::Anchor;
 use circuit_model::{
-    ComponentCatalog, Endpoint, GridPoint, JunctionId, LayoutIndex, PinRef, Schematic, Subject,
-    SymbolId, TextId, WireId, segment_at, text_bounds,
+    ComponentCatalog, Endpoint, GridPoint, JunctionId, LayerStates, LayoutIndex, PinRef, Schematic,
+    Subject, SymbolId, TextId, WireId, hidden_junctions, segment_at, text_bounds,
 };
 
 /// The element under a grid point.
@@ -61,8 +61,16 @@ impl Hit {
 #[must_use]
 pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -> Option<Hit> {
     let layout = LayoutIndex::new(doc, catalog);
+    // What a hidden layer hides cannot be hit (ADR-0015).
+    let layers = LayerStates::new(doc);
+    let hidden = hidden_junctions(doc, &layers);
 
-    let mut symbols: Vec<SymbolId> = doc.symbols.iter().map(|s| s.id).collect();
+    let mut symbols: Vec<SymbolId> = doc
+        .symbols
+        .iter()
+        .filter(|s| layers.is_visible(s.layer))
+        .map(|s| s.id)
+        .collect();
     symbols.sort_unstable_by(|a, b| b.cmp(a));
     for id in &symbols {
         let Some(definition) = layout.definition(*id) else {
@@ -82,7 +90,7 @@ pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -
     let junction = doc
         .junctions
         .iter()
-        .filter(|j| j.position == point)
+        .filter(|j| j.position == point && !hidden.contains(&j.id))
         .map(|j| j.id)
         .max();
     if let Some(id) = junction {
@@ -93,7 +101,10 @@ pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -
     let text = doc
         .texts
         .iter()
-        .filter(|note| text_bounds(note).is_some_and(|area| area.contains(point)))
+        .filter(|note| {
+            layers.is_visible(note.layer)
+                && text_bounds(note).is_some_and(|area| area.contains(point))
+        })
         .map(|note| note.id)
         .max();
     if let Some(id) = text {
@@ -104,9 +115,10 @@ pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -
         .wires
         .iter()
         .filter(|w| {
-            layout
-                .wire_polyline(w)
-                .is_some_and(|path| segment_at(&path, point).is_some())
+            layers.is_visible(w.layer)
+                && layout
+                    .wire_polyline(w)
+                    .is_some_and(|path| segment_at(&path, point).is_some())
         })
         .map(|w| w.id)
         .max();
@@ -117,5 +129,12 @@ pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -
         });
     }
 
-    layout.symbol_at(point).map(Hit::Symbol)
+    symbols
+        .iter()
+        .find(|id| {
+            layout
+                .symbol_bounds(**id)
+                .is_some_and(|bounds| bounds.contains(point))
+        })
+        .map(|id| Hit::Symbol(*id))
 }

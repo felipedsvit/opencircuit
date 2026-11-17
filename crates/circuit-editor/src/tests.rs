@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use circuit_commands::{History, SupplyPreset, ops};
+use circuit_commands::{CommandError, History, SupplyPreset, ops};
 use circuit_model::{
     ComponentCatalog, DeviceId, DiagnosticCode, GridPoint, InputAction, LayoutIndex, ModelRef,
     ParamValue, QuarterTurn, Schematic, Subject, SymbolId, SymbolKey, TextAnchor, is_orthogonal,
@@ -1274,5 +1274,118 @@ mod text_notes {
         bench.editor.retain_existing(&bench.doc);
         assert!(bench.editor.selection().is_empty());
         let _ = TextAnchor::Left;
+    }
+}
+
+mod layers {
+    use circuit_model::{Layer, LayerId};
+
+    use super::*;
+
+    const LAYER: LayerId = LayerId(9_001);
+
+    /// Two buttons wired together and a note; `layer` holds the first button.
+    fn bench(visible: bool, locked: bool) -> (Bench, SymbolId, SymbolId) {
+        let mut bench = Bench::new();
+        let a = bench.place("pushbutton_no", "contact", point(10, 10));
+        let b = bench.place("pushbutton_no", "contact", point(30, 10));
+        bench.doc.layers.push(Layer {
+            id: LAYER,
+            name: "Power".to_owned(),
+            visible,
+            locked,
+        });
+        bench.doc.next_id = bench.doc.next_id.max(9_002);
+        bench
+            .doc
+            .symbols
+            .iter_mut()
+            .find(|s| s.id == a)
+            .unwrap()
+            .layer = Some(LAYER);
+        (bench, a, b)
+    }
+
+    fn at(bench: &Bench, symbol: SymbolId) -> GridPoint {
+        bench.position(symbol)
+    }
+
+    #[test]
+    fn what_a_hidden_layer_holds_cannot_be_hit_and_what_is_visible_still_can() {
+        let (bench, a, b) = bench(false, false);
+
+        assert_eq!(hit_test(&bench.doc, &bench.catalog, at(&bench, a)), None);
+        assert_eq!(
+            hit_test(&bench.doc, &bench.catalog, at(&bench, b)),
+            Some(Hit::Symbol(b))
+        );
+        let shown = {
+            let (mut shown, a, _) = (bench.doc.clone(), a, b);
+            shown.layers[0].visible = true;
+            hit_test(&shown, &bench.catalog, at(&bench, a))
+        };
+        assert_eq!(shown, Some(Hit::Symbol(a)));
+    }
+
+    #[test]
+    fn a_box_and_select_all_leave_out_what_is_hidden() {
+        let (mut bench, a, b) = bench(false, false);
+
+        bench.drag(point(0, 0), point(50, 30));
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Symbol(b)])
+        );
+
+        bench.editor.set_selection(BTreeSet::new());
+        bench.key(Key::SelectAll);
+        assert!(!bench.editor.selection().contains(&Subject::Symbol(a)));
+        assert!(bench.editor.selection().contains(&Subject::Symbol(b)));
+    }
+
+    #[test]
+    fn dragging_or_deleting_something_on_a_locked_layer_changes_nothing_and_says_why() {
+        let (mut bench, a, _) = bench(true, true);
+        let before = at(&bench, a);
+
+        bench
+            .editor
+            .set_selection(BTreeSet::from([Subject::Symbol(a)]));
+        let down =
+            bench
+                .editor
+                .pointer_down(&bench.doc, &bench.catalog, before, Modifiers::default());
+        bench.apply(down);
+        bench
+            .editor
+            .pointer_move(&bench.doc, &bench.catalog, point(20, 20));
+        let up = bench
+            .editor
+            .pointer_up(&bench.doc, &bench.catalog, point(20, 20));
+        assert!(up.commit.is_none(), "{up:?}");
+        assert!(matches!(up.error, Some(CommandError::Locked(_))), "{up:?}");
+        assert_eq!(at(&bench, a), before);
+
+        let outcome = bench.editor.key(&bench.doc, &bench.catalog, Key::Delete);
+        assert!(outcome.commit.is_none());
+        assert!(matches!(outcome.error, Some(CommandError::Locked(_))));
+        assert_eq!(at(&bench, a), before);
+    }
+
+    #[test]
+    fn a_layer_that_disappears_leaves_nothing_selected_that_is_gone() {
+        let (mut bench, a, _) = bench(true, false);
+        bench
+            .editor
+            .set_selection(BTreeSet::from([Subject::Symbol(a), Subject::Layer(LAYER)]));
+        bench.doc.layers.clear();
+        bench.doc.symbols.iter_mut().for_each(|s| s.layer = None);
+
+        bench.editor.retain_existing(&bench.doc);
+
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Symbol(a)])
+        );
     }
 }

@@ -18,7 +18,8 @@
 //! edits the sheets and the information of the project, [`designators`]
 //! renumbers the reference designators, [`documentation`] edits the catalog data
 //! of devices and the wire numbers, [`waivers`] accepts a warning with a
-//! reason, and [`commandline`] reads a typed
+//! reason, [`layers`] edits the layers and refuses changes to what is on a
+//! locked one, and [`commandline`] reads a typed
 //! command into the same operations. The crate depends on
 //! `circuit-model` only and does no I/O.
 
@@ -44,6 +45,7 @@ pub mod documentation;
 mod edit;
 mod error;
 mod history;
+pub mod layers;
 pub mod ops;
 pub mod sheets;
 mod sorted;

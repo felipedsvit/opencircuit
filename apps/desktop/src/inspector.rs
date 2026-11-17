@@ -167,6 +167,17 @@ pub fn show(
             if let Some(go) = documentation::project_section(ui, session, selection) {
                 state.goto = Some(go);
             }
+            // The layers organise the project, and live in its section: the
+            // inspector of a fresh window gets no new row (ADR-0015).
+            egui::CollapsingHeader::new("Layers")
+                .default_open(false)
+                .show(ui, |ui| {
+                    if let Some(change) =
+                        documentation::layers_section(ui, session, selection, state)
+                    {
+                        request = Some(change);
+                    }
+                });
         });
     request
 }

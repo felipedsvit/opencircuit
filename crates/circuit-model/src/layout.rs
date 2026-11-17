@@ -308,6 +308,7 @@ mod tests {
             position: GridPoint::new(10, 5),
             text: text.to_owned(),
             anchor,
+            layer: None,
         };
 
         // Ten characters are about five grid units wide and two high.
