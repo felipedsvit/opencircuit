@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
-    CatalogError, ComponentCatalog, Control, DeviceId, GridPoint, InputAction, LayoutIndex,
-    SheetId, Subject,
+    CatalogError, Category, ComponentCatalog, Control, DeviceId, GridPoint, InputAction,
+    LayoutIndex, SheetId, Subject,
 };
 use circuit_renderer::{
     SUBUNITS_PER_GRID, Scene, SceneItem, SceneOptions, ScenePoint, SceneRect, Shape, StyleKey,
@@ -72,6 +72,8 @@ pub struct DesktopApp {
     /// Where the pointer snapped with the wire tool, as of the last frame.
     snapped: Option<Snap>,
     inspector: InspectorState,
+    /// The tab and the search of the palette.
+    palette: palette::PaletteState,
     /// Text of the path field.
     path_input: String,
     /// The last error, shown until the next successful action.
@@ -94,7 +96,7 @@ pub struct DesktopApp {
     /// The user agreed to close the window.
     allow_close: bool,
     /// Extension libraries loaded in this window, in loading order. Every
-    /// project opened here compiles against the built-in catalog with them.
+    /// project opened here compiles against the standard catalog with them.
     libraries: Vec<Library>,
     /// Files a browser has finished reading, opened at the next frame.
     #[cfg(target_arch = "wasm32")]
@@ -199,6 +201,12 @@ impl DesktopApp {
     #[must_use]
     pub const fn problems_shown(&self) -> bool {
         !self.diagnostics_hidden
+    }
+
+    /// The tab of the palette that is open.
+    #[must_use]
+    pub const fn palette_tab(&self) -> Category {
+        self.palette.tab()
     }
 
     /// The grid point under the pointer, as of the last frame.
@@ -461,12 +469,13 @@ impl DesktopApp {
         }
     }
 
-    /// The built-in catalog with the libraries of this window.
+    /// The built-in catalog and the standard library, with the libraries of
+    /// this window.
     fn catalog(&self) -> Result<ComponentCatalog, CatalogError> {
         self.libraries
             .iter()
             .cloned()
-            .try_fold(ComponentCatalog::builtin(), |catalog, library| {
+            .try_fold(circuit_project::stdlib::catalog(), |catalog, library| {
                 catalog.with_library(library)
             })
     }
@@ -644,10 +653,15 @@ impl DesktopApp {
             Mode::Edit if self.session.is_some() => {
                 egui::Panel::left("palette")
                     .resizable(true)
-                    .default_size(230.0)
+                    .default_size(260.0)
                     .show(ui, |ui| {
                         if let Some(session) = &self.session {
-                            palette::show(ui, session.catalog(), &mut self.editor);
+                            palette::show(
+                                ui,
+                                session.catalog(),
+                                &mut self.editor,
+                                &mut self.palette,
+                            );
                         }
                     });
                 egui::Panel::right("inspector")

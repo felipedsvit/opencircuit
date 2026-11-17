@@ -6,9 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ComponentModel, ConductorSet, CrossReferences, DeviceClass, DeviceId,
-    JunctionId, LayoutIndex, Location, MotorState, Operator, PinRef, Schematic, SheetId,
-    SimSnapshot, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire,
-    WireId, cross_references, terminal_label,
+    JunctionId, LayoutIndex, Location, MotorState, PinRef, Schematic, SheetId, SimSnapshot,
+    Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire, WireId,
+    cross_references, terminal_label,
 };
 
 use crate::frame::{draw_sheets, frame_rect};
@@ -300,13 +300,7 @@ fn draw_symbol(
             _ => initially_closed,
         }
     };
-    let operator = match model.operator() {
-        Operator::Push => Actuator::Push,
-        Operator::Latch => Actuator::Latch,
-        Operator::Emergency => Actuator::Emergency,
-        Operator::Position => Actuator::Position,
-        Operator::None => Actuator::None,
-    };
+    let operator = Actuator::of(model.operator());
     let look = Look {
         closed,
         energized: state.energized.contains(&device.id),

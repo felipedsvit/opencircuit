@@ -24,12 +24,16 @@ fn harness() -> Harness<'static, DesktopApp> {
         |ui, app: &mut DesktopApp| app.show(ui),
         DesktopApp::default(),
     );
-    harness.set_size(egui::Vec2::new(1400.0, 1100.0));
+    harness.set_size(egui::Vec2::new(1400.0, 900.0));
     harness.run();
     harness
 }
 
+/// Click the widget named `label`, scrolling it into view first: the
+/// palette lists more parts than fit the window.
 fn click_label(harness: &mut Harness<'_, DesktopApp>, label: &str) {
+    harness.get_by_label(label).scroll_to_me();
+    harness.run();
     harness.get_by_label(label).click();
     harness.run();
 }
@@ -125,10 +129,12 @@ fn draw(harness: &mut Harness<'_, DesktopApp>) {
 
     // Supply taps: each placed tap is selected, so the inspector shows it.
     for (y, conductor) in [(0, "dc_pos"), (22, "dc_neg")] {
+        click_label(harness, "Supplies and sources");
         place(harness, "supply.terminal · terminal", 0, y);
         choose(harness, "supply", &supply_option);
         choose(harness, "conductor", conductor);
     }
+    click_label(harness, "Controls and actuation");
     place(harness, "pushbutton_no · contact", -4, 11);
     place(harness, "pushbutton_nc · contact", 0, 4);
     place(harness, "contactor.generic · coil", 0, 18);

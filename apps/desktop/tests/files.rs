@@ -49,7 +49,11 @@ fn opened(path: &TempPath) -> Harness<'static, DesktopApp> {
     harness(DesktopApp::new(Some(&path.0)))
 }
 
+/// Click the widget named `label`, scrolling it into view first: the
+/// palette lists more parts than fit the window.
 fn click_label(harness: &mut Harness<'_, DesktopApp>, label: &str) {
+    harness.get_by_label(label).scroll_to_me();
+    harness.run();
     harness.get_by_label(label).click();
     harness.run();
 }
