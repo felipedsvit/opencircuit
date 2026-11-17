@@ -1359,3 +1359,67 @@ fn a_file_that_is_not_an_edit_file_is_a_usage_error() {
     let missing = opencircuit(&["edit", path, "--apply", "nowhere.json"]);
     assert_eq!(code(&missing), 2);
 }
+
+/// An edit file that uses the standard parts: a solenoid coil between a DC
+/// positive and a DC negative terminal, and a diode that is drawn only.
+const STANDARD_PARTS_EDIT: &str = r#"{
+  "schema_version": 1,
+  "operations": [
+    { "op": "add_supply", "preset": "dc_24v", "as": "control" },
+    { "op": "place", "model": "std.supply_dc_pos", "symbol": "terminal", "at": [0, 0],
+      "reference": "P24", "as": "p24" },
+    { "op": "set_param", "device": "P24", "key": "supply", "value": { "supply": "control" } },
+    { "op": "place", "model": "std.supply_dc_neg", "symbol": "terminal", "at": [20, 0],
+      "reference": "P0", "as": "p0" },
+    { "op": "set_param", "device": "P0", "key": "supply", "value": { "supply": "control" } },
+    { "op": "place", "model": "std.solenoid", "symbol": "coil", "at": [10, 10],
+      "reference": "Y1", "as": "coil" },
+    { "op": "set_param", "device": "Y1", "key": "rated_voltage_mv", "value": 24000 },
+    { "op": "set_param", "device": "Y1", "key": "connection", "value": "dc" },
+    { "op": "connect", "from": { "symbol": "p24", "terminal": "out" },
+      "to": { "symbol": "coil", "terminal": "a1" } },
+    { "op": "connect", "from": { "symbol": "coil", "terminal": "a2" },
+      "to": { "symbol": "p0", "terminal": "out" } },
+    { "op": "place", "model": "std.diode", "symbol": "body", "at": [30, 10],
+      "reference": "A1", "as": "diode" }
+  ]
+}"#;
+
+#[test]
+fn the_standard_parts_are_available_to_every_command_without_a_library_file() {
+    let directory = scratch("standard-parts");
+    let project = directory.join("parts.ocircuit");
+    let path = project.to_str().expect("UTF-8 path");
+    let edit = directory.join("parts.edit.json");
+    fs::write(&edit, STANDARD_PARTS_EDIT).expect("written");
+
+    let made = opencircuit(&["new", path]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+    let edited = opencircuit(&[
+        "edit",
+        path,
+        "--apply",
+        edit.to_str().expect("UTF-8 path"),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&edited), 0, "{}{}", stdout(&edited), stderr(&edited));
+
+    // It validates, and says that the diode is not simulated.
+    let validate = opencircuit(&["validate", path, "--format", "json"]);
+    assert_eq!(code(&validate), 0, "{}", stdout(&validate));
+    let report = json(&validate);
+    assert_eq!(report["ok"], true);
+    assert!(
+        stdout(&validate).contains("OC-SEM-011"),
+        "{}",
+        stdout(&validate)
+    );
+    assert_eq!(report["errors"], 0);
+
+    // A model of the library that does not exist is still refused.
+    let unknown = STANDARD_PARTS_EDIT.replacen("std.diode", "std.nothing", 1);
+    fs::write(&edit, unknown).expect("written");
+    let refused = opencircuit(&["edit", path, "--apply", edit.to_str().expect("UTF-8 path")]);
+    assert_ne!(code(&refused), 0);
+}

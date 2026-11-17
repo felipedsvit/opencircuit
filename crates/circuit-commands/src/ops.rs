@@ -13,8 +13,8 @@ use circuit_model::{
     ComponentCatalog, ComponentModel, Device, DeviceClass, DeviceId, Endpoint, GridPoint,
     IdAllocator, Junction, JunctionId, LayoutIndex, ModelRef, Operator, ParamType, ParamValue,
     PhaseSequence, QuarterTurn, ReferenceDesignator, Schematic, Subject, SupplyId, SupplyKind,
-    SupplyProfile, SymbolId, SymbolInstance, SymbolKey, Wire, WireId, orthogonal_route, segment_at,
-    stretch_route,
+    SupplyProfile, SymbolId, SymbolInstance, SymbolKey, SymbolKind, Wire, WireId, orthogonal_route,
+    segment_at, stretch_route,
 };
 
 use crate::edit::Edit;
@@ -157,11 +157,12 @@ pub fn designator_prefix(model: &ComponentModel) -> &'static str {
             }
         }
         DeviceClass::LatchingSwitch => {
-            if model.id().starts_with("main_switch") {
-                "Q"
-            } else {
-                "S"
-            }
+            // A switch that opens power poles is a switching device (Q).
+            let power = model
+                .symbols()
+                .iter()
+                .any(|symbol| matches!(symbol.kind(), SymbolKind::PowerContacts { .. }));
+            if power { "Q" } else { "S" }
         }
         DeviceClass::ThermalOverload | DeviceClass::Fuse => "F",
         DeviceClass::Motor => "M",

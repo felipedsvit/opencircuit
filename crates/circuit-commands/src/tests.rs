@@ -150,6 +150,42 @@ fn placed_devices_get_the_first_free_designator_of_their_kind() {
 }
 
 #[test]
+fn a_switch_that_opens_power_poles_is_a_q_and_the_others_are_s() {
+    let mut doc = Schematic::new("place");
+    let mut history = History::new();
+
+    let main = place(
+        &mut doc,
+        &mut history,
+        "main_switch.3p",
+        "main",
+        point(0, 0),
+    );
+    let selector = place(
+        &mut doc,
+        &mut history,
+        "selector.latching",
+        "contact",
+        point(8, 0),
+    );
+
+    let name = |symbol| {
+        let device = device_of(&doc, symbol);
+        doc.devices
+            .iter()
+            .find(|d| d.id == device)
+            .unwrap()
+            .reference
+            .0
+            .clone()
+    };
+    assert_eq!(
+        (name(main), name(selector)),
+        ("Q1".to_owned(), "S1".to_owned())
+    );
+}
+
+#[test]
 fn position_switches_are_named_b_and_emergency_stops_s() {
     let mut doc = Schematic::new("prefixes");
     let mut history = History::new();
