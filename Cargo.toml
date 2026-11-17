@@ -16,21 +16,21 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2-dev"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.85"
 
 [workspace.dependencies]
-circuit-commands = { path = "crates/circuit-commands", version = "0.0.1" }
-circuit-editor = { path = "crates/circuit-editor", version = "0.0.1" }
-circuit-export = { path = "crates/circuit-export", version = "0.0.1" }
-circuit-io = { path = "crates/circuit-io", version = "0.0.1" }
-circuit-model = { path = "crates/circuit-model", version = "0.0.1" }
-circuit-project = { path = "crates/circuit-project", version = "0.0.1" }
-circuit-renderer = { path = "crates/circuit-renderer", version = "0.0.1" }
-circuit-report = { path = "crates/circuit-report", version = "0.0.1" }
-circuit-sim = { path = "crates/circuit-sim", version = "0.0.1" }
+circuit-commands = { path = "crates/circuit-commands", version = "0.0.2-dev" }
+circuit-editor = { path = "crates/circuit-editor", version = "0.0.2-dev" }
+circuit-export = { path = "crates/circuit-export", version = "0.0.2-dev" }
+circuit-io = { path = "crates/circuit-io", version = "0.0.2-dev" }
+circuit-model = { path = "crates/circuit-model", version = "0.0.2-dev" }
+circuit-project = { path = "crates/circuit-project", version = "0.0.2-dev" }
+circuit-renderer = { path = "crates/circuit-renderer", version = "0.0.2-dev" }
+circuit-report = { path = "crates/circuit-report", version = "0.0.2-dev" }
+circuit-sim = { path = "crates/circuit-sim", version = "0.0.2-dev" }
 proptest = { version = "1", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
