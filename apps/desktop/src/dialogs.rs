@@ -49,6 +49,15 @@ pub fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
     save_path(filter, name, extension)
 }
 
+/// Ask where to write the list of problems of a project named `name`. The
+/// extension is added when the user leaves it out. A browser downloads
+/// instead.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn choose_problems_path(name: &str) -> Option<PathBuf> {
+    save_path("Comma-separated values", &format!("{name}-problems"), "csv")
+}
+
 /// Ask for library files to load; empty when the user cancels or no file
 /// dialog is available.
 #[must_use]

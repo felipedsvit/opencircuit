@@ -1726,6 +1726,7 @@ dependencies = [
  "circuit-model",
  "circuit-project",
  "circuit-renderer",
+ "circuit-report",
  "circuit-sim",
  "eframe",
  "egui_kittest",

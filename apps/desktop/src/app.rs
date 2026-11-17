@@ -9,11 +9,12 @@ use circuit_commands::commandline::{
     self, ModeRequest, Request, SimRequest, ToolRequest, ViewRequest,
 };
 use circuit_commands::designators::{self, Scope};
+use circuit_commands::{ops, waivers};
 use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
-    CatalogError, Category, ComponentCatalog, Control, DeviceId, GridPoint, InputAction,
-    LayoutIndex, SheetId, StaticNets, Subject,
+    CatalogError, Category, ComponentCatalog, Control, DeviceId, Diagnostic, DiagnosticCode,
+    GridPoint, InputAction, LayoutIndex, Severity, SheetId, StaticNets, Subject, WaiverIndex,
 };
 use circuit_renderer::{
     SUBUNITS_PER_GRID, Scene, SceneItem, SceneOptions, ScenePoint, SceneRect, Shape, StyleKey,
@@ -66,6 +67,66 @@ pub enum Mode {
     Simulate,
     /// Change the circuit.
     Edit,
+}
+
+/// What a click in the list of problems asked for.
+enum PanelAction {
+    /// Select and show the subject of a diagnostic.
+    Select(Subject),
+    /// Connect what a `OC-STR-018` warning found touching.
+    Connect(Subject, Vec<Subject>),
+    /// Start typing the reason for waiving a diagnostic.
+    StartWaive(String, Subject),
+    /// Waive it with the reason typed.
+    Waive,
+    /// Do not waive it after all.
+    KeepIt,
+    /// Take a waiver away.
+    Restore(String, Subject),
+    /// Write the list as CSV.
+    Save,
+}
+
+/// One diagnostic of the list: the line that selects its subject, as it always
+/// was, and small buttons after it for what can be done about it.
+fn problem_row(ui: &mut Ui, diagnostic: &Diagnostic, action: &mut Option<PanelAction>) {
+    let text = format!(
+        "{} {} {}: {}",
+        diagnostic.severity(),
+        diagnostic.code(),
+        diagnostic.subject(),
+        diagnostic.message()
+    );
+    ui.horizontal(|ui| {
+        if ui.selectable_label(false, text).clicked() {
+            *action = Some(PanelAction::Select(diagnostic.subject().clone()));
+        }
+        let name = format!("{} {}", diagnostic.code(), diagnostic.subject());
+        let button = |ui: &mut Ui, text: &str, hint: &str| {
+            let response = ui.small_button(text).on_hover_text(hint);
+            let label = format!("{text} {name}");
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
+            });
+            response
+        };
+        if diagnostic.code() == DiagnosticCode::LooseConnection
+            && button(ui, "Connect", "Join them with a wire").clicked()
+        {
+            *action = Some(PanelAction::Connect(
+                diagnostic.subject().clone(),
+                diagnostic.related().to_vec(),
+            ));
+        }
+        let waivable = diagnostic.severity() != Severity::Error
+            && diagnostic.code() != DiagnosticCode::InvalidWaiver;
+        if waivable && button(ui, "Ignore", "Accept it, with a reason").clicked() {
+            *action = Some(PanelAction::StartWaive(
+                diagnostic.code().as_str().to_owned(),
+                diagnostic.subject().clone(),
+            ));
+        }
+    });
 }
 
 /// The desktop application.
@@ -137,6 +198,10 @@ pub struct DesktopApp {
     trace_net: bool,
     /// What is traced this frame, and a line about it for the status bar.
     traced: (BTreeSet<Subject>, String),
+    /// The diagnostic a reason is being typed for, to waive it.
+    waiving: Option<(String, Subject)>,
+    /// The reason being typed.
+    waive_reason: String,
 }
 
 impl DesktopApp {
@@ -315,6 +380,28 @@ impl DesktopApp {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = dialogs::choose_export_path(&session.document().project.name, extension)
             && let Err(error) = session.export(&path, with_state)
+        {
+            self.error = Some(error.to_string());
+        }
+    }
+
+    /// Write the list of problems as CSV: to a file the user chooses, or as a
+    /// download in a browser.
+    fn save_problems_dialog(&mut self) {
+        let Some(session) = self.session.as_ref() else {
+            return;
+        };
+        let csv = session.problems_csv();
+        let name = session.document().project.name.clone();
+        #[cfg(target_arch = "wasm32")]
+        if let Err(error) =
+            crate::web::download(&format!("{name}-problems.csv"), csv.as_bytes(), "text/csv")
+        {
+            self.error = Some(error);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = dialogs::choose_problems_path(&name)
+            && let Err(error) = crate::files::write_atomic(&path, csv)
         {
             self.error = Some(error.to_string());
         }
@@ -1306,10 +1393,13 @@ impl DesktopApp {
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let problems = self.session.as_ref().map_or(0, |session| {
-                    session
+                    let waivers = WaiverIndex::new(session.document());
+                    let open = session
                         .diagnostics()
-                        .len()
-                        .saturating_add(session.snapshot().map_or(0, |s| s.faults.len()))
+                        .iter()
+                        .filter(|diagnostic| waivers.of(diagnostic).is_none())
+                        .count();
+                    open.saturating_add(session.snapshot().map_or(0, |s| s.faults.len()))
                 });
                 if icons::button_hint(
                     ui,
@@ -1715,42 +1805,146 @@ impl DesktopApp {
             return;
         };
         let selected = self.selected_description(session);
+        let mut action: Option<PanelAction> = None;
         ui.horizontal(|ui| {
             ui.strong("Diagnostics");
             if let Some(selected) = selected {
                 ui.separator();
                 ui.label(selected);
             }
+            ui.separator();
+            if ui
+                .small_button("Save list…")
+                .on_hover_text("Write the problems as a CSV file")
+                .clicked()
+            {
+                action = Some(PanelAction::Save);
+            }
         });
         let diagnostics = session.diagnostics();
         let faults = session.snapshot().map_or(&[][..], |s| s.faults.as_slice());
         if diagnostics.is_empty() && faults.is_empty() {
             ui.label("No diagnostics: the project compiles.");
+            if let Some(PanelAction::Save) = action {
+                self.save_problems_dialog();
+            }
             return;
         }
-        let mut chosen = None;
+        let waivers = WaiverIndex::new(session.document());
+        let mut waived: Vec<&Diagnostic> = Vec::new();
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (title, list) in [("Runtime faults", faults), ("Compilation", diagnostics)] {
                 if list.is_empty() {
                     continue;
                 }
-                ui.label(RichText::new(title).italics());
+                let mut heading = Some(title);
                 for diagnostic in list {
-                    let text = format!(
-                        "{} {} {}: {}",
-                        diagnostic.severity(),
-                        diagnostic.code(),
-                        diagnostic.subject(),
-                        diagnostic.message()
-                    );
-                    if ui.selectable_label(false, text).clicked() {
-                        chosen = Some(diagnostic.subject().clone());
+                    if waivers.of(diagnostic).is_some() {
+                        waived.push(diagnostic);
+                        continue;
                     }
+                    if let Some(title) = heading.take() {
+                        ui.label(RichText::new(title).italics());
+                    }
+                    problem_row(ui, diagnostic, &mut action);
                 }
             }
+            if let Some((code, subject)) = &self.waiving {
+                ui.horizontal(|ui| {
+                    ui.label(format!("Reason for waiving {code} on {subject}"));
+                    let field = ui.add(
+                        egui::TextEdit::singleline(&mut self.waive_reason)
+                            .id_salt("waive-reason")
+                            .desired_width(220.0),
+                    );
+                    field.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Reason")
+                    });
+                    if ui.button("Waive it").clicked() {
+                        action = Some(PanelAction::Waive);
+                    }
+                    if ui.button("Keep it").clicked() {
+                        action = Some(PanelAction::KeepIt);
+                    }
+                });
+            }
+            if !waived.is_empty() {
+                egui::CollapsingHeader::new(format!("Waived ({})", waived.len()))
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for diagnostic in &waived {
+                            let reason = waivers
+                                .of(diagnostic)
+                                .map_or("", |waiver| waiver.reason.as_str());
+                            ui.horizontal(|ui| {
+                                ui.label(format!(
+                                    "{} {}: {} (reason: {reason})",
+                                    diagnostic.code(),
+                                    diagnostic.subject(),
+                                    diagnostic.message()
+                                ));
+                                let label = format!(
+                                    "Restore {} {}",
+                                    diagnostic.code(),
+                                    diagnostic.subject()
+                                );
+                                let response = ui.small_button("Restore");
+                                response.widget_info(|| {
+                                    egui::WidgetInfo::labeled(
+                                        egui::Role::Button,
+                                        true,
+                                        label.as_str(),
+                                    )
+                                });
+                                if response.clicked() {
+                                    action = Some(PanelAction::Restore(
+                                        diagnostic.code().as_str().to_owned(),
+                                        diagnostic.subject().clone(),
+                                    ));
+                                }
+                            });
+                        }
+                    });
+            }
         });
-        if let Some(subject) = chosen {
-            self.select(subject);
+        match action {
+            Some(PanelAction::Select(subject)) => self.select(subject),
+            Some(PanelAction::Connect(subject, related)) => {
+                if let Some(session) = &self.session {
+                    let request = ops::connect_touching(
+                        session.document(),
+                        session.catalog(),
+                        &subject,
+                        &related,
+                    );
+                    self.commit(request);
+                }
+            }
+            Some(PanelAction::StartWaive(code, subject)) => {
+                self.waiving = Some((code, subject));
+                self.waive_reason.clear();
+            }
+            Some(PanelAction::Waive) => {
+                if let (Some(session), Some((code, subject))) = (&self.session, self.waiving.take())
+                {
+                    let request =
+                        waivers::waive(session.document(), &code, subject, &self.waive_reason);
+                    self.commit(request);
+                    self.waive_reason.clear();
+                }
+            }
+            Some(PanelAction::KeepIt) => {
+                self.waiving = None;
+                self.waive_reason.clear();
+            }
+            Some(PanelAction::Restore(code, subject)) => {
+                if let Some(session) = &self.session {
+                    let request = waivers::unwaive(session.document(), &code, subject);
+                    self.commit(request);
+                }
+            }
+            Some(PanelAction::Save) => self.save_problems_dialog(),
+            None => {}
         }
     }
 

@@ -115,6 +115,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
+            "circuit-report",
             "circuit-sim",
         ],
         // `rfd` gives the native file dialogs (portal over libdbus on Linux).

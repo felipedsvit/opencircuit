@@ -328,6 +328,20 @@ impl Session {
         &self.diagnostics
     }
 
+    /// The problems of the project as CSV: the faults of the running circuit,
+    /// then the diagnostics of the compilation, each with whether the project
+    /// waives it and why (the `problems` report).
+    #[must_use]
+    pub fn problems_csv(&self) -> String {
+        let mut all: Vec<Diagnostic> = self
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.faults.clone())
+            .unwrap_or_default();
+        all.extend(self.diagnostics.iter().cloned());
+        circuit_report::problems(self.document(), &all).to_csv()
+    }
+
     /// Whether the project compiled and can be simulated.
     #[must_use]
     pub const fn can_simulate(&self) -> bool {

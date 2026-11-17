@@ -393,3 +393,105 @@ fn a_part_clicked_on_a_wire_in_the_window_is_put_in_series_with_it() {
     let undone = document(&harness);
     assert_eq!((undone.symbols.len(), undone.wires.len()), (2, 1));
 }
+
+/// Two pushbuttons whose terminals touch at (0, 2) and are not connected.
+fn touching() -> Schematic {
+    let mut b = SchematicBuilder::new("touching");
+    let s1 = b.device("S1", "pushbutton_no", &[]).unwrap();
+    let s2 = b.device("S2", "pushbutton_no", &[]).unwrap();
+    b.symbol(s1, "contact", None, GridPoint::new(0, 0)).unwrap();
+    b.symbol(s2, "contact", None, GridPoint::new(0, 4)).unwrap();
+    b.finish()
+}
+
+#[test]
+fn a_loose_connection_in_the_problems_list_is_connected_with_one_click() {
+    let mut harness = open(&touching());
+    assert!(
+        harness
+            .query_by_label_contains("Connect OC-STR-018")
+            .is_some()
+    );
+
+    harness.get_by_label_contains("Connect OC-STR-018").click();
+    harness.run();
+
+    assert_eq!(document(&harness).wires.len(), 1);
+    assert!(
+        harness
+            .query_by_label("No diagnostics: the project compiles.")
+            .is_some()
+    );
+    click(&mut harness, "Run");
+    click(&mut harness, "Drawing mode");
+    click(&mut harness, "Modify");
+    click(&mut harness, "Undo last change");
+    assert!(document(&harness).wires.is_empty());
+}
+
+#[test]
+fn a_warning_is_ignored_with_a_reason_listed_as_waived_and_restored() {
+    let mut harness = open(&touching());
+
+    harness.get_by_label_contains("Ignore OC-STR-018").click();
+    harness.run();
+    type_into(&mut harness, "Reason", "test jig");
+    harness.get_by_label("Waive it").click();
+    harness.run();
+
+    let doc = document(&harness);
+    assert_eq!(doc.waivers.len(), 1);
+    assert_eq!(doc.waivers[0].reason, "test jig");
+    assert!(
+        harness
+            .query_by_label_contains("Connect OC-STR-018")
+            .is_none()
+    );
+    assert!(harness.query_by_label("Waived (1)").is_some());
+
+    harness.get_by_label("Waived (1)").click();
+    harness.run();
+    assert!(
+        harness
+            .query_by_label_contains("(reason: test jig)")
+            .is_some()
+    );
+    harness.get_by_label_contains("Restore OC-STR-018").click();
+    harness.run();
+
+    assert!(document(&harness).waivers.is_empty());
+    assert!(
+        harness
+            .query_by_label_contains("Connect OC-STR-018")
+            .is_some()
+    );
+}
+
+#[test]
+fn nothing_is_waived_when_the_reason_is_not_given() {
+    let mut harness = open(&touching());
+
+    harness.get_by_label_contains("Ignore OC-STR-018").click();
+    harness.run();
+    harness.get_by_label("Waive it").click();
+    harness.run();
+
+    assert!(document(&harness).waivers.is_empty());
+}
+
+#[test]
+fn the_list_of_problems_can_be_written_as_csv_with_the_waivers_marked() {
+    let mut harness = open(&touching());
+    let csv = harness.state().session().expect("a project").problems_csv();
+    assert!(csv.starts_with("Severity,Code,Subject,Message,Related,Waived,Reason\n"));
+    assert!(csv.contains("warning,OC-STR-018,"), "{csv}");
+
+    harness.get_by_label_contains("Ignore OC-STR-018").click();
+    harness.run();
+    type_into(&mut harness, "Reason", "test jig");
+    harness.get_by_label("Waive it").click();
+    harness.run();
+
+    let csv = harness.state().session().expect("a project").problems_csv();
+    assert!(csv.contains(",yes,test jig\n"), "{csv}");
+}
