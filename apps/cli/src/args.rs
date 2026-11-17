@@ -72,6 +72,9 @@ pub(crate) enum Command {
         duration_ms: Option<u64>,
         report: OutputFormat,
     },
+    Mcp {
+        root: Option<PathBuf>,
+    },
     Report {
         project: PathBuf,
         which: ReportChoice,
@@ -405,6 +408,15 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
             })
         }
         "report" => parse_report(rest),
+        "mcp" => {
+            let words = Words::split(rest, &["--root"], &[])?;
+            if !words.positional.is_empty() {
+                return Err("`mcp` takes no file; give the directory with `--root`".to_owned());
+            }
+            Ok(Command::Mcp {
+                root: words.value("--root").map(PathBuf::from),
+            })
+        }
         other => Err(format!("unknown command `{other}`")),
     }
 }
@@ -569,6 +581,18 @@ mod tests {
         assert!(parse_words(&["edit", "a.ocircuit"]).is_err());
         assert!(parse_words(&["new"]).is_err());
         assert!(parse_words(&["new", "a", "b"]).is_err());
+    }
+
+    #[test]
+    fn mcp_takes_only_a_root() {
+        assert_eq!(parse_words(&["mcp"]), Ok(Command::Mcp { root: None }));
+        assert_eq!(
+            parse_words(&["mcp", "--root", "work"]),
+            Ok(Command::Mcp {
+                root: Some(PathBuf::from("work"))
+            })
+        );
+        assert!(parse_words(&["mcp", "a.ocircuit"]).is_err());
     }
 
     #[test]
