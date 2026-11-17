@@ -24,7 +24,14 @@ here when it lands.
   when the project is saved, replaced or closed on purpose. After a crash, a
   killed process or a power loss, the next window offers to recover it (as
   unsaved changes, with its original file) or to discard it. A window that is
-  still running is never offered.
+  still running is never offered: it holds an operating-system lock that the
+  system releases however the process ends, so a copy is offered as soon as
+  the window is gone. A panic in the window writes the newest changes before
+  the process ends.
+- **A project open in two windows** is said in the status bar of the second
+  ("Open in another window"): saving in both overwrites each other's changes.
+  The lock lives in the user's data folder, never next to the project, and is
+  released when the first window lets the project go or ends.
 
 ### Fixed
 

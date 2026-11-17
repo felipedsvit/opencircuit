@@ -368,10 +368,14 @@ Decisions, to be confirmed in #118:
   and an indicator in the status bar (native window;
   `apps/desktop/tests/recovery.rs`).
 - [ ] Autosave in the browser build, into browser storage.
-- [ ] A panic in the window writes the recovery copy before the process ends.
+- [x] A panic in the window writes the recovery copy before the process ends,
+  and a copy whose window has stopped is offered at once (the window holds an
+  operating-system lock while it runs).
 - [ ] Optional rotating backups next to the project.
-- [ ] Project lock: a second window or process on the same file is warned; a
-  stale lock is recognized.
+- [x] Project lock: a second window on the same file is warned in the status
+  bar; a lock is released however its window ends, so it is never stale
+  (`apps/desktop/tests/project_lock.rs`). Same user and machine only; the
+  command line does not take it.
 - [ ] Version history: a copy per save in the data folder, restored as a new
   document.
 - [ ] Semantic comparison of two projects (`opencircuit diff`, and in the

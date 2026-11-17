@@ -41,13 +41,15 @@ impl Scratch {
         RecoveryStore::at(self.0.join("recovery"))
     }
 
-    /// The files in the recovery folder.
+    /// The copies and descriptions in the recovery folder; the lock a
+    /// running window holds there is left out.
     fn copies(&self) -> Vec<String> {
         let mut names: Vec<String> = fs::read_dir(self.0.join("recovery"))
             .map(|listing| {
                 listing
                     .filter_map(Result::ok)
                     .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .filter(|name| !name.ends_with(".lock"))
                     .collect()
             })
             .unwrap_or_default();
