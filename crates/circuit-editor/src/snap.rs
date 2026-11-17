@@ -149,10 +149,11 @@ pub fn snap_with(
         });
     }
 
-    if options.wire_points
-        && let Some(found) = wire_point(doc, &layout, pointer, &within)
-    {
-        return Some(found);
+    // No `let` chain: the core builds on Rust 1.85.
+    if options.wire_points {
+        if let Some(found) = wire_point(doc, &layout, pointer, &within) {
+            return Some(found);
+        }
     }
 
     let wire = doc
