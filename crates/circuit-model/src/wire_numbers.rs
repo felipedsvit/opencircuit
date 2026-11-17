@@ -18,7 +18,7 @@ use crate::ids::WireId;
 use crate::layout::LayoutIndex;
 use crate::nets::{NetId, StaticNets};
 use crate::schematic::{Endpoint, Schematic};
-use crate::sheet::sheet_at;
+use crate::sheet::reading_key;
 
 /// The numbers of the wires of a document.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -60,22 +60,11 @@ impl WireNumbers {
                             .chain(net.junctions.iter().filter_map(|id| {
                                 layout.endpoint_position(&Endpoint::Junction(*id))
                             }));
-                    let mut first: Option<(Start, Option<u32>)> = None;
-                    for point in points {
-                        let (sheet, zone) = match sheet_at(doc, point) {
-                            Some(sheet) => (
-                                Some(sheet.number),
-                                sheet.zone_of(point).map_or((0, 0), |z| (z.row, z.column)),
-                            ),
-                            None => (None, (0, 0)),
-                        };
-                        let start = (sheet.unwrap_or(u32::MAX), zone.0, zone.1, point.y, point.x);
-                        if first.is_none_or(|(best, _)| start < best) {
-                            first = Some((start, sheet));
-                        }
-                    }
-                    let (start, sheet) =
-                        first.unwrap_or(((u32::MAX, 0, 0, i32::MAX, i32::MAX), None));
+                    let start = points
+                        .map(|point| reading_key(doc, point))
+                        .min()
+                        .unwrap_or((u32::MAX, 0, 0, i32::MAX, i32::MAX));
+                    let sheet = (start.0 != u32::MAX).then_some(start.0);
                     (start, net.id, sheet)
                 })
                 .collect();

@@ -69,7 +69,7 @@ pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,
 };
-pub use sheet::{Orientation, Sheet, SheetSize, Zone, Zones, sheet_at};
+pub use sheet::{Orientation, Sheet, SheetSize, Zone, Zones, reading_key, sheet_at};
 pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingConnection};
 pub use supply::{
     Conductor, ConductorConflict, ConductorSet, PhaseSequence, SupplyKind, SupplyProfile,

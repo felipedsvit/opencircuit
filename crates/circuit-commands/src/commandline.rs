@@ -15,7 +15,7 @@ use circuit_model::{
     SymbolId, SymbolKey,
 };
 
-use crate::{CommandError, Transaction, ops};
+use crate::{CommandError, Transaction, designators, ops};
 
 /// Longest line that is read, in bytes.
 pub const MAX_LINE_BYTES: usize = 512;
@@ -82,6 +82,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &[],
         usage: "redo",
         help: "Redo the change that was undone.",
+    },
+    CommandSpec {
+        name: "renumber",
+        aliases: &[],
+        usage: "renumber [sheet]",
+        help: "Give the designators the next numbers in reading order, on every sheet or on one.",
     },
     CommandSpec {
         name: "rotate",
@@ -308,6 +314,7 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
     match command.name {
         "place" => place(rest, context),
         "move" => move_selection(rest, context),
+        "renumber" => renumber_designators(rest, context),
         "rotate" => rotate_selection(rest, context),
         "delete" => delete_selection(rest, context),
         "undo" => bare(rest, command, Request::Undo),
@@ -518,6 +525,25 @@ fn move_selection(rest: &[&str], context: &Context<'_>) -> Result<Vec<Request>, 
     )?)])
 }
 
+fn renumber_designators(
+    rest: &[&str],
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    let scope = match rest {
+        [] => designators::Scope::All,
+        [sheet] => designators::Scope::Sheet(
+            sheet
+                .parse::<u32>()
+                .map_err(|_| CommandLineError::Usage("renumber [sheet]"))?,
+        ),
+        _ => return Err(CommandLineError::Usage("renumber [sheet]")),
+    };
+    Ok(vec![Request::Edit(designators::renumber(
+        context.doc,
+        scope,
+    )?)])
+}
+
 fn rotate_selection(
     rest: &[&str],
     context: &Context<'_>,
@@ -686,6 +712,29 @@ mod tests {
     fn requests(line: &str) -> Result<Vec<Request>, CommandLineError> {
         let (doc, catalog, selection) = empty();
         run(line, &context(&doc, &catalog, &selection))
+    }
+
+    #[test]
+    fn renumber_asks_for_a_transaction_on_all_sheets_or_on_one() {
+        let (_, catalog, selection) = empty();
+        let mut b = circuit_model::SchematicBuilder::new("n");
+        let device = b.device("S5", "pushbutton_no", &[]).unwrap();
+        b.symbol(device, "contact", None, GridPoint::new(0, 0))
+            .unwrap();
+        let doc = b.finish();
+
+        let all = run("renumber", &context(&doc, &catalog, &selection)).unwrap();
+        assert!(matches!(&all[..], [Request::Edit(tx)] if tx.edits.len() == 1));
+
+        // There is no sheet 2.
+        assert!(run("renumber 2", &context(&doc, &catalog, &selection)).is_err());
+        for line in ["renumber x", "renumber 1 2", "renumber -1"] {
+            assert_eq!(
+                run(line, &context(&doc, &catalog, &selection)),
+                Err(CommandLineError::Usage("renumber [sheet]")),
+                "{line}"
+            );
+        }
     }
 
     #[test]

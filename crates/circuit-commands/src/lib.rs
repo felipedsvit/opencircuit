@@ -15,8 +15,9 @@
 //! delete, move, rotate, rename, set a parameter, edit supplies) into
 //! transactions, [`copy`] copies, pastes and duplicates part of a
 //! document, [`arrange`] edits several elements at once, and [`sheets`]
-//! edits the sheets and the information of the project, and [`commandline`]
-//! reads a typed command into the same operations. The crate depends on
+//! edits the sheets and the information of the project, [`designators`]
+//! renumbers the reference designators, and [`commandline`] reads a typed
+//! command into the same operations. The crate depends on
 //! `circuit-model` only and does no I/O.
 
 #![forbid(unsafe_code)]
@@ -36,6 +37,7 @@
 pub mod arrange;
 pub mod commandline;
 pub mod copy;
+pub mod designators;
 mod edit;
 mod error;
 mod history;
