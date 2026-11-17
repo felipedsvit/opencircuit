@@ -169,6 +169,9 @@ diagnostic_codes! {
     /// A device of the symbol-only class: it is drawn and wired, but it has
     /// no behaviour in the simulation (ADR-0013).
     NotSimulated = "OC-SEM-011", Semantic, Info, latches = false;
+    /// Two wires of one net carry different wire numbers (ADR-0014); the one
+    /// with the smaller ID wins.
+    WireNumberConflict = "OC-SEM-012", Semantic, Warning, latches = false;
     /// Incompatible conductors meet in one group, including any AC/DC mix.
     ShortCircuit = "OC-ELEC-001", Electrical, Error, latches = true;
     /// Protective earth meets a live conductor.
@@ -419,6 +422,7 @@ mod tests {
         ("OC-SEM-009", "InvalidInterlock", "error", false),
         ("OC-SEM-010", "InvalidTransformer", "error", false),
         ("OC-SEM-011", "NotSimulated", "info", false),
+        ("OC-SEM-012", "WireNumberConflict", "warning", false),
         ("OC-ELEC-001", "ShortCircuit", "error", true),
         ("OC-ELEC-002", "ProtectiveEarthFault", "error", true),
         ("OC-ELEC-003", "NeutralEarthBond", "warning", false),
