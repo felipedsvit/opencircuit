@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use circuit_commands::commandline::{
     self, ModeRequest, Request, SimRequest, ToolRequest, ViewRequest,
 };
+use circuit_commands::designators::{self, Scope};
 use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
@@ -970,6 +971,17 @@ impl DesktopApp {
                         if ui.add_enabled(editing, egui::Button::new(label)).clicked() {
                             ui.close();
                             self.press(key);
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(editing, egui::Button::new("Renumber designators"))
+                        .clicked()
+                    {
+                        ui.close();
+                        if let Some(session) = &self.session {
+                            let request = designators::renumber(session.document(), Scope::All);
+                            self.commit(request);
                         }
                     }
                 });
