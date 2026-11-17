@@ -206,7 +206,7 @@ jobs:
           $numeric = ($env:VERSION -split '-')[0]
           New-Item -ItemType Directory -Force -Path build | Out-Null
           (Get-Content packaging/README.txt -Raw).Replace('@VERSION@', $env:VERSION) | Set-Content build/README.txt
-          & "$env:RUNNER_TEMP/wix/wix.exe" build packaging/windows/opencircuit.wxs -arch x64 `
+          & "$env:RUNNER_TEMP/wix/wix.exe" build packaging/windows/opencircuit.wxs -arch x64 -pdbtype none `
             -d "Version=$numeric" -d "Root=$((Get-Location).Path)" `
             -o "dist/OpenCircuit-$env:VERSION-windows-x86_64.msi"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

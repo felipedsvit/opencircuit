@@ -7,7 +7,7 @@
   opencircuit-cli, with a README.txt in build/:
 
     wix build packaging/windows/opencircuit.wxs -arch x64 \
-      -d Version=0.0.2 -d Root=<the root of the repository> \
+      -pdbtype none -d Version=0.0.2 -d Root=<the root of the repository> \
       -o OpenCircuit-0.0.2-dev-windows-x86_64.msi
 
   `Version` is the numeric version (a.b.c): an installer version has no
