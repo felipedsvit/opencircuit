@@ -8,7 +8,7 @@ is fixed in the same change.
 ## Rules
 
 - The file is JSON (UTF-8) with the `.ocircuit` extension.
-- `schema_version` is mandatory. The current version is 1.
+- `schema_version` is mandatory. The current version is 2.
 - `next_id` is mandatory. Every entity of every collection draws its ID from
   this one counter: IDs start at 1, are unique across collections, are below
   `next_id`, are at most `2^53 - 1`, and are never reused.

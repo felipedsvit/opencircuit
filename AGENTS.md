@@ -83,6 +83,17 @@ cargo deny check
 - Tests are inline `#[cfg(test)] mod tests` next to the code they cover (module file or `src/lib.rs`); golden fixtures live under `tests/fixtures` and `tests/integration`; golden scenarios live under `examples/` too.
 - Every behaviour change needs a regression test. Every schema change needs a migration. Every component declares its terminals and provenance.
 
+## Conservative interface
+
+The window of M6 is intuitive and its users know it. Interface changes are incremental: add to the existing panels, menus and shortcuts, and do not rearrange them.
+
+- Do not move, rename or restyle an existing control, tab, menu entry, shortcut, accessible label or icon.
+- Do not refactor `apps/desktop` (`app.rs`, `palette.rs`, `inspector.rs`) beyond what the feature needs. New controls go into an existing section, or into a new collapsible section placed after the current ones.
+- A fresh window looks and behaves as before: same default tab, panel sizes and mode.
+- The tests in `apps/desktop/tests/` pass unchanged. Add assertions or new test files; do not edit an existing test. A needed edit is explained in the pull request.
+- A new top-level panel, a new palette tab or a change of a default needs its own issue first.
+- The same holds for the command line: flags, JSON field names and exit codes of existing commands do not change; additions only.
+
 ## Working rules
 
 - **A person is accountable.** Whoever runs an agent answers for what it changes and for its review comments.
