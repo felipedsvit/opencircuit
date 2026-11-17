@@ -1,6 +1,6 @@
 {
-  "schema_version": 3,
-  "next_id": 53,
+  "schema_version": 4,
+  "next_id": 55,
   "project": {
     "name": "Partida direta",
     "grid_unit": 10,
@@ -732,6 +732,26 @@
         }
       },
       "route": []
+    }
+  ],
+  "texts": [
+    {
+      "id": 53,
+      "position": {
+        "x": 6,
+        "y": 4
+      },
+      "text": "Stop: normally closed",
+      "anchor": "left"
+    },
+    {
+      "id": 54,
+      "position": {
+        "x": 14,
+        "y": 34
+      },
+      "text": "Control circuit: 24 V DC",
+      "anchor": "left"
     }
   ]
 }

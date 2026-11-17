@@ -269,5 +269,6 @@ fn subject_name(circuit: &CompiledCircuit, subject: &Subject) -> String {
         Subject::Wire(wire) => format!("wire#{wire}"),
         Subject::Junction(junction) => format!("junction#{junction}"),
         Subject::Sheet(sheet) => format!("sheet#{sheet}"),
+        Subject::Text(text) => format!("text#{text}"),
     }
 }

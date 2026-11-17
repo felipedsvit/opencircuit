@@ -64,6 +64,7 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
     )?;
     count("wires", doc.wires.len(), MAX_ENTITIES_PER_COLLECTION)?;
     count("waivers", doc.waivers.len(), MAX_WAIVERS)?;
+    count("texts", doc.texts.len(), MAX_ENTITIES_PER_COLLECTION)?;
 
     text("project name", &doc.project.name)?;
     for (what, value) in [
@@ -112,6 +113,9 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
                 }
             }
         }
+    }
+    for note in &doc.texts {
+        text("text note", &note.text)?;
     }
     for waiver in &doc.waivers {
         text("waiver code", &waiver.code)?;

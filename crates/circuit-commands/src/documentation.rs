@@ -70,6 +70,19 @@ pub fn set_wire_number(
     Ok(tx)
 }
 
+/// Change the words of a text note; see [`crate::ops::set_text`].
+///
+/// # Errors
+///
+/// As [`crate::ops::set_text`].
+pub fn set_text(
+    doc: &Schematic,
+    text: circuit_model::TextId,
+    words: &str,
+) -> Result<Transaction, CommandError> {
+    crate::ops::set_text(doc, text, words)
+}
+
 /// Set (`Some`) or clear (`None`) the rule that numbers the wires of the
 /// project. Without a rule no wire number is drawn.
 ///

@@ -20,7 +20,7 @@ use circuit_commands::{designators, documentation, waivers};
 use circuit_model::{
     ComponentCatalog, DeviceId, Endpoint, GridPoint, JunctionId, ModelRef, Orientation, ParamValue,
     PinRef, QuarterTurn, Schematic, SheetSize, Subject, SupplyId, SymbolId, SymbolKey, TerminalKey,
-    WireId, Zones,
+    TextId, WireId, Zones,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -198,6 +198,16 @@ enum Operation {
     /// Renumber the designators in reading order, on every sheet or on the
     /// sheet with this number.
     Renumber { sheet: Option<u32> },
+    /// Add a text note (ADR-0015): one line of at most 120 characters.
+    AddText {
+        at: [i32; 2],
+        text: String,
+        anchor: Option<String>,
+        #[serde(rename = "as")]
+        name: Option<String>,
+    },
+    /// Change the words of a text note, by name or ID.
+    SetText { text: Value, to: String },
 }
 
 impl Operation {
@@ -222,6 +232,8 @@ impl Operation {
             Self::Waive { .. } => "waive",
             Self::Unwaive { .. } => "unwaive",
             Self::Renumber { .. } => "renumber",
+            Self::AddText { .. } => "add_text",
+            Self::SetText { .. } => "set_text",
         }
     }
 }
@@ -237,6 +249,8 @@ pub enum Created {
     Junction(JunctionId),
     /// A wire.
     Wire(WireId),
+    /// A text note.
+    Text(TextId),
 }
 
 impl Created {
@@ -248,6 +262,7 @@ impl Created {
             Self::Symbol(_) => "symbol",
             Self::Junction(_) => "junction",
             Self::Wire(_) => "wire",
+            Self::Text(_) => "text",
         }
     }
 
@@ -259,6 +274,7 @@ impl Created {
             Self::Symbol(id) => id.0,
             Self::Junction(id) => id.0,
             Self::Wire(id) => id.0,
+            Self::Text(id) => id.0,
         }
     }
 }
@@ -716,6 +732,32 @@ impl Run<'_> {
                 let tx = waivers::unwaive(&self.doc, code, subject).map_err(refused)?;
                 self.commit(&tx)
             }
+            Operation::AddText {
+                at,
+                text,
+                anchor,
+                name,
+            } => {
+                let anchor = match anchor.as_deref() {
+                    None | Some("left") => circuit_model::TextAnchor::Left,
+                    Some("center") => circuit_model::TextAnchor::Center,
+                    Some(other) => {
+                        return Err(format!("unknown anchor `{other}`; use `left` or `center`"));
+                    }
+                };
+                let tx = ops::add_text(&self.doc, point(*at), text, anchor).map_err(refused)?;
+                let id = tx.edits.iter().find_map(|edit| match edit {
+                    Edit::InsertText(note) => Some(note.id),
+                    _ => None,
+                });
+                self.commit(&tx)?;
+                self.remember(name.as_deref(), id.map(Created::Text))
+            }
+            Operation::SetText { text, to } => {
+                let id = TextId(self.named_or_id(text, "text")?);
+                let tx = ops::set_text(&self.doc, id, to).map_err(refused)?;
+                self.commit(&tx)
+            }
             Operation::Renumber { sheet } => {
                 let scope = sheet.map_or(designators::Scope::All, designators::Scope::Sheet);
                 let tx = designators::renumber(&self.doc, scope).map_err(refused)?;
@@ -836,6 +878,7 @@ impl Run<'_> {
             Value::String(name) => match (self.names.get(name), expect) {
                 (Some(Created::Junction(id)), "junction") => Ok(id.0),
                 (Some(Created::Wire(id)), "wire") => Ok(id.0),
+                (Some(Created::Text(id)), "text") => Ok(id.0),
                 (Some(other), _) => Err(format!("`{name}` is a {}, not a {expect}", other.kind())),
                 (None, _) => Err(format!("no element is named `{name}`")),
             },
@@ -892,6 +935,7 @@ impl Run<'_> {
                     Some(Created::Symbol(id)) => Subject::Symbol(*id),
                     Some(Created::Junction(id)) => Subject::Junction(*id),
                     Some(Created::Wire(id)) => Subject::Wire(*id),
+                    Some(Created::Text(id)) => Subject::Text(*id),
                     Some(Created::Supply(_)) => {
                         return Err(format!("`{name}` is a supply, which cannot be selected"));
                     }
@@ -906,6 +950,11 @@ impl Run<'_> {
                 Value::Object(object) if object.len() == 1 && object.contains_key("wire") => {
                     Subject::Wire(WireId(
                         self.named_or_id(object.get("wire").unwrap_or(&Value::Null), "wire")?,
+                    ))
+                }
+                Value::Object(object) if object.len() == 1 && object.contains_key("text") => {
+                    Subject::Text(TextId(
+                        self.named_or_id(object.get("text").unwrap_or(&Value::Null), "text")?,
                     ))
                 }
                 Value::Object(object) if object.len() == 1 && object.contains_key("device") => {

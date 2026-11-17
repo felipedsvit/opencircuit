@@ -1098,6 +1098,13 @@ impl DesktopApp {
                     }
                     ui.separator();
                     if ui
+                        .add_enabled(editing, egui::Button::new("Add text"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.editor.set_tool(Tool::Text);
+                    }
+                    if ui
                         .add_enabled(editing, egui::Button::new("Renumber designators"))
                         .clicked()
                     {
@@ -1641,6 +1648,7 @@ impl DesktopApp {
             Request::Tool(tool) => self.editor.set_tool(match tool {
                 ToolRequest::Select => Tool::Select,
                 ToolRequest::Wire => Tool::Wire,
+                ToolRequest::Text => Tool::Text,
                 ToolRequest::Place {
                     model,
                     symbol,
@@ -1746,6 +1754,7 @@ impl DesktopApp {
             Tool::Select => "Click to select, drag to move, R to rotate, Delete to remove.",
             Tool::Place { .. } => "Click to place, R to rotate, Esc to stop placing.",
             Tool::Wire => "Click a pin to start, empty space to bend, a pin or wire to finish.",
+            Tool::Text => "Click to add a note, then type its words in the inspector.",
         };
         ui.label(hint);
     }

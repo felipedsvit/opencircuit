@@ -11,7 +11,7 @@ use std::fmt;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{DeviceId, JunctionId, SheetId, SupplyId, SymbolId, WireId};
+use crate::ids::{DeviceId, JunctionId, SheetId, SupplyId, SymbolId, TextId, WireId};
 use crate::schematic::PinRef;
 
 /// How serious a diagnostic is.
@@ -153,6 +153,10 @@ diagnostic_codes! {
     /// that cannot be waived (an error, or this one), a subject that is not in
     /// the document, or that repeats another waiver (ADR-0014).
     InvalidWaiver = "OC-STR-020", Structural, Warning, latches = false;
+    /// A text note that is empty, has more than 120 characters or a control
+    /// character (ADR-0015). A warning: a note has no electrical meaning, and
+    /// the drawing shows it cleaned.
+    InvalidText = "OC-STR-021", Structural, Warning, latches = false;
     /// The same reference designator is used by distinct devices.
     DuplicateReference = "OC-SEM-001", Semantic, Error, latches = false;
     /// A reference designator that does not match the allowed pattern.
@@ -261,6 +265,8 @@ pub enum Subject {
     Junction(JunctionId),
     /// A drawing sheet.
     Sheet(SheetId),
+    /// A text note.
+    Text(TextId),
 }
 
 impl fmt::Display for Subject {
@@ -274,6 +280,7 @@ impl fmt::Display for Subject {
             Self::Wire(id) => write!(f, "wire {id}"),
             Self::Junction(id) => write!(f, "junction {id}"),
             Self::Sheet(id) => write!(f, "sheet {id}"),
+            Self::Text(id) => write!(f, "text {id}"),
         }
     }
 }
@@ -430,6 +437,7 @@ mod tests {
         ("OC-STR-018", "LooseConnection", "warning", false),
         ("OC-STR-019", "OverlappingWires", "warning", false),
         ("OC-STR-020", "InvalidWaiver", "warning", false),
+        ("OC-STR-021", "InvalidText", "warning", false),
         ("OC-SEM-001", "DuplicateReference", "error", false),
         ("OC-SEM-002", "InvalidReference", "error", false),
         ("OC-SEM-003", "MissingRequiredTerminal", "error", false),

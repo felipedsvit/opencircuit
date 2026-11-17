@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 use circuit_model::builder::pin;
 use circuit_model::{
     ComponentCatalog, DeviceId, DiagnosticCode, Endpoint, GridPoint, LayoutIndex, ModelRef,
-    ParamValue, QuarterTurn, Schematic, Subject, SupplyId, SymbolId, SymbolKey, is_orthogonal,
+    ParamValue, QuarterTurn, Schematic, Subject, SupplyId, SymbolId, SymbolKey, TextAnchor, TextId,
+    is_orthogonal,
 };
 use proptest::prelude::*;
 
@@ -2494,5 +2495,120 @@ mod connect_touching {
             ),
             Err(CommandError::Missing(_))
         ));
+    }
+}
+
+mod text_notes {
+    use super::*;
+
+    fn with_note() -> (Schematic, History, TextId) {
+        let mut doc = Schematic::new("notes");
+        let mut history = History::new();
+        run(&mut doc, &mut history, |d| {
+            ops::add_text(d, point(4, 3), "Motor feed", TextAnchor::Left)
+        });
+        let id = doc.texts[0].id;
+        (doc, history, id)
+    }
+
+    #[test]
+    fn adding_a_text_takes_the_next_id_and_one_undo_removes_it() {
+        let mut doc = Schematic::new("notes");
+        let mut history = History::new();
+        let first_free = doc.next_id;
+
+        run(&mut doc, &mut history, |d| {
+            ops::add_text(d, point(1, 2), "Title", TextAnchor::Center)
+        });
+
+        assert_eq!(doc.texts.len(), 1);
+        assert_eq!(doc.texts[0].id, TextId(first_free));
+        assert_eq!(doc.texts[0].anchor, TextAnchor::Center);
+        assert!(doc.next_id > first_free);
+        assert!(history.undo(&mut doc).unwrap());
+        assert!(doc.texts.is_empty());
+        assert!(history.redo(&mut doc).unwrap());
+        assert_eq!(doc.texts[0].text, "Title");
+    }
+
+    #[test]
+    fn a_text_that_is_empty_too_long_or_with_a_control_character_is_refused() {
+        let doc = Schematic::new("notes");
+        for words in [String::new(), "x".repeat(121), "a\nb".to_owned()] {
+            assert!(
+                matches!(
+                    ops::add_text(&doc, point(0, 0), &words, TextAnchor::Left),
+                    Err(CommandError::InvalidParameter(_))
+                ),
+                "{words:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn editing_the_words_is_undone_and_an_equal_text_changes_nothing() {
+        let (mut doc, mut history, id) = with_note();
+
+        run(&mut doc, &mut history, |d| {
+            ops::set_text(d, id, "Pump feed")
+        });
+        assert_eq!(doc.texts[0].text, "Pump feed");
+        assert!(history.undo(&mut doc).unwrap());
+        assert_eq!(doc.texts[0].text, "Motor feed");
+
+        let same = ops::set_text(&doc, id, "Motor feed").unwrap();
+        assert!(same.edits.is_empty());
+        assert!(matches!(
+            ops::set_text(&doc, TextId(999), "x"),
+            Err(CommandError::Missing(Subject::Text(_)))
+        ));
+        assert!(ops::set_text(&doc, id, "").is_err());
+    }
+
+    #[test]
+    fn a_text_moves_with_the_selection_and_is_deleted_with_it() {
+        let (mut doc, mut history, id) = with_note();
+        let catalog = ComponentCatalog::builtin();
+        let selection = BTreeSet::from([Subject::Text(id)]);
+
+        run(&mut doc, &mut history, |d| {
+            ops::move_by(d, &catalog, &selection, point(3, -1))
+        });
+        assert_eq!(doc.texts[0].position, point(7, 2));
+        assert!(history.undo(&mut doc).unwrap());
+        assert_eq!(doc.texts[0].position, point(4, 3));
+
+        run(&mut doc, &mut history, |d| {
+            ops::delete(d, &catalog, &selection)
+        });
+        assert!(doc.texts.is_empty());
+        assert!(history.undo(&mut doc).unwrap());
+        assert_eq!(doc.texts.len(), 1);
+        assert!(integrity(&doc).is_empty());
+    }
+
+    #[test]
+    fn moving_or_deleting_a_text_that_does_not_exist_is_refused() {
+        let doc = Schematic::new("notes");
+        let catalog = ComponentCatalog::builtin();
+        let missing = BTreeSet::from([Subject::Text(TextId(5))]);
+
+        assert!(matches!(
+            ops::delete(&doc, &catalog, &missing),
+            Err(CommandError::Missing(Subject::Text(_)))
+        ));
+        assert!(matches!(
+            ops::move_by(&doc, &catalog, &missing, point(1, 0)),
+            Err(CommandError::Missing(Subject::Text(_)))
+        ));
+    }
+
+    #[test]
+    fn moving_a_text_past_the_coordinate_range_is_refused() {
+        let (doc, _, id) = with_note();
+        let catalog = ComponentCatalog::builtin();
+        let selection = BTreeSet::from([Subject::Text(id)]);
+
+        assert!(ops::move_by(&doc, &catalog, &selection, point(i32::MAX, 0)).is_err(),);
     }
 }

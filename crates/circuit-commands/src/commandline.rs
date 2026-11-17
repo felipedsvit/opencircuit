@@ -114,6 +114,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "Run, pause, advance or restart the simulation.",
     },
     CommandSpec {
+        name: "text",
+        aliases: &[],
+        usage: "text [x,y words]",
+        help: "Choose the text tool, or add a note with the words at a point.",
+    },
+    CommandSpec {
         name: "undo",
         aliases: &["u"],
         usage: "undo",
@@ -140,6 +146,8 @@ pub enum ToolRequest {
     Select,
     /// Draw wires.
     Wire,
+    /// Add a text note at each click.
+    Text,
     /// Place this symbol where the user clicks.
     Place {
         /// The model.
@@ -321,6 +329,7 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
         "redo" => bare(rest, command, Request::Redo),
         "save" => bare(rest, command, Request::Save),
         "wire" => bare(rest, command, Request::Tool(ToolRequest::Wire)),
+        "text" => text_note(rest, command, context),
         "select" => bare(rest, command, Request::Tool(ToolRequest::Select)),
         "zoom" => zoom(rest, command),
         "mode" => mode(rest, command),
@@ -522,6 +531,27 @@ fn move_selection(rest: &[&str], context: &Context<'_>) -> Result<Vec<Request>, 
         context.catalog,
         context.selection,
         delta,
+    )?)])
+}
+
+/// `text` chooses the tool; `text x,y words…` adds a note, its words joined by
+/// single spaces.
+fn text_note(
+    rest: &[&str],
+    command: &CommandSpec,
+    context: &Context<'_>,
+) -> Result<Vec<Request>, CommandLineError> {
+    let Some((at, words)) = rest.split_first() else {
+        return Ok(vec![Request::Tool(ToolRequest::Text)]);
+    };
+    if words.is_empty() {
+        return Err(CommandLineError::Usage(command.usage));
+    }
+    Ok(vec![Request::Edit(ops::add_text(
+        context.doc,
+        point(at)?,
+        &words.join(" "),
+        circuit_model::TextAnchor::Left,
     )?)])
 }
 
@@ -776,6 +806,7 @@ mod tests {
         for (line, request) in [
             ("W", Request::Tool(ToolRequest::Wire)),
             ("wire", Request::Tool(ToolRequest::Wire)),
+            ("TEXT", Request::Tool(ToolRequest::Text)),
             ("SELECT", Request::Tool(ToolRequest::Select)),
             ("u", Request::Undo),
             ("Redo", Request::Redo),
@@ -1025,5 +1056,41 @@ mod tests {
             let _ = run(&line, &context(&doc, &catalog, &selection));
             let _ = run(&format!("move {x},{y}"), &context(&doc, &catalog, &selection));
         }
+    }
+
+    #[test]
+    fn text_alone_chooses_the_tool_and_with_a_point_and_words_adds_a_note() {
+        assert_eq!(requests("text"), Ok(vec![Request::Tool(ToolRequest::Text)]));
+
+        let doc = Schematic::new("notes");
+        let catalog = ComponentCatalog::builtin();
+        let selection = BTreeSet::new();
+        let context = Context {
+            doc: &doc,
+            catalog: &catalog,
+            selection: &selection,
+        };
+        let made = run("text 4,3  Motor   feed", &context).unwrap();
+
+        let [Request::Edit(tx)] = made.as_slice() else {
+            panic!("one edit expected: {made:?}");
+        };
+        let (next, _) = tx.apply_to(&doc).unwrap();
+        assert_eq!(next.texts[0].text, "Motor feed");
+        assert_eq!(next.texts[0].position, GridPoint::new(4, 3));
+        // A point without words, a bad point and a refused text say so.
+        assert_eq!(
+            run("text 4,3", &context),
+            Err(CommandLineError::Usage("text [x,y words]"))
+        );
+        assert!(matches!(
+            run("text nope hello", &context),
+            Err(CommandLineError::BadPoint(_))
+        ));
+        let long = format!("text 0,0 {}", "x".repeat(121));
+        assert!(matches!(
+            run(&long, &context),
+            Err(CommandLineError::Refused(_))
+        ));
     }
 }

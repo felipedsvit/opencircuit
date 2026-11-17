@@ -6,9 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use circuit_model::catalog::PARAM_INITIAL_CLOSED;
 use circuit_model::{
     ComponentCatalog, ComponentModel, ConductorSet, CrossReferences, DeviceClass, DeviceId,
-    JunctionId, LayoutIndex, Location, MotorState, PinRef, Schematic, SheetId, SimSnapshot,
-    StaticNets, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire,
-    WireId, WireNumbers, cross_references, signal_arrows, signal_references, terminal_label,
+    JunctionId, LayoutIndex, Location, MAX_NOTE_CHARS, MotorState, PinRef, Schematic, SheetId,
+    SimSnapshot, StaticNets, Subject, SymbolId, SymbolInstance, SymbolKind, TextAnchor, TextId,
+    TextNote, TimerView, WindingConnection, Wire, WireId, WireNumbers, cross_references,
+    signal_arrows, signal_references, terminal_label, text_bounds,
 };
 
 use crate::frame::{draw_sheets, frame_rect};
@@ -176,6 +177,7 @@ pub fn build_scene(
     let state = State::new(snapshot);
     let wires = by_id(&doc.wires, |wire| wire.id);
     let symbols = by_id(&doc.symbols, |symbol| symbol.id);
+    let texts = by_id(&doc.texts, |note| note.id);
     let mut scene = Scene::default();
 
     // Frames first, so that the drawing lies over them.
@@ -222,6 +224,7 @@ pub fn build_scene(
 
     draw_wire_numbers(&mut scene, doc, catalog, &layout, &wires);
     draw_signal_names(&mut scene, doc, catalog, &layout);
+    draw_texts(&mut scene, &texts);
 
     if let Some(snapshot) = snapshot {
         let subjects: BTreeSet<&Subject> = snapshot
@@ -235,6 +238,7 @@ pub fn build_scene(
                 &layout,
                 &wires,
                 &symbols,
+                &texts,
                 subject,
                 StyleKey::Fault,
             );
@@ -247,6 +251,7 @@ pub fn build_scene(
             &layout,
             &wires,
             &symbols,
+            &texts,
             subject,
             StyleKey::Traced,
         );
@@ -258,6 +263,7 @@ pub fn build_scene(
             &layout,
             &wires,
             &symbols,
+            &texts,
             subject,
             StyleKey::Selected,
         );
@@ -456,6 +462,31 @@ fn draw_label(
     }
 }
 
+/// The text notes (ADR-0015), as labels. A note a file made too long, or with
+/// a control character, is drawn cut and cleaned: validation warns about it.
+fn draw_texts(scene: &mut Scene, texts: &BTreeMap<TextId, &TextNote>) {
+    for note in texts.values() {
+        let text: String = note
+            .text
+            .chars()
+            .take(MAX_NOTE_CHARS)
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect();
+        scene.push(
+            Shape::Text {
+                at: ScenePoint::from_grid(note.position),
+                text,
+                anchor: match note.anchor {
+                    TextAnchor::Left => Anchor::Left,
+                    TextAnchor::Center => Anchor::Center,
+                },
+            },
+            StyleKey::Label,
+            Some(Subject::Text(note.id)),
+        );
+    }
+}
+
 /// The name of every signal arrow above it, and where the other arrows of its
 /// name are under its designator, as `-> 2/4B` (ADR-0016). Nothing is drawn
 /// for a drawing without arrows.
@@ -643,6 +674,7 @@ fn outline(
     layout: &LayoutIndex<'_>,
     wires: &BTreeMap<WireId, &Wire>,
     symbols: &BTreeMap<SymbolId, &SymbolInstance>,
+    texts: &BTreeMap<TextId, &TextNote>,
     subject: &Subject,
     style: StyleKey,
 ) {
@@ -689,6 +721,11 @@ fn outline(
                 layout.endpoint_position(&circuit_model::Endpoint::Junction(*id))
             {
                 ring(scene, ScenePoint::from_grid(position), RING_RADIUS);
+            }
+        }
+        Subject::Text(id) => {
+            if let Some(area) = texts.get(id).and_then(|note| text_bounds(note)) {
+                scene.push(Shape::Rect(scene_rect(area)), style, Some(subject.clone()));
             }
         }
     }

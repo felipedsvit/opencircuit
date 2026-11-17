@@ -239,6 +239,24 @@ pub fn stretch_route(
     Some(path.into_iter().skip(1).take(inner).collect())
 }
 
+/// The area a text note covers, in grid units: one line of the label font
+/// (0.48 grid units a character, two units high) from, or around, its anchor.
+/// `None` when it would leave the coordinate range.
+#[must_use]
+pub fn text_bounds(note: &crate::documentation::TextNote) -> Option<GridRect> {
+    use crate::documentation::{MAX_NOTE_CHARS, TextAnchor};
+    let chars = i32::try_from(note.text.chars().count().min(MAX_NOTE_CHARS)).ok()?;
+    let width = chars.checked_mul(48)?.checked_add(99)?.checked_div(100)?;
+    let left = match note.anchor {
+        TextAnchor::Left => note.position.x,
+        TextAnchor::Center => note.position.x.checked_sub(width.checked_div(2)?)?,
+    };
+    Some(GridRect::from_corners(
+        GridPoint::new(left, note.position.y.checked_sub(1)?),
+        GridPoint::new(left.checked_add(width)?, note.position.y.checked_add(1)?),
+    ))
+}
+
 /// Whether `p` lies on the segment from `a` to `b`, ends included. Exact on
 /// integers: the products of coordinate differences are taken in `i128`.
 #[must_use]
@@ -281,6 +299,34 @@ pub fn is_orthogonal(points: &[GridPoint]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_text_covers_a_line_from_its_anchor_or_around_it() {
+        use crate::documentation::{TextAnchor, TextNote};
+        use crate::ids::TextId;
+        let note = |anchor, text: &str| TextNote {
+            id: TextId(1),
+            position: GridPoint::new(10, 5),
+            text: text.to_owned(),
+            anchor,
+        };
+
+        // Ten characters are about five grid units wide and two high.
+        let left = text_bounds(&note(TextAnchor::Left, "0123456789")).unwrap();
+        assert_eq!(
+            (left.min, left.max),
+            (GridPoint::new(10, 4), GridPoint::new(15, 6))
+        );
+        let centre = text_bounds(&note(TextAnchor::Center, "0123456789")).unwrap();
+        assert_eq!((centre.min.x, centre.max.x), (8, 13));
+        assert!(centre.contains(GridPoint::new(10, 5)));
+        // The edge of the coordinate range gives nothing instead of overflowing.
+        let edge = TextNote {
+            position: GridPoint::new(i32::MAX, i32::MAX),
+            ..note(TextAnchor::Left, "x")
+        };
+        assert_eq!(text_bounds(&edge), None);
+    }
+
     use super::*;
     use crate::builder::{SchematicBuilder, pin};
     use crate::geometry::QuarterTurn;

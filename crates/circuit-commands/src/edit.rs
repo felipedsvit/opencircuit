@@ -8,7 +8,7 @@
 use circuit_model::{
     Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId, ModelRef, ParamValue,
     ProjectMeta, QuarterTurn, ReferenceDesignator, Schematic, Sheet, SheetId, Subject, SupplyId,
-    SupplyProfile, SymbolId, SymbolInstance, Waiver, Wire, WireId,
+    SupplyProfile, SymbolId, SymbolInstance, TextId, TextNote, Waiver, Wire, WireId,
 };
 
 use crate::error::CommandError;
@@ -26,6 +26,24 @@ pub enum Edit {
     RemoveSheet(SheetId),
     /// Replace a sheet with one of the same ID.
     SetSheet(Sheet),
+    /// Add a text note.
+    InsertText(TextNote),
+    /// Remove a text note.
+    RemoveText(TextId),
+    /// Change the content of a text note.
+    SetText {
+        /// The text.
+        text: TextId,
+        /// The new content.
+        content: String,
+    },
+    /// Move a text note.
+    MoveText {
+        /// The text.
+        text: TextId,
+        /// The new anchor point.
+        position: GridPoint,
+    },
     /// Add a supply profile.
     InsertSupply(SupplyProfile),
     /// Remove a supply profile.
@@ -176,6 +194,33 @@ impl Edit {
                 let slot = sorted::find_mut(&mut doc.sheets, &id, |s| s.id)
                     .ok_or_else(|| missing(Subject::Sheet(id)))?;
                 Ok(Self::SetSheet(std::mem::replace(slot, sheet)))
+            }
+            Self::InsertText(note) => {
+                let id = note.id;
+                if sorted::insert(&mut doc.texts, note, |t| t.id) {
+                    Ok(Self::RemoveText(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Text(id)))
+                }
+            }
+            Self::RemoveText(id) => sorted::remove(&mut doc.texts, &id, |t| t.id)
+                .map(Self::InsertText)
+                .ok_or_else(|| missing(Subject::Text(id))),
+            Self::SetText { text, content } => {
+                let found = sorted::find_mut(&mut doc.texts, &text, |t| t.id)
+                    .ok_or_else(|| missing(Subject::Text(text)))?;
+                Ok(Self::SetText {
+                    text,
+                    content: std::mem::replace(&mut found.text, content),
+                })
+            }
+            Self::MoveText { text, position } => {
+                let found = sorted::find_mut(&mut doc.texts, &text, |t| t.id)
+                    .ok_or_else(|| missing(Subject::Text(text)))?;
+                Ok(Self::MoveText {
+                    text,
+                    position: std::mem::replace(&mut found.position, position),
+                })
             }
             Self::InsertSupply(supply) => {
                 let id = supply.id;
