@@ -220,6 +220,43 @@ impl StaticNets {
         })
     }
 
+    /// Every terminal, junction and wire of the nets that touch `selection`,
+    /// for tracing a net (ADR-0014): a wire, a junction, a terminal or a
+    /// symbol (all its terminals) each bring the nets they are in. A net with
+    /// no wire is left out, since there is nothing to follow.
+    #[must_use]
+    pub fn traced(
+        &self,
+        selection: &std::collections::BTreeSet<crate::diagnostics::Subject>,
+    ) -> std::collections::BTreeSet<crate::diagnostics::Subject> {
+        use crate::diagnostics::Subject;
+        let mut wanted: std::collections::BTreeSet<NetId> = std::collections::BTreeSet::new();
+        for subject in selection {
+            match subject {
+                Subject::Wire(id) => wanted.extend(self.net_of_wire(*id)),
+                Subject::Junction(id) => wanted.extend(self.net_of_junction(*id)),
+                Subject::Pin(pin) => wanted.extend(self.net_of_pin(pin)),
+                Subject::Symbol(symbol) => wanted.extend(
+                    self.of_pin
+                        .iter()
+                        .filter(|(pin, _)| pin.symbol_id == *symbol)
+                        .map(|(_, net)| *net),
+                ),
+                _ => {}
+            }
+        }
+        let mut traced = std::collections::BTreeSet::new();
+        for id in wanted {
+            let Some(net) = self.net(id).filter(|net| !net.wires.is_empty()) else {
+                continue;
+            };
+            traced.extend(net.pins.iter().cloned().map(Subject::Pin));
+            traced.extend(net.junctions.iter().copied().map(Subject::Junction));
+            traced.extend(net.wires.iter().copied().map(Subject::Wire));
+        }
+        traced
+    }
+
     /// Every net, in the order of its [`NetId`].
     #[must_use]
     pub fn nets(&self) -> &[Net] {
@@ -350,6 +387,37 @@ mod tests {
         assert_eq!(nets.net_of_pin(&pin_ref(second, "p1")), Some(NetId(2)));
         assert_eq!(nets.net_of_pin(&pin_ref(second, "p2")), Some(NetId(3)));
         assert_eq!(nets.nets().len(), 4);
+    }
+
+    #[test]
+    fn tracing_a_wire_a_junction_or_a_symbol_brings_the_whole_net() {
+        use crate::diagnostics::Subject;
+        use std::collections::BTreeSet;
+
+        let (mut b, first, second) = two_buttons();
+        let junction = b.junction(GridPoint::new(5, 5)).unwrap();
+        b.wire(pin(first, "p2"), junction).unwrap();
+        b.wire(junction, pin(second, "p1")).unwrap();
+        let (doc, nets) = nets_of(b);
+        let whole = nets.traced(&BTreeSet::from([Subject::Wire(doc.wires[0].id)]));
+
+        // The net holds both pins, the junction and both wires.
+        assert_eq!(whole.len(), 5);
+        assert_eq!(
+            nets.traced(&BTreeSet::from([Subject::Junction(doc.junctions[0].id)])),
+            whole
+        );
+        // A symbol brings the nets of all its terminals; the free one has no
+        // wire and brings nothing.
+        assert_eq!(
+            nets.traced(&BTreeSet::from([Subject::Symbol(first)])),
+            whole
+        );
+        assert!(nets.traced(&BTreeSet::new()).is_empty());
+        assert!(
+            nets.traced(&BTreeSet::from([Subject::Device(doc.devices[0].id)]))
+                .is_empty()
+        );
     }
 
     #[test]

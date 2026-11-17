@@ -13,7 +13,7 @@ use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTa
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
     CatalogError, Category, ComponentCatalog, Control, DeviceId, GridPoint, InputAction,
-    LayoutIndex, SheetId, Subject,
+    LayoutIndex, SheetId, StaticNets, Subject,
 };
 use circuit_renderer::{
     SUBUNITS_PER_GRID, Scene, SceneItem, SceneOptions, ScenePoint, SceneRect, Shape, StyleKey,
@@ -133,6 +133,10 @@ pub struct DesktopApp {
     crosshair_off: bool,
     /// Where the context menu of the drawing is open, in screen points.
     context_menu: Option<egui::Pos2>,
+    /// The net of the selection is outlined (View menu, key T).
+    trace_net: bool,
+    /// What is traced this frame, and a line about it for the status bar.
+    traced: (BTreeSet<Subject>, String),
 }
 
 impl DesktopApp {
@@ -668,6 +672,7 @@ impl DesktopApp {
             self.styled = true;
         }
         let tokens = Tokens::of(ui);
+        self.update_trace();
         self.menu_bar(ui);
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
         if self.session.is_some() {
@@ -833,6 +838,36 @@ impl DesktopApp {
         if pressed(ui, egui::Key::F) && !self.editor.selection().is_empty() {
             self.frame_selection = true;
         }
+        if pressed(ui, egui::Key::T) {
+            self.trace_net = !self.trace_net;
+        }
+    }
+
+    /// Work out the net to outline this frame: that of the selection while
+    /// tracing is on, nothing otherwise.
+    fn update_trace(&mut self) {
+        self.traced = match (&self.session, self.trace_net) {
+            (Some(session), true) if !self.editor.selection().is_empty() => {
+                let nets = StaticNets::build(session.document(), session.catalog());
+                let traced = nets.traced(self.editor.selection());
+                let count =
+                    |wanted: fn(&Subject) -> bool| traced.iter().filter(|s| wanted(s)).count();
+                let text = if traced.is_empty() {
+                    String::new()
+                } else {
+                    let plural = |n: usize, noun: &str| {
+                        format!("{n} {noun}{}", if n == 1 { "" } else { "s" })
+                    };
+                    format!(
+                        "Net of the selection: {}, {}",
+                        plural(count(|s| matches!(s, Subject::Pin(_))), "terminal"),
+                        plural(count(|s| matches!(s, Subject::Wire(_))), "wire")
+                    )
+                };
+                (traced, text)
+            }
+            _ => (BTreeSet::new(), String::new()),
+        };
     }
 
     /// Apply what the editor asked for and report a refusal.
@@ -1026,6 +1061,7 @@ impl DesktopApp {
                     {
                         self.diagnostics_hidden = !problems;
                     }
+                    ui.checkbox(&mut self.trace_net, "Trace the net of the selection");
                 });
                 ui.menu_button("Run", |ui| {
                     let mut mode = self.mode;
@@ -1263,6 +1299,10 @@ impl DesktopApp {
                         self.fit_sheet = Some(id);
                     }
                 }
+            }
+            if !self.traced.1.is_empty() {
+                ui.separator();
+                ui.label(RichText::new(self.traced.1.as_str()).color(tokens.text_dim));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let problems = self.session.as_ref().map_or(0, |session| {
@@ -1744,6 +1784,7 @@ impl DesktopApp {
     fn scene(&self, session: &Session) -> (Scene, Option<(circuit_model::GridRect, bool)>) {
         let options = SceneOptions {
             selected: self.editor.selection().clone(),
+            traced: self.traced.0.clone(),
         };
         if self.mode == Mode::Simulate {
             return (session.scene(&options), None);

@@ -26,6 +26,7 @@ pub(crate) const KEYS: &[(&str, &str)] = &[
     ("+ / -", "zoom"),
     ("0", "fit the drawing"),
     ("F", "fit the selection"),
+    ("T", "trace the net of the selection"),
 ];
 
 /// Width and height of the cell of one symbol, in points.

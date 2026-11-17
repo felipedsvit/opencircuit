@@ -31,6 +31,8 @@ const ENERGIZED: Color32 = Color32::from_rgb(240, 160, 0);
 const ACTIVE: Color32 = Color32::from_rgb(40, 190, 90);
 const FAULT: Color32 = Color32::from_rgb(230, 40, 40);
 const SELECTED: Color32 = Color32::from_rgb(0, 170, 230);
+/// The net being traced.
+const TRACED: Color32 = Color32::from_rgb(255, 170, 40);
 const CONFLICT: Color32 = Color32::from_rgb(220, 0, 220);
 const REVERSE: Color32 = Color32::from_rgb(60, 120, 240);
 
@@ -278,6 +280,7 @@ pub fn look(style: StyleKey, dark_mode: bool) -> Look {
         StyleKey::Motor(MotorState::Reverse) => (REVERSE, 2.5),
         StyleKey::Fault => (FAULT, 3.0),
         StyleKey::Selected => (SELECTED, 2.5),
+        StyleKey::Traced => (TRACED, 2.5),
         StyleKey::Unknown => (CONFLICT, 1.5),
     };
     Look { color, width }
