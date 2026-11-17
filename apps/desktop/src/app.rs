@@ -10,7 +10,9 @@ use circuit_commands::commandline::{
 };
 use circuit_commands::designators::{self, Scope};
 use circuit_commands::{ops, waivers};
-use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
+use circuit_editor::{
+    Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapOptions, SnapTarget, Tool, snap_with,
+};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
     CatalogError, Category, ComponentCatalog, Control, DeviceId, Diagnostic, DiagnosticCode,
@@ -45,6 +47,8 @@ const SNAP_POINTS: f32 = 12.0;
 const SNAP_MAX: i64 = 2 * SUBUNITS_PER_GRID;
 /// Zoom factor of one press of `+`.
 const KEY_ZOOM: f32 = 1.25;
+/// Most views Previous view remembers.
+const MAX_VIEWS_BACK: usize = 32;
 
 /// An action that would drop unsaved changes, waiting for the user to save,
 /// discard or cancel.
@@ -246,6 +250,21 @@ pub struct DesktopApp {
     /// The label being typed over the drawing (F2): the element, its text,
     /// and whether the field still has to take the keyboard.
     label_edit: Option<(Subject, String, bool)>,
+    /// The views left with a zoom, a pan or a jump, newest last (View >
+    /// Previous view, Alt+Left).
+    view_back: Vec<Camera>,
+    /// The view as it was when the pointer and the wheel last rested.
+    view_settled: Option<Camera>,
+    /// The wire tool also snaps to the ends, middles and crossings of wires.
+    wire_points: bool,
+    /// The element under the pointer is outlined.
+    hover_highlight: bool,
+    /// Rulers along the top and left edges of the drawing.
+    rulers: bool,
+    /// A point being typed for the next click (G): the text, the grid point
+    /// a relative point starts from, where the field is on screen, and
+    /// whether the field still has to take the keyboard.
+    point_entry: Option<(String, GridPoint, egui::Pos2, bool)>,
 }
 
 impl DesktopApp {
@@ -332,6 +351,117 @@ impl DesktopApp {
         };
         // Best effort: a list that cannot be written only loses an entry.
         let _ = recent.record(path);
+    }
+
+    /// Go back to the view before the last zoom, pan or jump, as Alt+Left
+    /// does. Returns whether there was one.
+    pub fn previous_view(&mut self) -> bool {
+        match self.view_back.pop() {
+            Some(camera) => {
+                self.camera = camera;
+                self.view_settled = Some(camera);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// How many views Previous view can go back.
+    #[must_use]
+    pub fn views_back(&self) -> usize {
+        self.view_back.len()
+    }
+
+    /// Snap the wire tool to the ends, middles and crossings of wires too.
+    pub fn set_wire_point_snap(&mut self, on: bool) {
+        self.wire_points = on;
+    }
+
+    /// Start typing the grid point of the next click, as G does in edit
+    /// mode: `x,y`, or `@dx,dy` from the point under the pointer.
+    pub fn type_point(&mut self) {
+        if self.mode != Mode::Edit || self.session.is_none() {
+            return;
+        }
+        let from = self.cursor.unwrap_or(GridPoint::new(0, 0));
+        let at = self
+            .grid_to_screen(from)
+            .map_or(egui::pos2(200.0, 200.0), |[x, y]| {
+                egui::pos2(x + 12.0, y + 12.0)
+            });
+        self.point_entry = Some((String::new(), from, at, true));
+    }
+
+    /// Whether a point is being typed.
+    #[must_use]
+    pub const fn typing_point(&self) -> bool {
+        self.point_entry.is_some()
+    }
+
+    /// Press and release the primary button at `point` with the tool in
+    /// hand, as a click on the drawing does.
+    fn click_at(&mut self, point: GridPoint) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let (doc, catalog) = (session.document(), session.catalog());
+        self.editor.pointer_move(doc, catalog, point);
+        let down = self
+            .editor
+            .pointer_down(doc, catalog, point, Modifiers::default());
+        self.apply(down);
+        if let Some(session) = &self.session {
+            let up = self
+                .editor
+                .pointer_up(session.document(), session.catalog(), point);
+            self.apply(up);
+        }
+    }
+
+    /// The field of a typed point; Enter clicks there, Esc drops it.
+    fn point_entry(&mut self, ui: &Ui) {
+        if self.mode != Mode::Edit {
+            self.point_entry = None;
+        }
+        let Some((text, from, at, focus)) = &mut self.point_entry else {
+            return;
+        };
+        let mut finished = None;
+        egui::Area::new(ui.scope_id().with(egui::IdSalt::new("point entry")))
+            .order(egui::Order::Foreground)
+            .fixed_pos(*at)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let label = ui.label(tr("Point"));
+                    let field = ui
+                        .add(
+                            egui::TextEdit::singleline(text)
+                                .id_salt("point entry input")
+                                .hint_text(tr("x,y or @dx,dy"))
+                                .desired_width(110.0),
+                        )
+                        .labelled_by(label.id);
+                    if std::mem::take(focus) {
+                        field.request_focus();
+                    }
+                    if field.lost_focus() {
+                        let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
+                        finished = Some(enter.then(|| commandline::typed_point(text, *from)));
+                    }
+                });
+            });
+        match finished {
+            None => {}
+            Some(None) => self.point_entry = None,
+            Some(Some(None)) => {
+                self.error = Some(tr("Type a point as x,y or @dx,dy.").to_owned());
+                self.point_entry = None;
+            }
+            Some(Some(Some(point))) => {
+                self.point_entry = None;
+                self.click_at(point);
+            }
+        }
     }
 
     /// Open the find and replace window, as Ctrl+H does in edit mode.
@@ -1593,6 +1723,9 @@ impl DesktopApp {
         if pressed(ui, egui::Modifiers::NONE, egui::Key::F2) {
             self.edit_label();
         }
+        if pressed(ui, egui::Modifiers::NONE, egui::Key::G) {
+            self.type_point();
+        }
         let mut actions = Vec::new();
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::A) {
             actions.push(Key::SelectAll);
@@ -1670,6 +1803,14 @@ impl DesktopApp {
             ))
         }) {
             self.command_palette.open();
+        }
+        if ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::ALT,
+                egui::Key::ArrowLeft,
+            ))
+        }) {
+            self.previous_view();
         }
         let pressed = |ui: &mut Ui, key: egui::Key| {
             ui.input_mut(|input| {
@@ -1963,6 +2104,16 @@ impl DesktopApp {
                     {
                         self.zoom_request = Some(1.0 / KEY_ZOOM);
                     }
+                    if ui
+                        .add_enabled(
+                            !self.view_back.is_empty(),
+                            egui::Button::new(tr("Previous view")),
+                        )
+                        .on_hover_text("Alt+Left")
+                        .clicked()
+                    {
+                        self.previous_view();
+                    }
                     ui.separator();
                     let mut grid = !self.grid_off;
                     if ui.checkbox(&mut grid, tr("Show the grid")).changed() {
@@ -1972,6 +2123,15 @@ impl DesktopApp {
                     if ui.checkbox(&mut snap, tr("Snap wires to pins")).changed() {
                         self.snap_off = !snap;
                     }
+                    ui.checkbox(
+                        &mut self.wire_points,
+                        tr("Snap to wire ends, middles and crossings"),
+                    );
+                    ui.checkbox(
+                        &mut self.hover_highlight,
+                        tr("Outline the element under the pointer"),
+                    );
+                    ui.checkbox(&mut self.rulers, tr("Show rulers"));
                     let mut cross = !self.crosshair_off;
                     if ui.checkbox(&mut cross, tr("Cross-shaped cursor")).changed() {
                         self.crosshair_off = !cross;
@@ -2393,6 +2553,129 @@ impl DesktopApp {
             egui::FontId::proportional(11.0),
             tokens.text_faint,
         );
+    }
+
+    /// Keep the view the drawing rested at, so that Previous view can go
+    /// back to it: a zoom with the wheel or a pan with the pointer counts once,
+    /// when it ends.
+    fn remember_view(&mut self, ui: &Ui) {
+        let busy = ui.input(|input| {
+            input.pointer.any_down()
+                || input.smooth_scroll_delta != egui::Vec2::ZERO
+                || (input.zoom_delta() - 1.0).abs() > f32::EPSILON
+        });
+        if busy {
+            return;
+        }
+        if let Some(settled) = self.view_settled
+            && settled != self.camera
+        {
+            self.view_back.push(settled);
+            if self.view_back.len() > MAX_VIEWS_BACK {
+                self.view_back.remove(0);
+            }
+        }
+        self.view_settled = Some(self.camera);
+    }
+
+    /// Rulers along the top and left edges of the drawing, in grid units,
+    /// with the place of the pointer marked.
+    fn paint_rulers(&self, ui: &Ui, events: &canvas::CanvasEvents) {
+        const BAND: f32 = 16.0;
+        let tokens = Tokens::of(ui);
+        let [left, top] = events.origin;
+        let [width, height] = events.size;
+        let painter = ui.painter().with_clip_rect(egui::Rect::from_min_size(
+            egui::pos2(left, top),
+            egui::vec2(width, height),
+        ));
+        let fill = ui.visuals().extreme_bg_color;
+        painter.rect_filled(
+            egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(width, BAND)),
+            0.0,
+            fill,
+        );
+        painter.rect_filled(
+            egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(BAND, height)),
+            0.0,
+            fill,
+        );
+        // Ticks at least 40 points apart, at 1, 2 or 5 times a power of ten.
+        let per_grid = self.camera.to_screen_length(SUBUNITS_PER_GRID);
+        if !(per_grid.is_finite() && per_grid > 0.0) {
+            return;
+        }
+        let step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000]
+            .into_iter()
+            .find(|step| per_grid * *step as f32 >= 40.0)
+            .unwrap_or(10_000);
+        let stroke = egui::Stroke::new(1.0, tokens.text_faint);
+        let font = egui::FontId::proportional(9.0);
+        let along = |vertical: bool| {
+            let length = if vertical { height } else { width };
+            let first = self
+                .camera
+                .to_grid([0.0, 0.0])
+                .map_or(0, |point| if vertical { point.y } else { point.x });
+            let mut n = (i64::from(first) / step - 1) * step;
+            for _ in 0..200 {
+                let point = if vertical {
+                    GridPoint::new(0, i32::try_from(n).unwrap_or(0))
+                } else {
+                    GridPoint::new(i32::try_from(n).unwrap_or(0), 0)
+                };
+                let [x, y] = self.camera.to_screen(ScenePoint::from_grid(point));
+                let place = if vertical { y } else { x };
+                if place > length {
+                    break;
+                }
+                if place >= BAND {
+                    let (from, to, label_at, align) = if vertical {
+                        (
+                            egui::pos2(left + BAND - 5.0, top + place),
+                            egui::pos2(left + BAND, top + place),
+                            egui::pos2(left + 2.0, top + place + 1.0),
+                            egui::Align2::LEFT_TOP,
+                        )
+                    } else {
+                        (
+                            egui::pos2(left + place, top + BAND - 5.0),
+                            egui::pos2(left + place, top + BAND),
+                            egui::pos2(left + place + 2.0, top + 1.0),
+                            egui::Align2::LEFT_TOP,
+                        )
+                    };
+                    painter.line_segment([from, to], stroke);
+                    painter.text(
+                        label_at,
+                        align,
+                        n.to_string(),
+                        font.clone(),
+                        tokens.text_faint,
+                    );
+                }
+                n += step;
+            }
+        };
+        along(false);
+        along(true);
+        if let Some(hover) = events.hover {
+            let mark = egui::Stroke::new(1.5, tokens.crosshair);
+            painter.line_segment(
+                [
+                    egui::pos2(left + hover[0], top),
+                    egui::pos2(left + hover[0], top + BAND),
+                ],
+                mark,
+            );
+            painter.line_segment(
+                [
+                    egui::pos2(left, top + hover[1]),
+                    egui::pos2(left + BAND, top + hover[1]),
+                ],
+                mark,
+            );
+        }
     }
 
     /// The menu of a secondary click on the drawing: what can be done to the
@@ -2985,8 +3268,39 @@ impl DesktopApp {
             );
             self.camera.fit(corners, events.size, canvas::FIT_MARGIN);
         }
+        let hovered = if self.hover_highlight {
+            events
+                .hover
+                .and_then(|at| self.camera.to_grid(at))
+                .and_then(|point| {
+                    circuit_editor::hit_test(session.document(), session.catalog(), point)
+                })
+                .map(|hit| hit.subject())
+        } else {
+            None
+        };
         self.paint_over_canvas(ui, &events, selecting);
+        if let Some(bounds) = hovered.and_then(|subject| scene.subject_bounds(&subject)) {
+            let [left, top] = events.origin;
+            let corner = |point: ScenePoint| {
+                let [x, y] = self.camera.to_screen(point);
+                egui::pos2(left + x, top + y)
+            };
+            let outline =
+                egui::Rect::from_two_pos(corner(bounds.min), corner(bounds.max)).expand(4.0);
+            ui.painter().rect_stroke(
+                outline,
+                3.0,
+                egui::Stroke::new(1.5, Tokens::of(ui).window_select),
+                egui::StrokeKind::Outside,
+            );
+        }
+        if self.rulers {
+            self.paint_rulers(ui, &events);
+        }
         self.label_editor(ui, &scene, &events);
+        self.point_entry(ui);
+        self.remember_view(ui);
         self.navigation(ui, events.origin, events.size);
         self.command_line_overlay(ui, events.origin, events.size);
         self.context_menu(ui, &events);
@@ -3009,6 +3323,7 @@ impl DesktopApp {
         // The wire tool snaps to what a wire can end on; the other tools work
         // on the nearest grid point, so a drag never jumps to a pin.
         let wiring = matches!(self.editor.tool(), Tool::Wire) && !self.snap_off;
+        let wire_points = self.wire_points;
         let radius = self
             .camera
             .to_scene_length(SNAP_POINTS)
@@ -3022,7 +3337,7 @@ impl DesktopApp {
                     y: at.y,
                     per_grid: SUBUNITS_PER_GRID,
                 };
-                snap(doc, catalog, pointer, radius)
+                snap_with(doc, catalog, pointer, radius, SnapOptions { wire_points })
             } else {
                 camera.to_grid(screen).map(|point| Snap {
                     point,
@@ -3181,7 +3496,7 @@ fn snap_marker(found: &Snap) -> Vec<Shape> {
     match found.target {
         SnapTarget::Pin(_) => vec![Shape::Circle { center, radius: r }],
         SnapTarget::Junction(_) => vec![Shape::Rect(SceneRect::from_corners(at(-r, -r), at(r, r)))],
-        SnapTarget::Wire(_) => vec![
+        SnapTarget::Wire(_) | SnapTarget::Crossing(..) => vec![
             Shape::Line {
                 from: at(-r, -r),
                 to: at(r, r),
@@ -3191,6 +3506,21 @@ fn snap_marker(found: &Snap) -> Vec<Shape> {
                 to: at(r, -r),
             },
         ],
+        // A diamond on an end or a bend.
+        SnapTarget::WireEnd(_) => vec![Shape::Polyline(vec![
+            at(0, -r),
+            at(r, 0),
+            at(0, r),
+            at(-r, 0),
+            at(0, -r),
+        ])],
+        // A triangle on a middle.
+        SnapTarget::WireMiddle(_) => vec![Shape::Polyline(vec![
+            at(0, -r),
+            at(r, r),
+            at(-r, r),
+            at(0, -r),
+        ])],
         SnapTarget::Grid => Vec::new(),
     }
 }

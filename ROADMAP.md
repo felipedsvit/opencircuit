@@ -392,9 +392,11 @@ Decisions, to be confirmed in #118:
 - [x] Reports: `devices` (one row per device) and renumbering of sheets
   (`renumber_sheets` in edit files, `sheets renumber` on the command line of
   the window).
-- [ ] Navigation: previous view, highlight of the element under the pointer,
-  snapping to wire ends, middles and crossings, coordinates typed at the
-  pointer, rulers.
+- [x] Navigation: previous view (Alt+Left), highlight of the element under the
+  pointer, snapping to wire ends, middles and crossings
+  (`circuit_editor::snap_with`), coordinates typed at the pointer (G), rulers;
+  the three view options are off in a fresh window
+  (`apps/desktop/tests/navigation.rs`).
 - [ ] Print preview; export of several projects in one command.
 - [x] Find and replace (designators, notes, parameters; `replace` in edit
   files); editing every common field of a selection (catalog data of devices

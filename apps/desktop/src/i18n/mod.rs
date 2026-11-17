@@ -343,12 +343,13 @@ mod tests {
     }
 
     /// Technical texts that read the same in both languages.
-    const THE_SAME: [&str; 21] = [
+    const THE_SAME: [&str; 23] = [
         "{0} ({1})",
         "{0} terminal",
         "{0} wire",
         "0",
         "+ / -",
+        "Alt+Left",
         "Ctrl+A",
         "Ctrl+C / Ctrl+V",
         "Ctrl+D",
@@ -359,6 +360,7 @@ mod tests {
         "Esc",
         "F",
         "F2",
+        "G",
         "PDF…",
         "R",
         "SVG…",

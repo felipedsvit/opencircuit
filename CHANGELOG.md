@@ -59,6 +59,12 @@ here when it lands.
 - **A label typed over the drawing** (F2, Modify > Edit label, or the context
   menu): the designator of the selected symbol's device, the words of a text
   note or the number of a wire. Enter commits, Esc drops it.
+- **Navigation:** View > Previous view (Alt+Left) goes back through the last
+  32 views left by a zoom, a pan or a jump; G opens a field at the pointer for
+  the point of the next click (`x,y`, or `@dx,dy` from the pointer); and three
+  View options, off unless turned on: snap the wire tool to the ends, bends,
+  middles and crossings of wires (`circuit_editor::snap_with`), outline the
+  element under the pointer, and rulers along the drawing.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

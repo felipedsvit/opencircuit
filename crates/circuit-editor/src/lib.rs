@@ -35,4 +35,4 @@ mod tests;
 
 pub use editor::{Editor, Key, Modifiers, Outcome, PASTE_STEP, Preview, Tool};
 pub use hit::{Hit, hit_test};
-pub use snap::{Pointer, Snap, SnapTarget, snap};
+pub use snap::{Pointer, Snap, SnapOptions, SnapTarget, snap, snap_with};

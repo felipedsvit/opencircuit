@@ -10,7 +10,9 @@ use circuit_model::{
 use circuit_sim::{SimConfig, Simulator, compile};
 use proptest::prelude::*;
 
-use crate::{Editor, Hit, Key, Modifiers, Pointer, SnapTarget, Tool, hit_test, snap};
+use crate::{
+    Editor, Hit, Key, Modifiers, Pointer, SnapOptions, SnapTarget, Tool, hit_test, snap, snap_with,
+};
 
 fn point(x: i32, y: i32) -> GridPoint {
     GridPoint::new(x, y)
@@ -191,6 +193,74 @@ fn snap_reaches_a_pin_from_outside_its_grid_cell() {
     );
 }
 
+/// Wire A from (0, 0) to (10, 4) bending at (10, 0); wire B from (3, -5)
+/// to (3, 3), crossing A at (3, 0). Their ends are junctions.
+fn crossing_wires() -> (Schematic, circuit_model::WireId, circuit_model::WireId) {
+    let mut b = circuit_model::SchematicBuilder::new("wires");
+    let corners = [(0, 0), (10, 4), (3, -5), (3, 3)].map(|(x, y)| b.junction(point(x, y)).unwrap());
+    let a = b
+        .wire_routed(corners[0], corners[1], &[point(10, 0)])
+        .unwrap();
+    let wire_b = b.wire(corners[2], corners[3]).unwrap();
+    (b.finish(), a, wire_b)
+}
+
+#[test]
+fn wire_points_are_snapped_to_only_when_asked() {
+    let (doc, a, wire_b) = crossing_wires();
+    let catalog = ComponentCatalog::builtin();
+    let on = SnapOptions { wire_points: true };
+    let found = |x, y, options| snap_with(&doc, &catalog, pointer(x, y), 25, options).unwrap();
+
+    // Near the bend of A: its end, or the nearest grid point of the wire.
+    let bend = found(88, 4, on);
+    assert_eq!(
+        (bend.point, bend.target),
+        (point(10, 0), SnapTarget::WireEnd(a))
+    );
+    let plain = found(88, 4, SnapOptions::default());
+    assert_eq!(
+        (plain.point, plain.target.clone()),
+        (point(9, 0), SnapTarget::Wire(a))
+    );
+    assert_eq!(
+        snap(&doc, &catalog, pointer(88, 4), 25),
+        Some(plain),
+        "snap is snap_with without options"
+    );
+
+    let middle = snap_with(&doc, &catalog, pointer(62, 3), 15, on).unwrap();
+    assert_eq!(
+        (middle.point, middle.target),
+        (point(5, 0), SnapTarget::WireMiddle(a))
+    );
+
+    let cross = snap_with(&doc, &catalog, pointer(37, 4), 15, on).unwrap();
+    assert_eq!(
+        (cross.point, cross.target),
+        (
+            point(3, 0),
+            SnapTarget::Crossing(a.min(wire_b), a.max(wire_b))
+        )
+    );
+}
+
+#[test]
+fn a_junction_still_wins_over_wire_points() {
+    let (doc, _, _) = crossing_wires();
+    let found = snap_with(
+        &doc,
+        &ComponentCatalog::builtin(),
+        pointer(4, 3),
+        25,
+        SnapOptions { wire_points: true },
+    )
+    .unwrap();
+
+    assert!(matches!(found.target, SnapTarget::Junction(_)));
+    assert_eq!(found.point, point(0, 0));
+}
+
 #[test]
 fn snap_falls_back_to_the_nearest_grid_point_outside_the_radius() {
     let mut bench = Bench::new();
@@ -294,6 +364,8 @@ proptest! {
                 prop_assert_eq!(found.point.x, i32::try_from((x + 5).div_euclid(10)).unwrap());
                 prop_assert_eq!(found.point.y, i32::try_from((y + 5).div_euclid(10)).unwrap());
             }
+            // The points of wires are found only when asked for.
+            other => prop_assert!(false, "snap found {other:?}"),
         }
         if found.target != SnapTarget::Grid {
             let dx = i64::from(found.point.x) * 10 - x;
