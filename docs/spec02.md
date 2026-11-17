@@ -1684,6 +1684,7 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-011](adr/0011-sheets-as-frames.md) | M5: folhas como molduras sobre a tela única, com tamanho de papel, zonas e carimbo; o simulador não muda |
 | [ADR-012](adr/0012-pdf-font.md) | M5: subconjunto embutido da Liberation Mono no PDF, com um leitor mínimo de fonte no lugar de um crate sem manutenção |
 | [ADR-013](adr/0013-symbolic-devices.md) | M6: dispositivos só de símbolo (classe `symbolic`, blocos de 2, 4 e 8 terminais), sem comportamento na simulação, com `OC-SEM-011` |
+| [ADR-014](adr/0014-derived-documentation.md) | M7: documentação derivada (nets, números de fio, relatórios, avisos de geometria) com só as substituições, os dados de catálogo, a regra de numeração e as dispensas guardadas; schema versão 3 |
 
 ---
 

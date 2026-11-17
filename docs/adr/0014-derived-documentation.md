@@ -27,7 +27,10 @@ reason for accepting a warning.
   - the number of every wire (one number per net) and its two ends;
   - every report (bill of materials, wires, terminals, cross-reference
     exceptions, I/O map, problems) as a `Table`;
-  - the geometry diagnostics `OC-STR-018` and `OC-STR-019`.
+  - the geometry diagnostics `OC-STR-018` (a terminal or junction on another
+    terminal, junction or wire it is not connected to) and `OC-STR-019` (wires of
+    **different nets** over one line: wires of one net that overlap say the same
+    thing twice and are left alone).
 - **Persisted, in schema version 3**, each omitted from the file when empty:
   - `Wire.number`: an optional override of the generated number;
   - `Device.info`: optional `manufacturer`, `part_no`, `description` and
