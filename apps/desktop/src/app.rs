@@ -63,6 +63,8 @@ enum Pending {
     OpenDialog,
     /// Close the window.
     Close,
+    /// Close the project of the tab shown.
+    CloseTab,
     /// Start a new project from the template at this place of
     /// [`crate::templates::TEMPLATES`].
     Template(usize),
@@ -70,6 +72,27 @@ enum Pending {
     #[cfg(not(target_arch = "wasm32"))]
     Restore(crate::versions::Version),
 }
+
+/// A project open in a tab that is not the one shown (M9.2): what the
+/// window keeps of it while another tab is shown.
+#[derive(Debug, Default)]
+struct Tab {
+    session: Option<Session>,
+    mode: Mode,
+    editor: Editor,
+    inspector: InspectorState,
+    camera: Camera,
+    view_back: Vec<Camera>,
+    view_settled: Option<Camera>,
+    path_input: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    autosave: Option<crate::recovery::Autosave>,
+    #[cfg(not(target_arch = "wasm32"))]
+    project_lock: Option<crate::project_lock::ProjectLock>,
+}
+
+/// Most projects a window keeps open in tabs.
+pub const MAX_TABS: usize = 16;
 
 /// What the window is for at the moment.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -270,6 +293,20 @@ pub struct DesktopApp {
     print_preview: crate::print_preview::PrintPreview,
     /// The grid point the context menu was opened at.
     context_point: Option<GridPoint>,
+    /// The projects of the tabs not shown, in tab order without the shown
+    /// one, which is at `active_tab`.
+    tabs: Vec<Tab>,
+    /// Where the shown project is among the tabs.
+    active_tab: usize,
+    /// The store and interval of the autosave, for the autosave of each new
+    /// tab, and the panic copy of the first one, which writes those of the
+    /// others too.
+    #[cfg(not(target_arch = "wasm32"))]
+    recovery_setup: Option<(
+        crate::recovery::RecoveryStore,
+        f64,
+        crate::recovery::PanicCopy,
+    )>,
     /// The keys of the customizable shortcuts and the named workspaces.
     settings: crate::workspace::Settings,
     /// The colours chosen in View > Theme.
@@ -316,10 +353,11 @@ impl DesktopApp {
         store: crate::recovery::RecoveryStore,
         interval_seconds: f64,
     ) {
-        let autosave = crate::recovery::Autosave::new(store, interval_seconds, 0.0);
+        let autosave = crate::recovery::Autosave::new(store.clone(), interval_seconds, 0.0);
         self.recover_offer = autosave
             .store()
             .orphans(autosave.key(), autosave.stale_after());
+        self.recovery_setup = Some((store, interval_seconds, autosave.panic_copy()));
         self.autosave = Some(autosave);
     }
 
@@ -1078,11 +1116,223 @@ impl DesktopApp {
     /// Whether the window may close now. With unsaved changes it may not:
     /// the user is asked to save, discard or cancel.
     pub fn request_close(&mut self) -> bool {
-        if self.allow_close || !self.is_dirty() {
+        if self.allow_close || !self.any_dirty() {
             return true;
+        }
+        // The question is about the project shown: a tab with changes is
+        // shown first.
+        if !self.is_dirty()
+            && let Some(index) = self.dirty_tab()
+        {
+            self.switch_tab(index);
         }
         self.confirm = Some(Pending::Close);
         false
+    }
+
+    /// Whether the project shown or one in another tab has unsaved changes.
+    #[must_use]
+    pub fn any_dirty(&self) -> bool {
+        self.is_dirty() || self.dirty_tab().is_some()
+    }
+
+    /// The place among the tabs of the first project not shown that has
+    /// unsaved changes.
+    fn dirty_tab(&self) -> Option<usize> {
+        let at = self
+            .tabs
+            .iter()
+            .position(|tab| tab.session.as_ref().is_some_and(Session::is_dirty))?;
+        Some(if at >= self.active_tab {
+            at.saturating_add(1)
+        } else {
+            at
+        })
+    }
+
+    /// How many projects are open, in tabs; one or none without tabs.
+    #[must_use]
+    pub fn tab_count(&self) -> usize {
+        self.tabs
+            .len()
+            .saturating_add(usize::from(self.session.is_some()))
+    }
+
+    /// Where the shown project is among the tabs.
+    #[must_use]
+    pub const fn active_tab(&self) -> usize {
+        self.active_tab
+    }
+
+    /// The names of the projects in the tabs, in tab order.
+    #[must_use]
+    pub fn tab_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .tabs
+            .iter()
+            .map(|tab| {
+                tab.session.as_ref().map_or_else(String::new, |session| {
+                    session.document().project.name.clone()
+                })
+            })
+            .collect();
+        if let Some(session) = &self.session {
+            let at = self.active_tab.min(names.len());
+            names.insert(at, session.document().project.name.clone());
+        }
+        names
+    }
+
+    /// Swap what the window shows with what `tab` keeps.
+    fn swap_tab(&mut self, tab: &mut Tab) {
+        std::mem::swap(&mut self.session, &mut tab.session);
+        std::mem::swap(&mut self.mode, &mut tab.mode);
+        std::mem::swap(&mut self.editor, &mut tab.editor);
+        std::mem::swap(&mut self.inspector, &mut tab.inspector);
+        std::mem::swap(&mut self.camera, &mut tab.camera);
+        std::mem::swap(&mut self.view_back, &mut tab.view_back);
+        std::mem::swap(&mut self.view_settled, &mut tab.view_settled);
+        std::mem::swap(&mut self.path_input, &mut tab.path_input);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::mem::swap(&mut self.autosave, &mut tab.autosave);
+            std::mem::swap(&mut self.project_lock, &mut tab.project_lock);
+        }
+        // What was under way in the other tab does not carry over.
+        self.held = None;
+        self.label_edit = None;
+        self.point_entry = None;
+        self.context_menu = None;
+        self.waiving = None;
+        self.focus = None;
+        self.snapped = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.history = None;
+        }
+    }
+
+    /// Show the project of the tab at `index`.
+    pub fn switch_tab(&mut self, index: usize) {
+        if index == self.active_tab || index >= self.tab_count() || self.session.is_none() {
+            return;
+        }
+        let mut shown = Tab::default();
+        self.swap_tab(&mut shown);
+        let at = self.active_tab.min(self.tabs.len());
+        self.tabs.insert(at, shown);
+        if index < self.tabs.len() {
+            let mut target = self.tabs.remove(index);
+            self.swap_tab(&mut target);
+            self.active_tab = index;
+        }
+    }
+
+    /// Put the shown project in a tab of its own and show an empty one,
+    /// with an autosave of its own; `false` when no other tab can be opened.
+    fn push_tab(&mut self) -> bool {
+        if self.session.is_none() {
+            return true;
+        }
+        if self.tab_count() >= MAX_TABS {
+            self.error = Some(trf("At most {} projects are open at once.", &[&MAX_TABS]));
+            return false;
+        }
+        let mut shown = Tab::default();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((store, interval, root)) = &self.recovery_setup {
+            let autosave = crate::recovery::Autosave::new(store.clone(), *interval, 0.0);
+            root.adopt(autosave.panic_copy());
+            shown.autosave = Some(autosave);
+        }
+        self.swap_tab(&mut shown);
+        let at = self.active_tab.min(self.tabs.len());
+        self.tabs.insert(at, shown);
+        self.active_tab = self.tabs.len();
+        true
+    }
+
+    /// Take back the tab just pushed when nothing was opened in it.
+    fn pop_empty_tab(&mut self, before: usize) {
+        if self.session.is_none() && !self.tabs.is_empty() && self.active_tab != before {
+            let index = before.min(self.tabs.len().saturating_sub(1));
+            let mut target = self.tabs.remove(index);
+            self.swap_tab(&mut target);
+            self.active_tab = index;
+        }
+    }
+
+    /// A new, empty project in a tab of its own; the shown one stays open.
+    pub fn new_tab(&mut self) {
+        let before = self.active_tab;
+        if self.push_tab() {
+            self.perform(Pending::New);
+            self.pop_empty_tab(before);
+        }
+    }
+
+    /// Open the project at `path` in a tab of its own; the shown one stays
+    /// open. A project open already in a tab is shown instead.
+    pub fn open_in_new_tab(&mut self, path: &Path) {
+        if let Some(index) = self.tab_of(path) {
+            self.switch_tab(index);
+            return;
+        }
+        let before = self.active_tab;
+        if self.push_tab() {
+            self.open_path(path);
+            self.pop_empty_tab(before);
+        }
+    }
+
+    /// The tab whose project was opened from or saved to `path`.
+    fn tab_of(&self, path: &Path) -> Option<usize> {
+        let same = |session: &Session| session.path().is_some_and(|own| own == path);
+        if self.session.as_ref().is_some_and(same) {
+            return Some(self.active_tab);
+        }
+        let at = self
+            .tabs
+            .iter()
+            .position(|tab| tab.session.as_ref().is_some_and(same))?;
+        Some(if at >= self.active_tab {
+            at.saturating_add(1)
+        } else {
+            at
+        })
+    }
+
+    /// Close the project shown, asking first about unsaved changes; the
+    /// next tab is shown.
+    pub fn close_tab(&mut self) {
+        if self.session.is_some() {
+            self.guard(Pending::CloseTab);
+        }
+    }
+
+    /// Drop the project shown, whose changes were saved or dropped on
+    /// purpose, and show the tab next to it.
+    fn drop_shown(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(autosave) = &mut self.autosave {
+            autosave.clear();
+        }
+        if self.tabs.is_empty() {
+            let mut empty = Tab::default();
+            // The first tab keeps the autosave of the window.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                empty.autosave = self.autosave.take();
+            }
+            self.swap_tab(&mut empty);
+            self.active_tab = 0;
+            self.error = None;
+            return;
+        }
+        let index = self.active_tab.min(self.tabs.len().saturating_sub(1));
+        let mut target = self.tabs.remove(index);
+        self.swap_tab(&mut target);
+        self.active_tab = index;
     }
 
     /// Whether the open project has unsaved changes.
@@ -1349,6 +1599,19 @@ impl DesktopApp {
                 }
             }
             Pending::Close => {
+                // Another tab with unsaved changes is asked about next; the
+                // project answered for is closed.
+                if let Some(index) = self.dirty_tab() {
+                    self.drop_shown();
+                    let index = if index > self.active_tab {
+                        index.saturating_sub(1)
+                    } else {
+                        index
+                    };
+                    self.switch_tab(index);
+                    self.confirm = Some(Pending::Close);
+                    return;
+                }
                 // Closed on purpose: no copy is kept for a recovery.
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(autosave) = &mut self.autosave {
@@ -1357,6 +1620,7 @@ impl DesktopApp {
                 self.allow_close = true;
                 self.close_now = true;
             }
+            Pending::CloseTab => self.drop_shown(),
         }
     }
 
@@ -1374,6 +1638,12 @@ impl DesktopApp {
         }
         let now = ui.input(|input| input.time);
         autosave.tick(now, self.session.as_ref());
+        // The projects of the other tabs are kept too.
+        for tab in &mut self.tabs {
+            if let Some(autosave) = &mut tab.autosave {
+                autosave.tick(now, tab.session.as_ref());
+            }
+        }
         if self.session.as_ref().is_some_and(Session::is_dirty) {
             let wait = autosave.due_in(now).max(0.1);
             ui.ctx()
@@ -2281,6 +2551,25 @@ impl DesktopApp {
                             }
                         });
                     });
+                    ui.separator();
+                    if ui.button(tr("New tab")).clicked() {
+                        ui.close();
+                        self.new_tab();
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button(tr("Open in a new tab…")).clicked() {
+                        ui.close();
+                        if let Some(path) = dialogs::pick_project() {
+                            self.open_in_new_tab(&path);
+                        }
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new(tr("Close tab")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.close_tab();
+                    }
                 });
                 ui.menu_button(tr("Modify"), |ui| {
                     let (can_undo, can_redo) = self.session.as_ref().map_or((false, false), |s| {
@@ -2877,6 +3166,10 @@ impl DesktopApp {
     /// The tab of the open project: its name, and whether it has unsaved
     /// changes.
     fn document_tab(&mut self, ui: &mut Ui) {
+        if !self.tabs.is_empty() {
+            self.document_tabs(ui);
+            return;
+        }
         let Some(session) = &self.session else {
             return;
         };
@@ -2897,6 +3190,67 @@ impl DesktopApp {
             .show(ui, |ui| {
                 ui.label(RichText::new(name).strong());
             });
+    }
+
+    /// One tab per open project, when there are several: the shown one as
+    /// the single tab is drawn, the others as buttons that show them, each
+    /// with a button that closes it.
+    fn document_tabs(&mut self, ui: &mut Ui) {
+        let tokens = Tokens::of(ui);
+        let names = self.tab_names();
+        let dirty: Vec<bool> = {
+            let mut dirty: Vec<bool> = self
+                .tabs
+                .iter()
+                .map(|tab| tab.session.as_ref().is_some_and(Session::is_dirty))
+                .collect();
+            dirty.insert(self.active_tab.min(dirty.len()), self.is_dirty());
+            dirty
+        };
+        let mut show = None;
+        let mut close = None;
+        ui.horizontal(|ui| {
+            for (index, (name, unsaved)) in names.iter().zip(dirty).enumerate() {
+                let mut text = name.clone();
+                if unsaved {
+                    text.push_str(tr(" (unsaved)"));
+                }
+                if index == self.active_tab {
+                    egui::Frame::new()
+                        .fill(tokens.tab_active)
+                        .corner_radius(egui::CornerRadius {
+                            nw: 5,
+                            ne: 5,
+                            sw: 0,
+                            se: 0,
+                        })
+                        .inner_margin(egui::Margin::symmetric(12, 3))
+                        .show(ui, |ui| {
+                            ui.label(RichText::new(text).strong());
+                        });
+                } else if ui
+                    .add(egui::Button::new(text).frame(false))
+                    .on_hover_text(tr("Show this project"))
+                    .clicked()
+                {
+                    show = Some(index);
+                }
+                let label = trf("Close {}", &[name]);
+                let response = ui.small_button("×").on_hover_text(label.as_str());
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
+                });
+                if response.clicked() {
+                    close = Some(index);
+                }
+            }
+        });
+        if let Some(index) = close {
+            self.switch_tab(index);
+            self.close_tab();
+        } else if let Some(index) = show {
+            self.switch_tab(index);
+        }
     }
 
     /// The status bar: the position of the pointer, one tab per sheet, and

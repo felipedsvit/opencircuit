@@ -95,6 +95,13 @@ here when it lands.
   shortcuts other keys (undo, copy, paste, the arrows, Delete and Escape keep
   theirs). All of it is kept in `workspace.json` in the user's data folder; a
   fresh window is the window as before.
+- **Several projects in tabs** (File > New tab, Open in a new tab, Close
+  tab): each tab keeps its project, mode, view, selection, undo history,
+  autosave copy and lock. The tab bar shows one tab per project and a button
+  that closes it; with one project open, the window is as before. A project
+  open already is shown instead of opened twice. Closing the window asks
+  about each tab with unsaved changes in turn; at most 16 projects are open
+  at once.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

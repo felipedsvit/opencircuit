@@ -416,7 +416,8 @@ Decisions, to be confirmed in #118:
   kept in the user's data folder (`apps/desktop/src/workspace.rs`,
   `apps/desktop/tests/workspace.rs`). Panels dock on the left or the right;
   floating panels are not part of it.
-- [ ] Several open projects, in tabs.
+- [x] Several open projects, in tabs (File > New tab, Open in a new tab, Close
+  tab; each tab keeps its autosave and lock; `apps/desktop/tests/tabs.rs`).
 - [x] Wire routing on request: an orthogonal route around symbols, undone in
   one step (`circuit_commands::route`; Modify > Route the selected wires,
   `route` on the command line and in edit files; `apps/desktop/tests/route.rs`).
