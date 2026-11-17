@@ -1344,3 +1344,136 @@ fn a_preview_has_no_designator_and_an_unknown_symbol_has_none() {
         crate::symbol_preview(model, &circuit_model::SymbolKey("nothing".to_owned())).is_none()
     );
 }
+
+mod signal_arrows {
+    use circuit_model::catalog::{
+        Category, ComponentModel, DeviceClass, ParamDefinition, ParamType, Provenance,
+        SymbolDefinition, SymbolKind,
+    };
+    use circuit_model::library::Library;
+    use circuit_model::{Orientation, Sheet, SheetId, SheetSize, Zones};
+
+    use super::*;
+
+    fn catalog() -> ComponentCatalog {
+        let provenance = Provenance {
+            origin: "test".to_owned(),
+            license: "MIT".to_owned(),
+            standard_reference: None,
+        };
+        let model = ComponentModel::new(
+            "std.signal_arrow",
+            1,
+            DeviceClass::SignalArrow,
+            vec![ParamDefinition {
+                key: "name".to_owned(),
+                ty: ParamType::Name,
+                default: Some(ParamValue::Text("SIGNAL".to_owned())),
+            }],
+            vec![SymbolDefinition::new(
+                "arrow",
+                SymbolKind::SignalArrow,
+                1,
+                1,
+                false,
+            )],
+            provenance.clone(),
+        )
+        .with_category(Category::Lines);
+        ComponentCatalog::builtin()
+            .with_library(Library {
+                id: "std".to_owned(),
+                version: 1,
+                name: "test".to_owned(),
+                provenance,
+                models: vec![model],
+            })
+            .unwrap()
+    }
+
+    fn doc(names: &[(&str, i32)]) -> Schematic {
+        let mut b = SchematicBuilder::new("arrows");
+        for (index, (name, x)) in names.iter().enumerate() {
+            let device = b
+                .device(
+                    &format!("SA{}", index + 1),
+                    "std.signal_arrow",
+                    &[("name", ParamValue::Text((*name).to_owned()))],
+                )
+                .unwrap();
+            b.symbol(device, "arrow", None, GridPoint::new(*x, 10))
+                .unwrap();
+        }
+        let mut doc = b.finish();
+        for (id, number, x) in [(900, 1, -5), (901, 2, 45)] {
+            doc.sheets.push(Sheet {
+                id: SheetId(id),
+                number,
+                title: String::new(),
+                origin: GridPoint::new(x, -5),
+                size: SheetSize::Custom {
+                    width: 40,
+                    height: 30,
+                },
+                orientation: Orientation::Landscape,
+                zones: Zones {
+                    columns: 4,
+                    rows: 2,
+                },
+            });
+        }
+        doc
+    }
+
+    fn texts(scene: &Scene) -> Vec<&str> {
+        scene
+            .items
+            .iter()
+            .filter_map(|item| match &item.shape {
+                Shape::Text { text, .. } if item.style == StyleKey::Label => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_arrow_shows_its_name_and_where_the_others_of_that_name_are() {
+        let scene = build_scene(
+            &doc(&[("FEED", 0), ("FEED", 50)]),
+            &catalog(),
+            None,
+            &SceneOptions::default(),
+        );
+
+        let shown = texts(&scene);
+        assert_eq!(shown.iter().filter(|t| **t == "FEED").count(), 2);
+        assert!(shown.iter().any(|t| t.starts_with("-> 2/")), "{shown:?}");
+        assert!(shown.iter().any(|t| t.starts_with("-> 1/")), "{shown:?}");
+    }
+
+    #[test]
+    fn a_lone_arrow_shows_its_name_and_no_places() {
+        let scene = build_scene(
+            &doc(&[("FEED", 0)]),
+            &catalog(),
+            None,
+            &SceneOptions::default(),
+        );
+
+        let shown = texts(&scene);
+        assert!(shown.contains(&"FEED"));
+        assert!(!shown.iter().any(|t| t.starts_with("->")));
+    }
+
+    #[test]
+    fn a_drawing_without_arrows_draws_none_of_it() {
+        let scene = build_scene(
+            &starter().doc,
+            &ComponentCatalog::builtin(),
+            None,
+            &SceneOptions::default(),
+        );
+
+        assert!(!texts(&scene).iter().any(|t| t.starts_with("->")));
+    }
+}

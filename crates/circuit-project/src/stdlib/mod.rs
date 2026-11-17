@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn the_standard_library_has_44_simulated_and_20_symbol_only_parts() {
+    fn the_standard_library_has_45_simulated_and_20_symbol_only_parts() {
         let by_class = |symbolic: bool| {
             library()
                 .models
@@ -347,7 +347,7 @@ mod tests {
                 .count()
         };
 
-        assert_eq!((by_class(false), by_class(true)), (44, 20));
+        assert_eq!((by_class(false), by_class(true)), (45, 20));
     }
 
     #[test]

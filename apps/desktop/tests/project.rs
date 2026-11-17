@@ -495,3 +495,32 @@ fn the_list_of_problems_can_be_written_as_csv_with_the_waivers_marked() {
     let csv = harness.state().session().expect("a project").problems_csv();
     assert!(csv.contains(",yes,test jig\n"), "{csv}");
 }
+
+#[test]
+fn an_arrow_goes_to_the_other_arrows_of_its_name_from_the_inspector() {
+    let mut b = SchematicBuilder::new("arrows");
+    let mut symbols = Vec::new();
+    for (reference, x) in [("SA1", 0), ("SA2", 30)] {
+        let device = b
+            .device(
+                reference,
+                "std.signal_arrow",
+                &[("name", circuit_model::ParamValue::Text("FEED".to_owned()))],
+            )
+            .unwrap();
+        symbols.push(
+            b.symbol(device, "arrow", None, GridPoint::new(x, 10))
+                .unwrap(),
+        );
+    }
+    let doc = b.finish();
+    let mut harness = drawing(&doc);
+    click_grid(&mut harness, 0, 9);
+    assert_eq!(selected(&harness), [Subject::Symbol(symbols[0])]);
+
+    press(&mut harness, "Cross-references");
+    harness.get_by_label("FEED").click();
+    harness.run();
+
+    assert_eq!(selected(&harness), [Subject::Symbol(symbols[1])]);
+}

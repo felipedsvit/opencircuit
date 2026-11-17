@@ -172,6 +172,7 @@ pub fn designator_prefix(model: &ComponentModel) -> &'static str {
         DeviceClass::MechanicalInterlock => "KX",
         DeviceClass::Transformer => "T",
         DeviceClass::TerminalBlock => "XT",
+        DeviceClass::SignalArrow => "SA",
         DeviceClass::Symbolic => "A",
     }
 }

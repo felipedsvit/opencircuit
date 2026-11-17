@@ -37,8 +37,22 @@ only a choice from a list.
 - **A strip and a number are given to one device.** Two devices with the same
   strip and number are the warning `OC-SEM-013`; it is a warning because a
   drawing in progress has them.
-- Signal arrows are decided in the same ADR when they are implemented (see the
-  section below).
+- **A signal arrow** is a device of the class `SignalArrow` with the symbol kind
+  `SignalArrow`: one terminal `t` and a `name` parameter. Every arrow with the
+  same name is one net, on the same sheet or on another: the compiler's copper
+  phase unions the terminals of the arrows of a name (as it does for the two ends
+  of a wire), and the static nets of `circuit-model` do the same, kept equal to the
+  compiler's by the existing comparison test. An arrow joins nothing else, and no
+  wire has to cross from one sheet to the next. Sheets stay frames over one canvas
+  (ADR-0011): the arrows are what continues a circuit across them.
+- **Cross-references of arrows are derived**, as those of coils and contacts
+  are: each arrow shows, under its designator, where the other arrows of its name
+  are (`-> 2/4B`), and `circuit_model::links` follows it from one to the other.
+- **A name that no other arrow has** is the warning `OC-SEM-014`: the arrow joins
+  nothing. It is a warning because a drawing in progress has them.
+- **Arrows are not parts.** The bill of materials, the terminal list and the
+  wires report leave them out, and a net that has terminals on two sheets is one
+  row of the wires report.
 
 ## Alternatives considered
 
@@ -52,10 +66,10 @@ only a choice from a list.
 
 ## Consequences
 
-- `DeviceClass` and `SymbolKind` gain a variant each, which the compiler, the
+- `DeviceClass` and `SymbolKind` gain two variants each (terminal blocks and signal arrows), which the compiler, the
   renderer, the designator prefixes (`XT`) and the library reader handle; the
-  fingerprint of a compiled circuit has a code for the class (16), and no existing
-  circuit changes its fingerprint.
+  fingerprint of a compiled circuit has a code for each class (16 and 17), and no
+  existing circuit changes its fingerprint.
 - The library schema is 3. The standard library has a part for it
   (`std.terminal_block`, in the Lines tab).
 - The report `strips` joins the others, and `--kind all` includes it.

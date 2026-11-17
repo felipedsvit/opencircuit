@@ -122,7 +122,7 @@ pub fn terminal_label(
         }
         SymbolKind::FuseLink => pair("1", "2"),
         // The number of a terminal is its `number` parameter, drawn with it.
-        SymbolKind::TerminalPoint => None,
+        SymbolKind::TerminalPoint | SymbolKind::SignalArrow => None,
         SymbolKind::Motor | SymbolKind::MotorSixTerminal => {
             matches!(key, "u1" | "v1" | "w1" | "u2" | "v2" | "w2").then(|| key.to_uppercase())
         }

@@ -411,6 +411,20 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
             ));
             out.push((rect(-4, -12, 4, 12), StyleKey::Symbol));
         }
+        SymbolKind::SignalArrow => {
+            // A pennant pointing at its terminal; the name is drawn beside it.
+            out.push((
+                Shape::Polyline(vec![
+                    point(0, 0),
+                    point(-14, -10),
+                    point(-14, -20),
+                    point(14, -20),
+                    point(14, -10),
+                    point(0, 0),
+                ]),
+                StyleKey::Symbol,
+            ));
+        }
         SymbolKind::TerminalPoint => {
             // Two leads and a ring where they meet: a screw terminal.
             leads(0, &mut out);

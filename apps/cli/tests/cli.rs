@@ -251,7 +251,7 @@ fn every_committed_scenario_passes() {
     let output = opencircuit(&["test", "examples", "tests/fixtures"]);
 
     assert_eq!(code(&output), 0, "{}", stdout(&output));
-    assert!(stdout(&output).ends_with("25 scenario(s), 0 failed\n"));
+    assert!(stdout(&output).ends_with("26 scenario(s), 0 failed\n"));
 }
 
 #[test]
@@ -963,10 +963,10 @@ fn test_in_json_lists_every_scenario_and_why_one_failed() {
             value["total"].clone(),
             value["failed"].clone()
         ),
-        (true.into(), 25.into(), 0.into())
+        (true.into(), 26.into(), 0.into())
     );
     let scenarios = value["scenarios"].as_array().expect("a list");
-    assert_eq!(scenarios.len(), 25);
+    assert_eq!(scenarios.len(), 26);
     assert!(
         scenarios
             .iter()
@@ -2058,4 +2058,95 @@ fn a_terminal_with_an_invalid_name_or_number_is_refused() {
         let applied = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
         assert_eq!(code(&applied), 1, "{key} {value}: {}", stdout(&applied));
     }
+}
+
+const SIGNAL_ARROWS: &str = "examples/signal-arrows/signal-arrows.ocircuit";
+
+#[test]
+fn a_circuit_continues_from_one_sheet_to_the_next_through_signal_arrows() {
+    // No wire crosses from sheet 1 to sheet 2, and the project is clean.
+    let validate = opencircuit(&["validate", SIGNAL_ARROWS, "--deny-warnings"]);
+    assert_eq!(code(&validate), 0, "{}", stdout(&validate));
+
+    // The wires report sees through the arrows: one net holds terminals of
+    // both sheets, and the arrows' own terminals are not listed.
+    let made = opencircuit(&[
+        "report",
+        SIGNAL_ARROWS,
+        "--kind",
+        "wires",
+        "--format",
+        "csv",
+    ]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+    let golden =
+        fs::read_to_string(root().join("examples/signal-arrows/wires.csv")).expect("golden");
+    assert_eq!(stdout(&made), golden);
+    assert!(golden.contains("K1:13,S1:13,S2:12"), "{golden}");
+    assert!(
+        !golden.contains("SA1") && !golden.contains("SA2"),
+        "{golden}"
+    );
+
+    // The coil is energized by the start button through the arrows: the
+    // golden trace of the scenario is that of the plain control circuit.
+    let ran = opencircuit(&["test", "examples/signal-arrows"]);
+    assert_eq!(code(&ran), 0, "{}", stdout(&ran));
+
+    // Arrows are not parts: the bill of materials has none.
+    let bom = stdout(&opencircuit(&[
+        "report",
+        SIGNAL_ARROWS,
+        "--kind",
+        "bom",
+        "--format",
+        "csv",
+    ]));
+    assert!(!bom.contains("signal_arrow"), "{bom}");
+}
+
+#[test]
+fn a_lone_signal_arrow_is_warned_about_until_another_has_its_name() {
+    let directory = scratch("lone-arrow");
+    let project = directory.join("arrows.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let apply = |operations: &str| {
+        let edit = directory.join("edit.json");
+        fs::write(
+            &edit,
+            format!(r#"{{ "schema_version": 1, "operations": {operations} }}"#),
+        )
+        .expect("write");
+        let done = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+        assert_eq!(code(&done), 0, "{}{}", stdout(&done), stderr(&done));
+    };
+
+    apply(
+        r#"[ { "op": "place", "model": "std.signal_arrow", "symbol": "arrow", "at": [0, 0],
+               "reference": "SA1" },
+             { "op": "set_param", "device": "SA1", "key": "name", "value": "FEED" } ]"#,
+    );
+    let alone = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&alone), 1);
+    assert!(stdout(&alone).contains("OC-SEM-014"), "{}", stdout(&alone));
+
+    apply(
+        r#"[ { "op": "place", "model": "std.signal_arrow", "symbol": "arrow", "at": [60, 0],
+               "reference": "SA2" },
+             { "op": "set_param", "device": "SA2", "key": "name", "value": "FEED" } ]"#,
+    );
+    let paired = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&paired), 0, "{}", stdout(&paired));
+
+    // A name with a space is refused.
+    let edit = directory.join("bad.json");
+    fs::write(
+        &edit,
+        r#"{ "schema_version": 1, "operations": [
+            { "op": "set_param", "device": "SA2", "key": "name", "value": "two words" } ] }"#,
+    )
+    .expect("write");
+    let refused = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+    assert_eq!(code(&refused), 1);
 }

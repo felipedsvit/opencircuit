@@ -25,8 +25,8 @@ use serde::Deserialize;
 /// Version 2 adds the optional model fields `category`, `title` and `note`;
 /// version 1 files keep loading, and their models take the category of their
 /// class and the identifier as title. Version 3 adds the parameter type
-/// `name`, the class `terminal_block` and the symbol kind `terminal_point`
-/// (ADR-0016); older files keep loading.
+/// `name`, the classes `terminal_block` and `signal_arrow` and the symbol kinds
+/// `terminal_point` and `signal_arrow` (ADR-0016); older files keep loading.
 pub const LIBRARY_SCHEMA_VERSION: u32 = 3;
 
 /// The first library schema version.
@@ -115,6 +115,7 @@ enum ClassFile {
     MechanicalInterlock,
     Transformer,
     TerminalBlock,
+    SignalArrow,
     Symbolic,
 }
 
@@ -170,6 +171,7 @@ enum KindFile {
     ThermalElement { poles: u8 },
     FuseLink,
     TerminalPoint,
+    SignalArrow,
     Motor,
     MotorSixTerminal,
     Lamp,
@@ -254,20 +256,21 @@ pub fn from_str(text: &str) -> Result<Library, LibraryError> {
         }
     }
     let has_v3_features = |model: &ModelFile| {
-        matches!(model.class, ClassFile::TerminalBlock)
-            || model
-                .params
-                .iter()
-                .any(|param| matches!(param.ty, ParamTypeFile::Name))
-            || model
-                .symbols
-                .iter()
-                .any(|symbol| matches!(symbol.kind, KindFile::TerminalPoint))
+        matches!(
+            model.class,
+            ClassFile::TerminalBlock | ClassFile::SignalArrow
+        ) || model
+            .params
+            .iter()
+            .any(|param| matches!(param.ty, ParamTypeFile::Name))
+            || model.symbols.iter().any(|symbol| {
+                matches!(symbol.kind, KindFile::TerminalPoint | KindFile::SignalArrow)
+            })
     };
     if file.schema_version < 3 {
         if let Some(model) = file.models.iter().find(|model| has_v3_features(model)) {
             return Err(LibraryError::Schema(format!(
-                "model `{}`: the parameter type `name`, the class `terminal_block` and the kind `terminal_point` need schema version 3",
+                "model `{}`: the parameter type `name`, the classes `terminal_block` and `signal_arrow` and the kinds `terminal_point` and `signal_arrow` need schema version 3",
                 model.id
             )));
         }
@@ -322,6 +325,7 @@ fn to_model(model: ModelFile, provenance: &Provenance) -> Result<ComponentModel,
         ClassFile::MechanicalInterlock => DeviceClass::MechanicalInterlock,
         ClassFile::Transformer => DeviceClass::Transformer,
         ClassFile::TerminalBlock => DeviceClass::TerminalBlock,
+        ClassFile::SignalArrow => DeviceClass::SignalArrow,
         ClassFile::Symbolic => DeviceClass::Symbolic,
     };
     let params = model
@@ -409,6 +413,7 @@ fn to_symbol(symbol: SymbolFile) -> Result<SymbolDefinition, LibraryError> {
         KindFile::ThermalElement { poles } => SymbolKind::ThermalElement { poles },
         KindFile::FuseLink => SymbolKind::FuseLink,
         KindFile::TerminalPoint => SymbolKind::TerminalPoint,
+        KindFile::SignalArrow => SymbolKind::SignalArrow,
         KindFile::Motor => SymbolKind::Motor,
         KindFile::MotorSixTerminal => SymbolKind::MotorSixTerminal,
         KindFile::Lamp => SymbolKind::Lamp,

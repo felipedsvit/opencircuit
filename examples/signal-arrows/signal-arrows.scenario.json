@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "circuit": "signal-arrows.ocircuit",
+  "config": { "tick_us": 1000, "pickup_ticks": 1, "dropout_ticks": 1, "fault_policy": "halt" },
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 6, "action": "release", "device": "S1" },
+    { "tick": 10, "action": "press", "device": "S2" },
+    { "tick": 14, "action": "release", "device": "S2" }
+  ],
+  "until_tick": 20,
+  "expect": { "trace": "signal-arrows.trace", "diagnostics": [] }
+}

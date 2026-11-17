@@ -278,6 +278,20 @@ Designators sort in natural order (`K2` before `K10`). A terminal is written
 spreadsheet would read as a formula (it starts with `=`, `+`, `-`, `@`, a tab
 or a carriage return) gets a leading apostrophe.
 
+## Terminals and signal arrows
+
+Two standard parts (`std`, the Lines tab) carry a name, a parameter of the type
+`name` (1 to 32 letters, digits, `_`, `-` or `.`). `std.terminal_block` is a
+terminal of a strip with the parameters `strip` and `number`: it always conducts,
+and `opencircuit report --kind strips` lists every terminal by strip and number,
+with the wire and the terminals on each side (the terminal plan; its CSV is the
+table for a manufacturer's import). `std.signal_arrow` has the parameter `name`:
+every arrow with the same name is one net, on the sheet or on another, so a
+circuit can continue where a wire cannot go. Each arrow shows under its
+designator where the others of its name are. In an edit file they are `place`
+and `set_param`. ADR-0016 has the rules; `examples/terminals/` and
+`examples/signal-arrows/` are the examples.
+
 ## MCP server
 
 `opencircuit mcp [--root <directory>]` is a [Model Context Protocol](https://modelcontextprotocol.io)

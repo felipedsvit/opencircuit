@@ -37,6 +37,7 @@ pub mod loose;
 pub mod nets;
 pub mod schematic;
 pub mod sheet;
+pub mod signals;
 pub mod snapshot;
 pub mod supply;
 pub mod table;
@@ -74,6 +75,7 @@ pub use schematic::{
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,
 };
 pub use sheet::{Orientation, ReadingKey, Sheet, SheetSize, Zone, Zones, reading_key, sheet_at};
+pub use signals::{ArrowAt, lone_arrows, signal_arrows, signal_references};
 pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingConnection};
 pub use supply::{
     Conductor, ConductorConflict, ConductorSet, PhaseSequence, SupplyKind, SupplyProfile,

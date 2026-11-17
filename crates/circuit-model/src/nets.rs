@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::catalog::ComponentCatalog;
+use crate::catalog::{ComponentCatalog, DeviceClass, PARAM_NAME};
 use crate::ids::{JunctionId, WireId};
 use crate::schematic::{Endpoint, PinRef, Schematic};
 
@@ -167,6 +167,41 @@ impl StaticNets {
             };
             sets.union(from, to);
             wire_node.push((*id, from));
+        }
+
+        // Signal arrows of one name are one net (ADR-0016).
+        let mut named: BTreeMap<String, u32> = BTreeMap::new();
+        for (id, symbol) in &symbols {
+            let Some(device) = devices.get(&symbol.device_id) else {
+                continue;
+            };
+            let Some(model) = catalog.model(&device.model) else {
+                continue;
+            };
+            if model.class() != DeviceClass::SignalArrow {
+                continue;
+            }
+            let terminal = model
+                .symbol(&symbol.symbol_key)
+                .and_then(|definition| definition.terminals().first());
+            let (Some(name), Some(terminal)) =
+                (model.text_param(&device.params, PARAM_NAME), terminal)
+            else {
+                continue;
+            };
+            let pin = PinRef {
+                symbol_id: *id,
+                terminal: terminal.key.clone(),
+            };
+            let Some(&node) = pin_node.get(&pin) else {
+                continue;
+            };
+            match named.get(name) {
+                Some(&other) => sets.union(node, other),
+                None => {
+                    named.insert(name.to_owned(), node);
+                }
+            }
         }
 
         // A net is numbered by its smallest node, and nodes are visited in

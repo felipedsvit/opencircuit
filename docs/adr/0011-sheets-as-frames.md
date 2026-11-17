@@ -2,7 +2,8 @@
 
 Status: Accepted (2026-11-15). Builds on [ADR-0004](0004-canonical-json-format.md)
 (canonical JSON, version policy) and [ADR-0006](0006-pdf-export.md) (PDF
-export). Tracking issue: #56 (M5).
+export). Tracking issue: #56 (M5). Extended by [ADR-0016](0016-names-and-terminals.md): signal
+arrows join nets by name across sheets; sheets stay frames.
 
 ## Context
 
