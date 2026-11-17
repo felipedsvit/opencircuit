@@ -99,11 +99,11 @@ catalog.
 
 | Field | Values |
 | --- | --- |
-| `class` | `contactor`, `relay`, `thermal_overload`, `timer_on`, `timer_off`, `pushbutton`, `latching_switch`, `fuse`, `motor`, `lamp`, `buzzer`, `power_supply`, `mechanical_interlock`, `transformer` |
+| `class` | `contactor`, `relay`, `thermal_overload`, `timer_on`, `timer_off`, `pushbutton`, `latching_switch`, `fuse`, `motor`, `lamp`, `buzzer`, `power_supply`, `mechanical_interlock`, `transformer`, `symbolic` |
 | `operator` | `null` (the default of the class), `none`, `push`, `latch`, `emergency`, `position` |
 | `category` (schema 2) | `null` or absent (the default of the class), `supplies`, `protection`, `controls`, `motors`, `contacts`, `automation`, `actuators`, `lines`: the palette tab of the model |
 | `title`, `note` (schema 2) | `null` or absent, or text: a one-line title shown in the palette (the identifier by default) and a note shown to the user, such as the limits of an approximation. Neither may be empty, hold a control character or exceed 256 bytes (512 for a note) |
-| `kind` | `coil`, `contact_no`, `contact_nc`, `changeover`, `{ "power_contacts": { "poles": n } }`, `{ "thermal_element": { "poles": n } }`, `fuse_link`, `motor`, `motor_six_terminal`, `lamp`, `buzzer`, `supply_terminal`, `interlock_link`, `transformer_primary`, `transformer_secondary` |
+| `kind` | `coil`, `contact_no`, `contact_nc`, `changeover`, `{ "power_contacts": { "poles": n } }`, `{ "thermal_element": { "poles": n } }`, `fuse_link`, `motor`, `motor_six_terminal`, `lamp`, `buzzer`, `supply_terminal`, `interlock_link`, `transformer_primary`, `transformer_secondary`, `block2`, `block4`, `block8` |
 | parameter `type` | `"bool"`, `{ "int": { "min": a, "max": b } }`, `{ "enum": [ … ] }`, `"supply_ref"`, `"device_ref"` |
 | parameter `default` | `null` (mandatory parameter), a boolean, an integer or a string |
 

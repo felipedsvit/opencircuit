@@ -1163,6 +1163,7 @@ Regras:
 | OC-SEM-008 | `UnusedSupply` | Info | não | Fonte sem carga alcançável |
 | OC-SEM-009 | `InvalidInterlock` | Error | não | Intertravamento mecânico que não nomeia dois contatores distintos, ou contator em mais de um intertravamento (M3) |
 | OC-SEM-010 | `InvalidTransformer` | Error | não | Secundário de transformador que não é monofásico, é nomeado por outro transformador ou também é derivado por um `supply.terminal` (M4) |
+| OC-SEM-011 | `NotSimulated` | Info | não | Dispositivo só de símbolo (classe `symbolic`): desenhado e ligado, sem comportamento na simulação (ADR-0013) |
 | OC-ELEC-001 | `ShortCircuit` | Error | sim | Condutores incompatíveis no mesmo grupo, estático ou em execução (inclui mistura AC/DC) |
 | OC-ELEC-002 | `ProtectiveEarthFault` | Error | sim | PE em contato com condutor ativo |
 | OC-ELEC-003 | `NeutralEarthBond` | Warning | não | N e PE no mesmo grupo |
@@ -1678,6 +1679,7 @@ Escrever apenas decisões difíceis de reverter, antes de congelar os contratos.
 | [ADR-010](adr/0010-opcua-mqtt-evaluation.md) | M4: avaliação de OPC UA (não implementado: só há implementações MPL-2.0) e MQTT (viável, adiado, desenho registrado) |
 | [ADR-011](adr/0011-sheets-as-frames.md) | M5: folhas como molduras sobre a tela única, com tamanho de papel, zonas e carimbo; o simulador não muda |
 | [ADR-012](adr/0012-pdf-font.md) | M5: subconjunto embutido da Liberation Mono no PDF, com um leitor mínimo de fonte no lugar de um crate sem manutenção |
+| [ADR-013](adr/0013-symbolic-devices.md) | M6: dispositivos só de símbolo (classe `symbolic`, blocos de 2, 4 e 8 terminais), sem comportamento na simulação, com `OC-SEM-011` |
 
 ---
 

@@ -112,6 +112,7 @@ enum ClassFile {
     PowerSupply,
     MechanicalInterlock,
     Transformer,
+    Symbolic,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -172,6 +173,9 @@ enum KindFile {
     InterlockLink,
     TransformerPrimary,
     TransformerSecondary,
+    Block2,
+    Block4,
+    Block8,
 }
 
 #[derive(Deserialize)]
@@ -293,6 +297,7 @@ fn to_model(model: ModelFile, provenance: &Provenance) -> Result<ComponentModel,
         ClassFile::PowerSupply => DeviceClass::PowerSupply,
         ClassFile::MechanicalInterlock => DeviceClass::MechanicalInterlock,
         ClassFile::Transformer => DeviceClass::Transformer,
+        ClassFile::Symbolic => DeviceClass::Symbolic,
     };
     let params = model
         .params
@@ -385,6 +390,9 @@ fn to_symbol(symbol: SymbolFile) -> Result<SymbolDefinition, LibraryError> {
         KindFile::InterlockLink => SymbolKind::InterlockLink,
         KindFile::TransformerPrimary => SymbolKind::TransformerPrimary,
         KindFile::TransformerSecondary => SymbolKind::TransformerSecondary,
+        KindFile::Block2 => SymbolKind::Block2,
+        KindFile::Block4 => SymbolKind::Block4,
+        KindFile::Block8 => SymbolKind::Block8,
     };
     let definition =
         SymbolDefinition::new(&symbol.key, kind, symbol.min, symbol.max, symbol.slotted);
@@ -594,6 +602,49 @@ mod tests {
             from_str(&long),
             Err(LibraryError::LimitExceeded { .. })
         ));
+    }
+
+    const SYMBOLIC_LIBRARY: &str = r#"{
+  "schema_version": 2,
+  "id": "blocks",
+  "version": 1,
+  "name": "Blocks",
+  "provenance": { "origin": "test", "license": "MIT OR Apache-2.0", "standard_reference": null },
+  "models": [
+    {
+      "id": "blocks.plc",
+      "version": 1,
+      "class": "symbolic",
+      "operator": null,
+      "category": "automation",
+      "title": "PLC block",
+      "note": "Not simulated",
+      "params": [],
+      "symbols": [
+        { "key": "body", "kind": "block8", "min": 1, "max": 1, "slotted": false, "artwork": null }
+      ]
+    }
+  ]
+}"#;
+
+    #[test]
+    fn a_symbolic_block_library_loads_and_is_marked_with_its_category_and_note() {
+        let library = from_str(SYMBOLIC_LIBRARY).unwrap();
+        let catalog = ComponentCatalog::builtin().with_library(library).unwrap();
+        let model = model_named(&catalog, "blocks.plc");
+
+        assert_eq!(model.class(), DeviceClass::Symbolic);
+        assert_eq!(model.category(), Category::Automation);
+        assert_eq!(model.note(), Some("Not simulated"));
+        assert_eq!(model.symbols()[0].kind(), SymbolKind::Block8);
+    }
+
+    #[test]
+    fn a_block_kind_on_a_class_that_runs_is_refused_when_added_to_a_catalog() {
+        let wrong = SYMBOLIC_LIBRARY.replacen("\"symbolic\"", "\"lamp\"", 1);
+        let library = from_str(&wrong).unwrap();
+
+        assert!(ComponentCatalog::builtin().with_library(library).is_err());
     }
 
     proptest! {

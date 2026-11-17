@@ -86,6 +86,11 @@ pub enum DeviceClass {
     /// Control transformer: a primary load and a secondary that provides a
     /// separate single-phase section while the primary is powered.
     Transformer,
+    /// A device that is drawn and wired but has no behaviour in the
+    /// simulation (ADR-0013): a diode, a PLC block, a cylinder. It adds no
+    /// switch, source or load; its terminals only join the nets their wires
+    /// make.
+    Symbolic,
 }
 
 /// How an operator or a machine acts on a device, for the drawing and the
@@ -169,6 +174,15 @@ pub enum SymbolKind {
     /// Secondary winding of a transformer: provides `l1` on `x1` and `n` on
     /// `x2` while the transformer is powered.
     TransformerSecondary,
+    /// A block with two terminals, `t1` above and `t2` below the origin; it
+    /// has no behaviour (class [`DeviceClass::Symbolic`]).
+    Block2,
+    /// A block with four terminals: `t1`, `t2` on the top edge and `t3`,
+    /// `t4` on the bottom edge, left to right; no behaviour.
+    Block4,
+    /// A block with eight terminals: `t1` to `t4` on the top edge and `t5`
+    /// to `t8` on the bottom edge, left to right; no behaviour.
+    Block8,
 }
 
 /// Vertical offset of the terminals above the origin of a symbol, in grid
@@ -182,6 +196,14 @@ const BELOW: i32 = 2;
 /// Horizontal distance between the poles of a multi-pole symbol, in grid
 /// units.
 pub const POLE_PITCH: i32 = 4;
+
+/// Horizontal offset of the outer terminals of a four-terminal block, in grid
+/// units.
+const BLOCK4_X: i32 = 2;
+
+/// Horizontal offsets of the terminals of an eight-terminal block, left to
+/// right, in grid units: one pole pitch apart.
+const BLOCK8_X: [i32; 4] = [-6, -2, 2, 6];
 
 /// Offset of the leftmost motor terminal, one pitch left of the origin.
 const MOTOR_LEFT: i32 = -4;
@@ -262,6 +284,22 @@ impl SymbolKind {
                 vec![TerminalDefinition::new("out", false, GridPoint::new(0, 0))]
             }
             Self::InterlockLink => Vec::new(),
+            Self::Block2 => pair("t1", "t2", false),
+            Self::Block4 => vec![
+                TerminalDefinition::new("t1", false, GridPoint::new(-BLOCK4_X, ABOVE)),
+                TerminalDefinition::new("t2", false, GridPoint::new(BLOCK4_X, ABOVE)),
+                TerminalDefinition::new("t3", false, GridPoint::new(-BLOCK4_X, BELOW)),
+                TerminalDefinition::new("t4", false, GridPoint::new(BLOCK4_X, BELOW)),
+            ],
+            Self::Block8 => BLOCK8_X
+                .into_iter()
+                .map(|x| (x, ABOVE))
+                .chain(BLOCK8_X.into_iter().map(|x| (x, BELOW)))
+                .zip(1_u8..)
+                .map(|((x, y), number)| {
+                    TerminalDefinition::new(&format!("t{number}"), false, GridPoint::new(x, y))
+                })
+                .collect(),
         }
     }
 
@@ -281,7 +319,10 @@ impl SymbolKind {
             | Self::Lamp
             | Self::Buzzer
             | Self::TransformerPrimary
-            | Self::TransformerSecondary => corners(-2, ABOVE, 2, BELOW),
+            | Self::TransformerSecondary
+            | Self::Block2 => corners(-2, ABOVE, 2, BELOW),
+            Self::Block4 => corners(-2 * BLOCK4_X, ABOVE, 2 * BLOCK4_X, BELOW),
+            Self::Block8 => corners(-8, ABOVE, 8, BELOW),
             Self::PowerContacts { poles } | Self::ThermalElement { poles } => {
                 let outer = pole_x(poles, poles).saturating_add(2);
                 corners(outer.saturating_neg(), ABOVE, outer, BELOW)
@@ -651,7 +692,7 @@ impl Category {
             | DeviceClass::Buzzer
             | DeviceClass::MechanicalInterlock => Self::Controls,
             DeviceClass::Motor => Self::Motors,
-            DeviceClass::Relay | DeviceClass::Timer(_) => Self::Automation,
+            DeviceClass::Relay | DeviceClass::Timer(_) | DeviceClass::Symbolic => Self::Automation,
         }
     }
 }
@@ -1225,6 +1266,10 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
             kind,
             SymbolKind::TransformerPrimary | SymbolKind::TransformerSecondary
         ),
+        DeviceClass::Symbolic => matches!(
+            kind,
+            SymbolKind::Block2 | SymbolKind::Block4 | SymbolKind::Block8
+        ),
     }
 }
 
@@ -1291,7 +1336,10 @@ const fn class_params(class: DeviceClass) -> &'static [(&'static str, ExpectedPa
             (PARAM_CONNECTION, ExpectedParam::ConnectionKey),
             (PARAM_SECONDARY, ExpectedParam::SupplyRef),
         ],
-        DeviceClass::ThermalOverload | DeviceClass::Pushbutton | DeviceClass::Fuse => &[],
+        DeviceClass::ThermalOverload
+        | DeviceClass::Pushbutton
+        | DeviceClass::Fuse
+        | DeviceClass::Symbolic => &[],
     }
 }
 
@@ -1718,6 +1766,9 @@ mod tests {
             SymbolKind::InterlockLink,
             SymbolKind::TransformerPrimary,
             SymbolKind::TransformerSecondary,
+            SymbolKind::Block2,
+            SymbolKind::Block4,
+            SymbolKind::Block8,
         ];
         for poles in 1..=MAX_POLES {
             kinds.push(SymbolKind::PowerContacts { poles });
@@ -2481,5 +2532,94 @@ mod tests {
         let at_the_limit = "t".repeat(MAX_TEXT_BYTES);
 
         assert!(ComponentCatalog::new(vec![fuse_with(&at_the_limit, None)]).is_ok());
+    }
+
+    #[test]
+    fn block_terminals_are_numbered_left_to_right_top_edge_first() {
+        assert_eq!(terminal_keys(SymbolKind::Block2), ["t1", "t2"]);
+        assert_eq!(offsets(SymbolKind::Block2), [(0, -2), (0, 2)]);
+        assert_eq!(
+            offsets(SymbolKind::Block4),
+            [(-2, -2), (2, -2), (-2, 2), (2, 2)]
+        );
+        assert_eq!(
+            terminal_keys(SymbolKind::Block8),
+            ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8"]
+        );
+        assert_eq!(
+            offsets(SymbolKind::Block8),
+            [
+                (-6, -2),
+                (-2, -2),
+                (2, -2),
+                (6, -2),
+                (-6, 2),
+                (-2, 2),
+                (2, 2),
+                (6, 2)
+            ]
+        );
+    }
+
+    fn symbolic_model(id: &str, kind: SymbolKind) -> ComponentModel {
+        ComponentModel::new(
+            id,
+            1,
+            DeviceClass::Symbolic,
+            Vec::new(),
+            vec![SymbolDefinition::new("body", kind, 1, 1, false)],
+            Provenance::project_owned(),
+        )
+    }
+
+    #[test]
+    fn the_symbolic_class_takes_blocks_and_nothing_else() {
+        for kind in [SymbolKind::Block2, SymbolKind::Block4, SymbolKind::Block8] {
+            assert!(
+                ComponentCatalog::new(vec![symbolic_model("test.block", kind)]).is_ok(),
+                "{kind:?}"
+            );
+        }
+        for kind in [SymbolKind::ContactNo, SymbolKind::Coil, SymbolKind::Lamp] {
+            assert!(
+                matches!(
+                    ComponentCatalog::new(vec![symbolic_model("test.block", kind)]),
+                    Err(CatalogError::InvalidModel { .. })
+                ),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn blocks_are_only_for_the_symbolic_class() {
+        let lamp = ComponentModel::new(
+            "test.lamp",
+            1,
+            DeviceClass::Lamp,
+            vec![rated_voltage(), connection()],
+            vec![SymbolDefinition::new(
+                "lamp",
+                SymbolKind::Block2,
+                1,
+                1,
+                false,
+            )],
+            Provenance::project_owned(),
+        );
+
+        assert!(matches!(
+            ComponentCatalog::new(vec![lamp]),
+            Err(CatalogError::InvalidModel { .. })
+        ));
+    }
+
+    #[test]
+    fn a_symbolic_model_needs_no_parameters_and_has_no_operator() {
+        let model = symbolic_model("test.block", SymbolKind::Block4);
+
+        assert_eq!(model.operator(), Operator::None);
+        assert_eq!(model.category(), Category::Automation);
+        assert_eq!(model.check_params(&BTreeMap::new()), Vec::<String>::new());
     }
 }

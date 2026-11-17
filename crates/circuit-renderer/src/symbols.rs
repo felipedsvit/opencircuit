@@ -495,8 +495,29 @@ pub(crate) fn art(kind: SymbolKind, operator: Actuator, look: Look) -> Vec<(Shap
             out.push((line((-8, -12), (8, -12)), StyleKey::Symbol));
             out.push((line((0, -12), (0, 0)), StyleKey::Symbol));
         }
+        SymbolKind::Block2 => block(&[0], 10, &mut out),
+        SymbolKind::Block4 => block(&[-20, 20], 30, &mut out),
+        SymbolKind::Block8 => block(&[-60, -20, 20, 60], 70, &mut out),
     }
     out
+}
+
+/// A block of a symbol-only device: a rectangle `half_width` subunits to
+/// each side of the origin, with a lead from each column in `columns` up to
+/// the top terminal and down to the bottom one.
+fn block(columns: &[i64], half_width: i64, out: &mut Vec<(Shape, StyleKey)>) {
+    for &x in columns {
+        leads(x, out);
+    }
+    out.push((
+        rect(
+            half_width.saturating_neg(),
+            BODY.saturating_neg(),
+            half_width,
+            BODY,
+        ),
+        StyleKey::Symbol,
+    ));
 }
 
 /// Rotate a local point about the origin, with the convention of
@@ -565,6 +586,9 @@ mod tests {
             SymbolKind::InterlockLink,
             SymbolKind::TransformerPrimary,
             SymbolKind::TransformerSecondary,
+            SymbolKind::Block2,
+            SymbolKind::Block4,
+            SymbolKind::Block8,
             SymbolKind::FuseLink,
             SymbolKind::Motor,
             SymbolKind::MotorSixTerminal,
