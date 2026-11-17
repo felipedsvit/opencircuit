@@ -17,7 +17,7 @@ use serde::Serialize;
 use crate::args::{
     Command, ExportFormat, FileFormat, OutputFormat, ReportChoice, SheetChoice, TableFormat,
 };
-use crate::fsio::{find_scenarios, load_catalog, read_text, write_atomic};
+use crate::fsio::{find_scenarios, load_catalog, read_text, refuse_input_as_output, write_atomic};
 use crate::scenario::{ActionName, MAX_SCENARIO_BYTES, PolicyName, Scenario};
 use crate::{CliError, EXIT_FAILED, EXIT_OK, Env};
 
@@ -118,6 +118,13 @@ pub(crate) fn execute(
             library,
             report,
         } => {
+            // `--output` may name the project (that is the default) but not
+            // the edit file or a library.
+            if let Some(path) = output {
+                let mut inputs: Vec<&Path> = vec![apply];
+                inputs.extend(library.iter().map(std::path::PathBuf::as_path));
+                refuse_input_as_output("--output", path, &inputs)?;
+            }
             let catalog = load_catalog(library.as_slice())?;
             edit_project(
                 &EditRequest {
@@ -1065,6 +1072,15 @@ fn simulate(
         .into_iter()
         .chain(scenario.libraries.iter().map(|path| directory.join(path)))
         .collect();
+    let mut inputs: Vec<&Path> = vec![project, scenario_path];
+    inputs.extend(libraries.iter().map(std::path::PathBuf::as_path));
+    if let Some(path) = trace {
+        refuse_input_as_output("--trace", path, &inputs)?;
+    }
+    if let Some(path) = snapshot_json {
+        inputs.extend(trace);
+        refuse_input_as_output("--snapshot-json", path, &inputs)?;
+    }
     let catalog = load_catalog(&libraries)?;
     let doc = match circuit_project::from_str(&text) {
         Ok(doc) => doc,
@@ -1288,6 +1304,9 @@ fn check_scenario(path: &Path, update_golden: bool) -> Result<Verdict, CliError>
         };
         if golden.as_deref() != Some(run.trace.as_str()) {
             if update_golden {
+                let mut inputs: Vec<&Path> = vec![&project_path, path];
+                inputs.extend(libraries.iter().map(std::path::PathBuf::as_path));
+                refuse_input_as_output("expect.trace", &golden_path, &inputs)?;
                 write_atomic(&golden_path, &run.trace)?;
                 updated = true;
             } else {
