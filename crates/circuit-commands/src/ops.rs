@@ -384,6 +384,51 @@ pub fn place_on_wire(
     Ok(tx)
 }
 
+/// Connect what `OC-STR-018` found touching without a connection: a terminal
+/// or junction (`subject`) with the terminal, junction or wire (`related`) it
+/// lies on. The wire is cut at the point and a wire joins the point to the
+/// cut, so the net becomes one, in one transaction.
+///
+/// # Errors
+///
+/// Returns [`CommandError::Missing`] when an element is not there,
+/// [`CommandError::InvalidParameter`] when the pair is not one that can be
+/// connected, and the errors of [`connect`].
+pub fn connect_touching(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    subject: &Subject,
+    related: &[Subject],
+) -> Result<Transaction, CommandError> {
+    let layout = LayoutIndex::new(doc, catalog);
+    let anchor_of = |subject: &Subject| -> Result<(Anchor, GridPoint), CommandError> {
+        let endpoint = match subject {
+            Subject::Pin(pin) => Endpoint::Terminal(pin.clone()),
+            Subject::Junction(id) => Endpoint::Junction(*id),
+            _ => {
+                return Err(CommandError::InvalidParameter(
+                    "only terminals and junctions can be connected here".to_owned(),
+                ));
+            }
+        };
+        let at = layout
+            .endpoint_position(&endpoint)
+            .ok_or_else(|| CommandError::Missing(subject.clone()))?;
+        Ok((Anchor::Endpoint(endpoint), at))
+    };
+    let (from, at) = anchor_of(subject)?;
+    let to = match related {
+        [Subject::Wire(wire)] => Anchor::OnWire { wire: *wire, at },
+        [other] => anchor_of(other)?.0,
+        _ => {
+            return Err(CommandError::InvalidParameter(
+                "there is nothing to connect it to".to_owned(),
+            ));
+        }
+    };
+    connect(doc, catalog, &from, &to, &[])
+}
+
 /// Add another symbol of an existing device, such as an auxiliary contact
 /// of a contactor. A slotted symbol takes the first free slot.
 ///

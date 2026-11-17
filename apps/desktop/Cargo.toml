@@ -20,6 +20,7 @@ circuit-export = { workspace = true }
 circuit-model = { workspace = true }
 circuit-project = { workspace = true }
 circuit-renderer = { workspace = true }
+circuit-report = { workspace = true }
 circuit-sim = { workspace = true }
 # Without `accesskit`: its Linux adapter pulls zbus crates that cargo-deny
 # reports as unmaintained and a quick-xml with open advisories. egui still

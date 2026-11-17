@@ -2397,3 +2397,101 @@ mod place_on_wire {
         ));
     }
 }
+
+mod connect_touching {
+    use circuit_model::{DiagnosticCode, Endpoint, SchematicBuilder, Subject, loose_geometry};
+
+    use super::*;
+
+    fn found(doc: &Schematic) -> Vec<circuit_model::Diagnostic> {
+        loose_geometry(doc, &ComponentCatalog::builtin())
+    }
+
+    #[test]
+    fn two_terminals_that_touch_are_joined_by_a_wire_and_the_warning_goes() {
+        let mut b = SchematicBuilder::new("touch");
+        let s1 = b.device("S1", "pushbutton_no", &[]).unwrap();
+        let s2 = b.device("S2", "pushbutton_no", &[]).unwrap();
+        b.symbol(s1, "contact", None, point(0, 0)).unwrap();
+        b.symbol(s2, "contact", None, point(0, 4)).unwrap();
+        let mut doc = b.finish();
+        let warning = found(&doc);
+        assert_eq!(warning.len(), 1);
+        assert_eq!(warning[0].code(), DiagnosticCode::LooseConnection);
+
+        let tx = ops::connect_touching(
+            &doc,
+            &ComponentCatalog::builtin(),
+            warning[0].subject(),
+            warning[0].related(),
+        )
+        .unwrap();
+        let mut history = History::new();
+        history.execute(&mut doc, tx).unwrap();
+
+        assert_eq!(doc.wires.len(), 1);
+        assert_eq!(found(&doc), []);
+        assert_eq!(integrity(&doc), []);
+        history.undo(&mut doc).unwrap();
+        assert!(doc.wires.is_empty());
+    }
+
+    #[test]
+    fn a_terminal_on_a_wire_cuts_the_wire_and_is_joined_to_the_cut() {
+        let mut b = SchematicBuilder::new("on a wire");
+        let s1 = b.device("S1", "pushbutton_no", &[]).unwrap();
+        b.symbol(s1, "contact", None, point(0, 4)).unwrap();
+        let a = b.junction(point(-5, 2)).unwrap();
+        let c = b.junction(point(5, 2)).unwrap();
+        b.wire(a, c).unwrap();
+        let mut doc = b.finish();
+        let warning = found(&doc);
+        assert_eq!(warning.len(), 1);
+
+        let tx = ops::connect_touching(
+            &doc,
+            &ComponentCatalog::builtin(),
+            warning[0].subject(),
+            warning[0].related(),
+        )
+        .unwrap();
+        History::new().execute(&mut doc, tx).unwrap();
+
+        // The wire is in two, with a junction where it was cut, and a wire
+        // from that junction to the terminal.
+        assert_eq!(doc.wires.len(), 3);
+        assert_eq!(doc.junctions.len(), 3);
+        assert_eq!(found(&doc), []);
+        assert!(
+            doc.wires
+                .iter()
+                .any(|w| matches!(w.from, Endpoint::Terminal(_))
+                    || matches!(w.to, Endpoint::Terminal(_)))
+        );
+    }
+
+    #[test]
+    fn what_cannot_be_connected_is_refused() {
+        let doc = Schematic::new("none");
+        let catalog = ComponentCatalog::builtin();
+
+        assert!(matches!(
+            ops::connect_touching(
+                &doc,
+                &catalog,
+                &Subject::Wire(circuit_model::WireId(1)),
+                &[]
+            ),
+            Err(CommandError::InvalidParameter(_))
+        ));
+        assert!(matches!(
+            ops::connect_touching(
+                &doc,
+                &catalog,
+                &Subject::Junction(circuit_model::JunctionId(1)),
+                &[]
+            ),
+            Err(CommandError::Missing(_))
+        ));
+    }
+}
