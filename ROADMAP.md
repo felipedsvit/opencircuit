@@ -410,8 +410,12 @@ Decisions, to be confirmed in #118:
 - [x] Macros: record the edits of a session as an edit file and play it back
   (`circuit_commands::record`, verified by running the operations; the edit
   file reader moved to `circuit_commands::script`; `apps/desktop/tests/macros.rs`).
-- [ ] Customizable shortcuts, themes, a collapsible sidebar, toolbars, dockable
-  panels, saved workspaces.
+- [x] Customizable shortcuts, themes, a collapsible sidebar, toolbars, dockable
+  panels, saved workspaces: View > Theme, Show the side panels (Ctrl+B), Show
+  the tool bar, panels on either side, Workspaces and Customize shortcuts,
+  kept in the user's data folder (`apps/desktop/src/workspace.rs`,
+  `apps/desktop/tests/workspace.rs`). Panels dock on the left or the right;
+  floating panels are not part of it.
 - [ ] Several open projects, in tabs.
 - [x] Wire routing on request: an orthogonal route around symbols, undone in
   one step (`circuit_commands::route`; Modify > Route the selected wires,

@@ -446,6 +446,17 @@ mod tests {
                     .iter()
                     .map(|(_, label)| *label),
             )
+            .chain(
+                crate::workspace::Action::ALL
+                    .into_iter()
+                    .map(crate::workspace::Action::description),
+            )
+            .chain(
+                crate::workspace::ThemeChoice::ALL
+                    .into_iter()
+                    .map(crate::workspace::ThemeChoice::name),
+            )
+            .chain(crate::workspace::MESSAGES)
             .collect();
         for key in &in_tables {
             assert!(
