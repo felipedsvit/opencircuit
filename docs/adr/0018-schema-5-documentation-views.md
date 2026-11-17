@@ -44,7 +44,8 @@ for the milestone, so every field is decided here before any is written.
   `"Cu"`, `"PVC"`). The stored colour is what the wire is made of, not how it
   is drawn: the window and the exports keep drawing conductors in the
   colours of their energized state. The `wires` report gets one column per
-  field.
+  field, in a project where a wire has data (the report of any other project
+  is as before); a net whose wires differ shows each value once.
 
 ### Annotations
 

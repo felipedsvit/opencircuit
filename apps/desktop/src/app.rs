@@ -4111,7 +4111,8 @@ impl DesktopApp {
         ))
     }
 
-    fn select(&mut self, subject: Subject) {
+    /// Select one element and centre the view on it.
+    pub fn select(&mut self, subject: Subject) {
         self.editor.set_selection(BTreeSet::from([subject.clone()]));
         self.focus = Some(subject);
     }

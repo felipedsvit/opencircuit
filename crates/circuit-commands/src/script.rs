@@ -178,6 +178,21 @@ enum Operation {
     /// Set the number that replaces the generated one on a wire; `null`, or
     /// leaving it out, clears it.
     SetWireNumber { wire: Value, number: Option<String> },
+    /// Set what a wire is made of (ADR-0018). A field left out keeps its
+    /// value; `null` clears it.
+    SetWireSpec {
+        wire: Value,
+        #[serde(default)]
+        colour: Field,
+        #[serde(default)]
+        cross_section: Field,
+        #[serde(default)]
+        kind: Field,
+        #[serde(default)]
+        material: Field,
+        #[serde(default)]
+        insulation: Field,
+    },
     /// Set the rule that numbers the wires. What is left out keeps its value
     /// (an empty prefix, 1, 1 and a single counter for a new rule);
     /// `"enabled": false` removes the rule.
@@ -265,6 +280,7 @@ impl Operation {
             Self::RemoveSheet { .. } => "remove_sheet",
             Self::SetDeviceInfo { .. } => "set_device_info",
             Self::SetWireNumber { .. } => "set_wire_number",
+            Self::SetWireSpec { .. } => "set_wire_spec",
             Self::Numbering { .. } => "numbering",
             Self::Waive { .. } => "waive",
             Self::Unwaive { .. } => "unwaive",
@@ -771,6 +787,32 @@ impl Run<'_> {
                     .map_err(refused)?;
                 self.commit(&tx)
             }
+            Operation::SetWireSpec {
+                wire,
+                colour,
+                cross_section,
+                kind,
+                material,
+                insulation,
+            } => {
+                let wire = WireId(self.named_or_id(wire, "wire")?);
+                let current = self
+                    .doc
+                    .wires
+                    .iter()
+                    .find(|candidate| candidate.id == wire)
+                    .and_then(|candidate| candidate.spec.clone())
+                    .unwrap_or_default();
+                let spec = circuit_model::WireSpec {
+                    colour: colour.apply(current.colour.as_ref()),
+                    cross_section: cross_section.apply(current.cross_section.as_ref()),
+                    kind: kind.apply(current.kind.as_ref()),
+                    material: material.apply(current.material.as_ref()),
+                    insulation: insulation.apply(current.insulation.as_ref()),
+                };
+                let tx = documentation::set_wire_spec(&self.doc, wire, spec).map_err(refused)?;
+                self.commit(&tx)
+            }
             Operation::Numbering {
                 prefix,
                 start,
@@ -1267,6 +1309,27 @@ mod tests {
     fn documented(more: &str) -> Result<Applied, EditError> {
         let operations = format!("{}, {more}]", DOCUMENTED.trim_end_matches(']'));
         run(fresh(), &operations)
+    }
+
+    #[test]
+    fn set_wire_spec_keeps_the_fields_left_out_and_clears_null_ones() {
+        let doc = documented(
+            r#"
+            { "op": "set_wire_spec", "wire": "link", "colour": "BU", "material": "Cu" },
+            { "op": "set_wire_spec", "wire": "link", "material": null, "insulation": "PVC" }
+            "#,
+        )
+        .expect("the operations apply")
+        .doc;
+        let spec = doc.wires[0].spec.clone().expect("data");
+        assert_eq!(spec.colour.as_deref(), Some("BU"));
+        assert_eq!(spec.material, None);
+        assert_eq!(spec.insulation.as_deref(), Some("PVC"));
+
+        let (_, message) = refused(documented(
+            r#"{ "op": "set_wire_spec", "wire": "link", "kind": "0123456789012345678901234567890123" }"#,
+        ));
+        assert!(message.contains("32 characters"), "{message}");
     }
 
     #[test]

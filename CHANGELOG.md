@@ -106,6 +106,11 @@ here when it lands.
   `"client"` in the `project` operation of edit files), printed in a row
   above the title block of every sheet; a project without a client draws the
   title block as before.
+- **Wire data** (ADR-0018): the colour, cross-section, type, material and
+  insulation of a wire, in the closed section Wire data of the inspector and
+  in `{ "op": "set_wire_spec" }` of edit files. The `wires` report gets five
+  columns for them in a project that has any; the report of any other
+  project is as before.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

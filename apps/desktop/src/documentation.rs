@@ -271,6 +271,36 @@ pub fn wire_section(
                 request = Some(edits::set_wire_number(doc, wire, Some(&text)));
             }
         });
+    // What the wire is made of (ADR-0018), closed: selecting a wire shows
+    // one row more than before, and no field.
+    egui::CollapsingHeader::new(tr("Wire data"))
+        .default_open(false)
+        .show(ui, |ui| {
+            let spec = found.spec.clone().unwrap_or_default();
+            let labels = [
+                tr("Colour"),
+                tr("Cross-section"),
+                tr("Type"),
+                tr("Material"),
+                tr("Insulation"),
+            ];
+            for (name, label) in circuit_model::WireSpec::FIELDS.into_iter().zip(labels) {
+                let current = spec
+                    .clone()
+                    .field_mut(name)
+                    .and_then(|value| value.take())
+                    .unwrap_or_default();
+                if let Some(text) =
+                    state.text_field(ui, format!("wire:{wire}:{name}"), label, &current)
+                {
+                    let mut changed = spec.clone();
+                    if let Some(field) = changed.field_mut(name) {
+                        *field = Some(text);
+                    }
+                    request = Some(edits::set_wire_spec(doc, wire, changed));
+                }
+            }
+        });
     request
 }
 

@@ -424,3 +424,34 @@ fn devices_lists_the_sheets_their_symbols_are_on() {
     assert!(Kind::parse("devices") == Some(Kind::Devices));
     assert_eq!(Kind::ALL.last(), Some(&Kind::Devices));
 }
+
+#[test]
+fn the_data_of_the_wires_adds_columns_only_to_a_project_that_has_some() {
+    let mut doc = project();
+    let before = wires(&doc, &catalog());
+    assert_eq!(before.columns.len(), 5);
+
+    let first = doc.wires[0].id;
+    doc.wires[0].spec = Some(circuit_model::WireSpec {
+        colour: Some("BU".to_owned()),
+        cross_section: Some("1.5 mm²".to_owned()),
+        ..circuit_model::WireSpec::default()
+    });
+    let after = wires(&doc, &catalog());
+    assert_eq!(
+        after.columns[5..],
+        ["Colour", "Cross-section", "Type", "Material", "Insulation"]
+    );
+    let nets = StaticNets::build(&doc, &catalog());
+    let net = nets.net_of_wire(first).expect("a net");
+    let numbers = WireNumbers::build(&doc, &catalog(), &nets);
+    let number = numbers.of_net(net).unwrap_or_default().to_owned();
+    let row = after
+        .rows
+        .iter()
+        .find(|row| row[0] == number)
+        .expect("the row of the net");
+    assert_eq!(row[5], "BU");
+    assert_eq!(row[6], "1.5 mm²");
+    assert_eq!(row[7], "");
+}

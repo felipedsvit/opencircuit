@@ -135,7 +135,7 @@ elements with their kind and ID.
 
 | `op` | Fields | Does |
 | --- | --- | --- |
-| `project` | `name`, `author`, `company`, `revision`, `date` | sets what is present; `null` clears an optional field; absent keeps it |
+| `project` | `name`, `author`, `company`, `revision`, `date`, `client` | sets what is present; `null` clears an optional field; absent keeps it |
 | `add_supply` | `preset` (`dc_24v`, `single_phase_230v`, `three_phase_400v`), `as` | adds a supply profile |
 | `place` | `model`, `version`, `symbol`, `at`, `rotation`, `reference`, `as` | a new device drawn as one symbol; the newest `version` unless given; `rotation` 0, 90, 180 or 270 |
 | `add_symbol` | `device`, `symbol`, `at`, `rotation`, `as` | another symbol of a device (an auxiliary contact) |
@@ -150,6 +150,7 @@ elements with their kind and ID.
 | `remove_sheet` | `number` | removes a sheet; what was drawn on it stays |
 | `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it |
 | `set_wire_number` | `wire` (name or ID), `number` | the number that replaces the generated one on a wire; `null` or no `number` clears it |
+| `set_wire_spec` | `wire` (name or ID), `colour`, `cross_section`, `kind`, `material`, `insulation` | what a wire is made of (ADR-0018), each field at most 32 characters; a field left out is kept and `null` clears it |
 | `numbering` | `prefix`, `start`, `step`, `per_sheet`, `enabled` | the rule that numbers the wires: what is left out keeps its value (an empty prefix, 1, 1 and one counter for a new rule); `"enabled": false` removes it |
 | `waive` | `code`, `subject`, `reason` | accepts a warning or informational diagnostic with a reason; `subject` is a name, `{ "device": "K1" }`, `{ "wire": ... }`, `{ "junction": ... }`, `{ "symbol": ..., "terminal": "p2" }` for a terminal, or `"document"`; an error cannot be waived |
 | `unwaive` | `code`, `subject` | takes a waiver away |

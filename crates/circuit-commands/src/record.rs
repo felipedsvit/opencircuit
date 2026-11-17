@@ -367,6 +367,18 @@ fn translate(
                     "location": info.location,
                 }));
             }
+            Edit::SetWireSpec { wire, spec } => {
+                let spec = spec.clone().unwrap_or_default();
+                operations.push(json!({
+                    "op": "set_wire_spec",
+                    "wire": names.wire(*wire),
+                    "colour": spec.colour,
+                    "cross_section": spec.cross_section,
+                    "kind": spec.kind,
+                    "material": spec.material,
+                    "insulation": spec.insulation,
+                }));
+            }
             Edit::SetWireNumber { wire, number } => operations.push(json!({
                 "op": "set_wire_number",
                 "wire": names.wire(*wire),
@@ -604,6 +616,28 @@ mod tests {
         let file = s.recorder.to_edit_file();
         let played = script::apply(start, &s.catalog, &file).unwrap();
 
+        assert_eq!(played.doc, s.doc);
+    }
+
+    #[test]
+    fn the_data_of_a_wire_is_recorded_and_played_back() {
+        let start = Schematic::new("macro");
+        let mut s = session(start.clone());
+        let wire = s.doc.wires[0].id;
+        assert!(s.commit(|doc, _| {
+            crate::documentation::set_wire_spec(
+                doc,
+                wire,
+                circuit_model::WireSpec {
+                    colour: Some("BU".to_owned()),
+                    insulation: Some("PVC".to_owned()),
+                    ..circuit_model::WireSpec::default()
+                },
+            )
+            .unwrap()
+        }));
+        assert_eq!(s.recorder.left_out(), 0);
+        let played = script::apply(start, &s.catalog, &s.recorder.to_edit_file()).unwrap();
         assert_eq!(played.doc, s.doc);
     }
 

@@ -64,3 +64,46 @@ fn the_client_is_typed_in_the_project_data_section() {
     harness.run();
     assert_eq!(document(&harness).project.client.as_deref(), Some("ACME"));
 }
+
+fn starter() -> Harness<'static, DesktopApp> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/direct-starter/starter.ocircuit");
+    let mut harness = Harness::new_ui_state(
+        |ui, app: &mut DesktopApp| app.show(ui),
+        DesktopApp::new(Some(&path)),
+    );
+    harness.set_size(egui::Vec2::new(1300.0, 900.0));
+    harness.run();
+    harness.state_mut().set_mode(Mode::Edit);
+    harness.run();
+    harness
+}
+
+#[test]
+fn the_data_of_a_wire_is_typed_in_its_closed_section() {
+    let mut harness = starter();
+    let wire = document(&harness).wires[0].id;
+    harness
+        .state_mut()
+        .select(circuit_model::Subject::Wire(wire));
+    harness.run();
+    assert!(harness.query_by_label("Colour").is_none());
+    harness.get_by_label("Wire data").scroll_to_me();
+    harness.run();
+    harness.get_by_label("Wire data").click();
+    harness.run();
+    for (label, text) in [("Colour", "BU"), ("Cross-section", "1.5 mm²")] {
+        harness.get_by_label(label).scroll_to_me();
+        harness.run();
+        let field = harness.get_by_label(label);
+        field.focus();
+        field.type_text(text);
+        harness.run();
+        harness.key_press(Key::Enter);
+        harness.run();
+    }
+    let spec = document(&harness).wires[0].spec.clone().expect("set");
+    assert_eq!(spec.colour.as_deref(), Some("BU"));
+    assert_eq!(spec.cross_section.as_deref(), Some("1.5 mm²"));
+    assert_eq!(spec.kind, None);
+}

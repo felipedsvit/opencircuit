@@ -127,6 +127,13 @@ pub enum Edit {
         /// The new waypoints.
         route: Vec<GridPoint>,
     },
+    /// Set (`Some`) or clear (`None`) what a wire is made of (ADR-0018).
+    SetWireSpec {
+        /// The wire.
+        wire: WireId,
+        /// What it is made of; `None` clears it.
+        spec: Option<circuit_model::WireSpec>,
+    },
     /// Set (`Some`) or clear (`None`) the override of the generated number of
     /// a wire.
     SetWireNumber {
@@ -479,6 +486,14 @@ impl Edit {
                     route: previous,
                 })
             }
+            Self::SetWireSpec { wire, spec } => {
+                let found = sorted::find_mut(&mut doc.wires, &wire, |w| w.id)
+                    .ok_or_else(|| missing(Subject::Wire(wire)))?;
+                Ok(Self::SetWireSpec {
+                    wire,
+                    spec: std::mem::replace(&mut found.spec, spec),
+                })
+            }
             Self::SetWireNumber { wire, number } => {
                 let found = sorted::find_mut(&mut doc.wires, &wire, |w| w.id)
                     .ok_or_else(|| missing(Subject::Wire(wire)))?;
@@ -644,6 +659,13 @@ mod tests {
             Edit::SetWireNumber {
                 wire: wire.id,
                 number: Some("17".to_owned()),
+            },
+            Edit::SetWireSpec {
+                wire: wire.id,
+                spec: Some(circuit_model::WireSpec {
+                    colour: Some("BU".to_owned()),
+                    ..circuit_model::WireSpec::default()
+                }),
             },
             Edit::SetDeviceInfo {
                 device: device.id,

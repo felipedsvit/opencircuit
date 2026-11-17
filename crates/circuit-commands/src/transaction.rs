@@ -85,6 +85,7 @@ impl Transaction {
                 | Edit::MoveText { .. }
                 | Edit::SetRoute { .. }
                 | Edit::SetWireNumber { .. }
+                | Edit::SetWireSpec { .. }
                 | Edit::SetDeviceInfo { .. }
                 | Edit::InsertWaiver(_)
                 | Edit::RemoveWaiver { .. } => None,

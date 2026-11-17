@@ -430,8 +430,9 @@ Decisions, to be confirmed in #118:
   `OC-STR-025`).
 - [x] The client in the project data (title block; inspector Project tree >
   Project data; `apps/desktop/tests/schema5.rs`).
-- [ ] Wires: a stored colour, cross-section, type, material and insulation, in
-  the wires report.
+- [x] Wires: a stored colour, cross-section, type, material and insulation, in
+  the wires report (`set_wire_spec`; inspector Wire data;
+  `apps/desktop/tests/schema5.rs`).
 - [ ] Revision clouds, comments on an element, and shapes (polyline,
   rectangle, circle, arc) as annotations.
 - [ ] Groups of elements, and mirrored symbols.

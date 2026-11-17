@@ -344,7 +344,7 @@ mod tests {
     }
 
     /// Technical texts that read the same in both languages.
-    const THE_SAME: [&str; 23] = [
+    const THE_SAME: [&str; 24] = [
         "{0} ({1})",
         "{0} terminal",
         "{0} wire",
@@ -362,6 +362,7 @@ mod tests {
         "F",
         "F2",
         "G",
+        "Material",
         "PDF…",
         "R",
         "SVG…",

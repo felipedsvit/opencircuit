@@ -43,8 +43,8 @@ pub use diff::diff;
 use circuit_io::IoMap;
 use circuit_model::{
     ComponentCatalog, Device, DeviceClass, DeviceId, Diagnostic, PinRef, Schematic, StaticNets,
-    SymbolId, SymbolInstance, SymbolKind, Table, WaiverIndex, WireNumbers, natural_key as natural,
-    sheet_at, strip_terminals, terminal_label,
+    SymbolId, SymbolInstance, SymbolKind, Table, WaiverIndex, WireId, WireNumbers, WireSpec,
+    natural_key as natural, sheet_at, strip_terminals, terminal_label,
 };
 
 /// The reports, by the name the command line uses.
@@ -343,7 +343,19 @@ pub fn wires(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
     let nets = StaticNets::build(doc, catalog);
     let numbers = WireNumbers::build(doc, catalog, &nets);
 
-    let mut table = Table::new("Wires", &["Number", "Sheet", "From", "To", "Also"]);
+    // The data of the wires (ADR-0018) adds five columns, only to a project
+    // that has some: the report of any other project is as before.
+    let with_data = doc.wires.iter().any(|wire| wire.spec.is_some());
+    let mut columns = vec!["Number", "Sheet", "From", "To", "Also"];
+    if with_data {
+        columns.extend(["Colour", "Cross-section", "Type", "Material", "Insulation"]);
+    }
+    let mut table = Table::new("Wires", &columns);
+    let specs: BTreeMap<WireId, &WireSpec> = doc
+        .wires
+        .iter()
+        .filter_map(|wire| wire.spec.as_ref().map(|spec| (wire.id, spec)))
+        .collect();
     for (id, sheet) in numbers.sequence() {
         let Some(net) = nets.net(*id) else {
             continue;
@@ -355,13 +367,33 @@ pub fn wires(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
         };
         let to = names.next().unwrap_or_default();
         let also: Vec<String> = names.collect();
-        table.push(vec![
+        let mut row = vec![
             numbers.of_net(*id).unwrap_or_default().to_owned(),
             sheet.map(|sheet| sheet.to_string()).unwrap_or_default(),
             from,
             to,
             also.join(" "),
-        ]);
+        ];
+        if with_data {
+            // The wires of one net may be made of different things: each
+            // distinct value once, in the order of the wire IDs.
+            for field in 0..WireSpec::FIELDS.len() {
+                let mut values: Vec<&str> = Vec::new();
+                for wire in &net.wires {
+                    let value = specs
+                        .get(wire)
+                        .and_then(|spec| spec.values().get(field).copied())
+                        .and_then(|value| value.as_deref());
+                    if let Some(value) = value
+                        && !values.contains(&value)
+                    {
+                        values.push(value);
+                    }
+                }
+                row.push(values.join(" / "));
+            }
+        }
+        table.push(row);
     }
     table
 }
