@@ -17,6 +17,7 @@ use circuit_model::{
 use eframe::egui::{self, Ui};
 
 use crate::documentation::{self, Goto};
+use crate::i18n::{tr, trf};
 use crate::session::Session;
 
 /// What the user asked for: the transaction of a change, or why it cannot
@@ -76,17 +77,19 @@ impl InspectorState {
 fn kind_label(kind: SupplyKind) -> &'static str {
     match kind {
         SupplyKind::Dc => "DC",
-        SupplyKind::SinglePhase => "single phase",
-        SupplyKind::ThreePhase => "three phase",
+        SupplyKind::SinglePhase => tr("single phase"),
+        SupplyKind::ThreePhase => tr("three phase"),
     }
 }
 
 fn supply_label(profile: &SupplyProfile) -> String {
-    format!(
-        "Supply {} ({}, {} mV)",
-        profile.id,
-        kind_label(profile.kind),
-        profile.nominal_voltage_mv
+    trf(
+        "Supply {0} ({1}, {2} mV)",
+        &[
+            &profile.id,
+            &kind_label(profile.kind),
+            &profile.nominal_voltage_mv,
+        ],
     )
 }
 
@@ -99,7 +102,7 @@ pub fn show(
 ) -> Option<Request> {
     let mut request = None;
     ui.label(selection_summary(session, selection));
-    egui::CollapsingHeader::new("Properties")
+    egui::CollapsingHeader::new(tr("Properties"))
         .default_open(true)
         .show(ui, |ui| {
             let mut selected = selection.iter();
@@ -108,21 +111,21 @@ pub fn show(
                     request = device_section(ui, session, *id, state);
                 }
                 (None, _) => {
-                    ui.label("Select a symbol to edit its device.");
+                    ui.label(tr("Select a symbol to edit its device."));
                 }
                 _ => {
                     request = selection_section(ui, session, selection, state);
                 }
             }
         });
-    egui::CollapsingHeader::new("Supplies")
+    egui::CollapsingHeader::new(tr("Supplies"))
         .default_open(true)
         .show(ui, |ui| {
             if let Some(change) = supplies_section(ui, session, state) {
                 request = Some(change);
             }
         });
-    egui::CollapsingHeader::new("Sheets and title block")
+    egui::CollapsingHeader::new(tr("Sheets and title block"))
         .default_open(true)
         .show(ui, |ui| {
             if let Some(change) = sheets_section(ui, session, state) {
@@ -136,7 +139,7 @@ pub fn show(
     let mut selected = selection.iter();
     match (selected.next(), selected.next()) {
         (Some(Subject::Symbol(symbol)), None) => {
-            egui::CollapsingHeader::new("Connections")
+            egui::CollapsingHeader::new(tr("Connections"))
                 .default_open(false)
                 .show(ui, |ui| {
                     state.goto = documentation::connections_section(ui, session, *symbol)
@@ -161,7 +164,7 @@ pub fn show(
         }
         _ => {}
     }
-    egui::CollapsingHeader::new("Project tree")
+    egui::CollapsingHeader::new(tr("Project tree"))
         .default_open(false)
         .show(ui, |ui| {
             if let Some(go) = documentation::project_section(ui, session, selection) {
@@ -169,7 +172,7 @@ pub fn show(
             }
             // The layers organise the project, and live in its section: the
             // inspector of a fresh window gets no new row (ADR-0015).
-            egui::CollapsingHeader::new("Layers")
+            egui::CollapsingHeader::new(tr("Layers"))
                 .default_open(false)
                 .show(ui, |ui| {
                     if let Some(change) =
@@ -186,14 +189,14 @@ pub fn show(
 fn selection_summary(session: &Session, selection: &BTreeSet<Subject>) -> String {
     let mut selected = selection.iter();
     match (selected.next(), selected.next()) {
-        (None, _) => "Nothing selected".to_owned(),
+        (None, _) => tr("Nothing selected").to_owned(),
         (Some(Subject::Symbol(id)), None) => {
             let layout = LayoutIndex::new(session.document(), session.catalog());
             layout
                 .symbol(*id)
                 .and_then(|symbol| layout.device(symbol.device_id))
                 .map_or_else(
-                    || "1 symbol selected".to_owned(),
+                    || tr("1 symbol selected").to_owned(),
                     |device| {
                         let title = session
                             .catalog()
@@ -203,9 +206,9 @@ fn selection_summary(session: &Session, selection: &BTreeSet<Subject>) -> String
                     },
                 )
         }
-        (Some(Subject::Text(_)), None) => "1 text selected".to_owned(),
-        (Some(_), None) => "1 element selected".to_owned(),
-        _ => format!("{} elements selected", selection.len()),
+        (Some(Subject::Text(_)), None) => tr("1 text selected").to_owned(),
+        (Some(_), None) => tr("1 element selected").to_owned(),
+        _ => trf("{0} elements selected", &[&selection.len()]),
     }
 }
 
@@ -222,33 +225,40 @@ fn device_section(
     let device = layout.device(symbol.device_id)?;
     let mut request = None;
 
-    ui.label(format!(
-        "{} · {} v{} · symbol `{}`",
-        device.reference.0, device.model.id, device.model.version, symbol.symbol_key.0
+    ui.label(trf(
+        "{0} · {1} v{2} · symbol `{3}`",
+        &[
+            &device.reference.0,
+            &device.model.id,
+            &device.model.version,
+            &symbol.symbol_key.0,
+        ],
     ));
     if let Some(text) = state.text_field(
         ui,
         format!("reference:{}", device.id),
-        "Reference",
+        tr("Reference"),
         &device.reference.0,
     ) {
         request = Some(ops::set_reference(doc, device.id, &text));
     }
 
     let Some(model) = catalog.model(&device.model) else {
-        ui.colored_label(ui.visuals().error_fg_color, "Model not in the catalog.");
+        ui.colored_label(ui.visuals().error_fg_color, tr("Model not in the catalog."));
         return request;
     };
     if let Some(newer) = catalog.upgrade(&device.model)
         && ui
-            .button(format!("Upgrade to version {}", newer.version()))
-            .on_hover_text("Keeps every symbol, wire and parameter and offers the newer symbols")
+            .button(trf("Upgrade to version {0}", &[&newer.version()]))
+            .on_hover_text(tr(
+                "Keeps every symbol, wire and parameter and offers the newer symbols",
+            ))
             .clicked()
     {
         request = Some(ops::upgrade_model(doc, catalog, device.id));
     }
     if !model.params().is_empty() {
-        ui.strong("Parameters");
+        ui.strong(tr("Parameters"));
     }
     let devices = BTreeSet::from([device.id]);
     for definition in model.params() {
@@ -258,7 +268,7 @@ fn device_section(
         }
     }
 
-    ui.strong("Symbols");
+    ui.strong(tr("Symbols"));
     for definition in model.symbols() {
         let count = doc
             .symbols
@@ -266,17 +276,15 @@ fn device_section(
             .filter(|s| s.device_id == device.id && &s.symbol_key == definition.key())
             .count();
         ui.horizontal(|ui| {
-            ui.label(format!(
-                "{}: {count} of {}",
-                definition.key().0,
-                definition.max_instances()
+            ui.label(trf(
+                "{0}: {1} of {2}",
+                &[&definition.key().0, &count, &definition.max_instances()],
             ));
             if count < usize::from(definition.max_instances())
                 && ui
-                    .button(format!(
-                        "Add {} to {}",
-                        definition.key().0,
-                        device.reference.0
+                    .button(trf(
+                        "Add {0} to {1}",
+                        &[&definition.key().0, &device.reference.0],
                     ))
                     .clicked()
             {
@@ -301,10 +309,10 @@ fn device_section(
     }
 
     ui.horizontal(|ui| {
-        if ui.button("Rotate symbol").clicked() {
+        if ui.button(tr("Rotate symbol")).clicked() {
             request = Some(ops::rotate(doc, catalog, &BTreeSet::from([symbol_id])));
         }
-        if ui.button("Delete symbol").clicked() {
+        if ui.button(tr("Delete symbol")).clicked() {
             request = Some(ops::delete(
                 doc,
                 catalog,
@@ -327,7 +335,7 @@ fn selection_section(
     let doc = session.document();
     let catalog = session.catalog();
     let mut request = None;
-    ui.label(format!("{} elements selected.", selection.len()));
+    ui.label(trf("{0} elements selected.", &[&selection.len()]));
     let symbols: BTreeSet<circuit_model::SymbolId> = selection
         .iter()
         .filter_map(|subject| match subject {
@@ -336,20 +344,20 @@ fn selection_section(
         })
         .collect();
     ui.horizontal(|ui| {
-        if !symbols.is_empty() && ui.button("Rotate all").clicked() {
+        if !symbols.is_empty() && ui.button(tr("Rotate all")).clicked() {
             request = Some(ops::rotate(doc, catalog, &symbols));
         }
-        if ui.button("Delete all").clicked() {
+        if ui.button(tr("Delete all")).clicked() {
             request = Some(ops::delete(doc, catalog, selection));
         }
     });
     ui.horizontal(|ui| {
-        ui.label("Align");
+        ui.label(tr("Align"));
         for (label, edge) in [
-            ("Left", Align::Left),
-            ("Right", Align::Right),
-            ("Top", Align::Top),
-            ("Bottom", Align::Bottom),
+            (tr("Left"), Align::Left),
+            (tr("Right"), Align::Right),
+            (tr("Top"), Align::Top),
+            (tr("Bottom"), Align::Bottom),
         ] {
             if ui.button(label).clicked() {
                 request = Some(arrange::align(doc, catalog, selection, edge));
@@ -357,8 +365,11 @@ fn selection_section(
         }
     });
     ui.horizontal(|ui| {
-        ui.label("Distribute");
-        for (label, axis) in [("Across", Axis::Horizontal), ("Down", Axis::Vertical)] {
+        ui.label(tr("Distribute"));
+        for (label, axis) in [
+            (tr("Across"), Axis::Horizontal),
+            (tr("Down"), Axis::Vertical),
+        ] {
             if ui.button(label).clicked() {
                 request = Some(arrange::distribute(doc, catalog, selection, axis));
             }
@@ -383,7 +394,7 @@ fn selection_section(
         .filter(|model| owners.iter().all(|device| &device.model == *model))
         .and_then(|model| catalog.model(model));
     if let (Some(model), true) = (model, owners.len() >= 2) {
-        ui.strong(format!("Parameters of {} {}", owners.len(), model.id()));
+        ui.strong(trf("Parameters of {0} {1}", &[&owners.len(), &model.id()]));
         for definition in model.params() {
             if definition.ty == ParamType::DeviceRef {
                 continue;
@@ -472,7 +483,7 @@ fn param_row(
         ParamType::Enum(choices) => {
             let selected = match shown {
                 Some(ParamValue::Text(text)) => text.clone(),
-                _ => "(not set)".to_owned(),
+                _ => tr("(not set)").to_owned(),
             };
             egui::ComboBox::new(format!("param:{device}:{key}"), key)
                 .selected_text(selected)
@@ -496,8 +507,8 @@ fn param_row(
                     .supplies
                     .iter()
                     .find(|s| i64::try_from(s.id.0).ok() == Some(*raw))
-                    .map_or_else(|| format!("missing supply {raw}"), supply_label),
-                _ => "(not set)".to_owned(),
+                    .map_or_else(|| trf("missing supply {0}", &[raw]), supply_label),
+                _ => tr("(not set)").to_owned(),
             };
             egui::ComboBox::new(format!("param:{device}:{key}"), key)
                 .selected_text(chosen)
@@ -537,10 +548,10 @@ fn param_row(
                     .iter()
                     .find(|d| i64::try_from(d.id.0).ok() == Some(*raw))
                     .map_or_else(
-                        || format!("missing device {raw}"),
+                        || trf("missing device {0}", &[raw]),
                         |d| d.reference.0.clone(),
                     ),
-                _ => "(not set)".to_owned(),
+                _ => tr("(not set)").to_owned(),
             };
             egui::ComboBox::new(format!("param:{device}:{key}"), key)
                 .selected_text(chosen)
@@ -573,19 +584,23 @@ fn sheets_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) ->
     let mut request = None;
     let project = &doc.project;
     let fields = [
-        ("name", "Project", project.name.as_str()),
-        ("author", "Author", project.author.as_deref().unwrap_or("")),
+        ("name", tr("Project"), project.name.as_str()),
+        (
+            "author",
+            tr("Author"),
+            project.author.as_deref().unwrap_or(""),
+        ),
         (
             "company",
-            "Company",
+            tr("Company"),
             project.company.as_deref().unwrap_or(""),
         ),
         (
             "revision",
-            "Revision",
+            tr("Revision"),
             project.revision.as_deref().unwrap_or(""),
         ),
-        ("date", "Date", project.date.as_deref().unwrap_or("")),
+        ("date", tr("Date"), project.date.as_deref().unwrap_or("")),
     ];
     for (key, label, current) in fields {
         if let Some(text) = state.text_field(ui, format!("project:{key}"), label, current) {
@@ -617,15 +632,15 @@ fn sheets_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) ->
     sheets.sort_by_key(|sheet| (sheet.number, sheet.id));
     for sheet in sheets {
         ui.horizontal(|ui| {
-            ui.label(format!("Sheet {}", sheet.number));
-            if ui.button("Remove").clicked() {
+            ui.label(trf("Sheet {0}", &[&sheet.number]));
+            if ui.button(tr("Remove")).clicked() {
                 request = Some(sheets::remove_sheet(doc, sheet.id));
             }
         });
         if let Some(title) = state.text_field(
             ui,
             format!("sheet:{}:title", sheet.id),
-            "Title",
+            tr("Title"),
             &sheet.title,
         ) {
             request = Some(sheets::set_sheet(
@@ -638,8 +653,8 @@ fn sheets_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) ->
         }
     }
     if ui
-        .button("Add A4 sheet")
-        .on_hover_text("A new landscape sheet to the right of the others")
+        .button(tr("Add A4 sheet"))
+        .on_hover_text(tr("A new landscape sheet to the right of the others"))
         .clicked()
     {
         request = Some(next_sheet(doc));
@@ -690,15 +705,14 @@ fn supplies_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) 
     let catalog = session.catalog();
     let mut request = None;
     for supply in &doc.supplies {
-        ui.label(format!(
-            "Supply {} · {}",
-            supply.id,
-            kind_label(supply.kind)
+        ui.label(trf(
+            "Supply {0} · {1}",
+            &[&supply.id, &kind_label(supply.kind)],
         ));
         if let Some(text) = state.text_field(
             ui,
             format!("supply:{}:voltage", supply.id),
-            "Voltage (mV)",
+            tr("Voltage (mV)"),
             &supply.nominal_voltage_mv.to_string(),
         ) {
             request = Some(match text.parse::<u32>() {
@@ -718,7 +732,7 @@ fn supplies_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) 
             && let Some(text) = state.text_field(
                 ui,
                 format!("supply:{}:frequency", supply.id),
-                "Frequency (mHz)",
+                tr("Frequency (mHz)"),
                 &frequency.to_string(),
             )
         {
@@ -735,13 +749,13 @@ fn supplies_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) 
                 )),
             });
         }
-        if ui.button(format!("Remove supply {}", supply.id)).clicked() {
+        if ui.button(trf("Remove supply {0}", &[&supply.id])).clicked() {
             request = Some(ops::remove_supply(doc, catalog, supply.id));
         }
     }
     ui.horizontal_wrapped(|ui| {
         for preset in SupplyPreset::ALL {
-            if ui.button(format!("Add {}", preset.label())).clicked() {
+            if ui.button(trf("Add {0}", &[&tr(preset.label())])).clicked() {
                 request = Some(ops::add_supply(doc, preset));
             }
         }

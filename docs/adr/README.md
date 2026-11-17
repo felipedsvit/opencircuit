@@ -28,3 +28,4 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0014](0014-derived-documentation.md) | Derived documentation (nets, wire numbers, reports, geometry diagnostics) with only overrides, device catalog data, the numbering rule and waivers stored; schema version 3 |
 | [0015](0015-text-and-layers.md) | Text notes and layers (schema 4) |
 | [0016](0016-names-and-terminals.md) | A name parameter, terminal blocks that always conduct and the terminal plan; names that join nets (signal arrows) |
+| [0017](0017-window-language.md) | The language of the window: English source, Brazilian Portuguese catalog, chosen from the environment and the Help menu |

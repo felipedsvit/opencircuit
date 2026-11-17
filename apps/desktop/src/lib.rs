@@ -25,6 +25,7 @@ mod cmdline;
 mod dialogs;
 mod documentation;
 pub mod files;
+mod i18n;
 mod icons;
 mod inspector;
 mod palette;
@@ -34,4 +35,5 @@ mod theme;
 pub mod web;
 
 pub use app::{DesktopApp, Mode};
+pub use i18n::Language;
 pub use session::{LoadError, Session};

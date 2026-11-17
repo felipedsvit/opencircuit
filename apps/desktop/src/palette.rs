@@ -8,6 +8,7 @@ use circuit_model::{
 use circuit_renderer::{Scene, ScenePoint, Shape, symbol_preview};
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui};
 
+use crate::i18n::{tr, trf};
 use crate::icons::{self, Icon};
 use crate::theme::{self, Tokens};
 
@@ -103,8 +104,8 @@ pub fn show(
         if icons::button_hint(
             ui,
             Icon::Select,
-            "Select",
-            "Select and move (Esc)",
+            tr("Select"),
+            tr("Select and move (Esc)"),
             tool == Tool::Select,
         )
         .clicked()
@@ -114,8 +115,8 @@ pub fn show(
         if icons::button_hint(
             ui,
             Icon::Wire,
-            "Wire",
-            "Draw a wire (W)",
+            tr("Wire"),
+            tr("Draw a wire (W)"),
             tool == Tool::Wire,
         )
         .clicked()
@@ -131,19 +132,20 @@ pub fn show(
                 .latest()
                 .filter(|model| model.category() == category)
                 .count();
-            let hint = format!("{} ({count})", category.label());
+            let label = tr(category.label());
+            let hint = trf("{0} ({1})", &[&label, &count]);
             let open = state.search.is_empty() && state.tab == category;
-            if icons::button_hint(ui, tab_icon(category), category.label(), &hint, open).clicked() {
+            if icons::button_hint(ui, tab_icon(category), label, &hint, open).clicked() {
                 state.tab = category;
                 state.search.clear();
             }
         }
     });
     ui.horizontal(|ui| {
-        let name = ui.label("Search");
+        let name = ui.label(tr("Search"));
         ui.add(
             egui::TextEdit::singleline(&mut state.search)
-                .hint_text("title, model or symbol")
+                .hint_text(tr("title, model or symbol"))
                 .desired_width(f32::INFINITY),
         )
         .labelled_by(name.id);
@@ -162,13 +164,13 @@ pub fn show(
     models.sort_by(|a, b| (a.title(), a.id()).cmp(&(b.title(), b.id())));
     recent_strip(ui, catalog, editor, state);
     let place = if needle.is_empty() {
-        state.tab.label()
+        tr(state.tab.label())
     } else {
-        "Search results"
+        tr("Search results")
     };
-    ui.strong(format!("{place}: {} parts", models.len()));
+    ui.strong(trf("{0}: {1} parts", &[&place, &models.len()]));
     if models.is_empty() {
-        ui.label("Nothing here.");
+        ui.label(tr("Nothing here."));
         return;
     }
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -211,9 +213,13 @@ fn recent_strip(
     }
     let tokens = Tokens::of(ui);
     ui.horizontal_wrapped(|ui| {
-        ui.label(egui::RichText::new("Recent").small().color(tokens.text_dim));
+        ui.label(
+            egui::RichText::new(tr("Recent"))
+                .small()
+                .color(tokens.text_dim),
+        );
         for (model, symbol, title) in shown {
-            let label = format!("Recent {} · {}", model.id, symbol.0);
+            let label = trf("Recent {0} · {1}", &[&model.id, &symbol.0]);
             let response = ui.small_button(title);
             let enabled = ui.is_enabled();
             response.widget_info(|| {
@@ -244,8 +250,10 @@ fn part(
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(model.title()).strong());
         if model.class() == DeviceClass::Symbolic {
-            ui.label(egui::RichText::new("no sim").small().color(tokens.warn))
-                .on_hover_text("Drawn and wired only: it has no behaviour in the simulation.");
+            ui.label(egui::RichText::new(tr("no sim")).small().color(tokens.warn))
+                .on_hover_text(tr(
+                    "Drawn and wired only: it has no behaviour in the simulation.",
+                ));
         }
     });
     let provenance = model.provenance();
