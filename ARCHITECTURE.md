@@ -185,3 +185,18 @@ warnings and informational diagnostics can be waived. The window changed by
 addition: sections after the existing ones in the inspector, a View item and a
 key for the net trace, a strip of recent parts, parts placed in series with a
 wire, and buttons on the lines of the problems list.
+
+M8 is implemented (ADR-0015 to ADR-0017, schema version 4, library schema 3).
+Names join nets: a parameter type `name`, terminal blocks (`TerminalPoint`, a
+terminal pair that always conducts, listed by `circuit-report` as the terminal
+plan) and signal arrows (`SignalArrow`, a terminal that joins every other arrow of
+its name, on a sheet or across sheets, in the compiler's copper phase and in
+`StaticNets`, which the same equivalence test keeps in step). Text notes and
+layers are stored, each optional and omitted when empty, and neither reaches the
+compiler: a note has no terminals, and a layer only hides (the renderer, the hit
+test and the exports skip it) or locks (`circuit_commands::layers` refuses the
+edits). `opencircuit mcp` is a second front end over the same command-line code,
+confined to one root directory. The window speaks the language of the environment
+or the Help menu through a catalog that has English as its keys (`i18n`); the core,
+the diagnostics and the command line do not know about languages.
+
