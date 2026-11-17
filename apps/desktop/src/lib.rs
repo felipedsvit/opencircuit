@@ -29,6 +29,8 @@ mod i18n;
 mod icons;
 mod inspector;
 mod palette;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod recovery;
 pub mod session;
 mod theme;
 #[cfg(target_arch = "wasm32")]

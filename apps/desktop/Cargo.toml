@@ -22,6 +22,8 @@ circuit-project = { workspace = true }
 circuit-renderer = { workspace = true }
 circuit-report = { workspace = true }
 circuit-sim = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 # Without `accesskit`: its Linux adapter pulls zbus crates that cargo-deny
 # reports as unmaintained and a quick-xml with open advisories. egui still
 # builds its AccessKit tree for egui_kittest.

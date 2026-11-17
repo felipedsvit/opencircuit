@@ -14,6 +14,18 @@ Version 0.0.2 closes M9 (`ROADMAP.md`): resilience, work safety,
 productivity, schema version 5 and new document views. Each item is listed
 here when it lands.
 
+### Added
+
+- **Autosave and recovery** in the window: while a project has unsaved
+  changes, a copy is kept every 30 seconds in the user's data folder
+  (`~/.local/share/opencircuit/recovery`, `~/Library/Application
+  Support/OpenCircuit/recovery` or `%LOCALAPPDATA%\OpenCircuit\recovery`),
+  never next to the project, and the status bar says so. The copy is removed
+  when the project is saved, replaced or closed on purpose. After a crash, a
+  killed process or a power loss, the next window offers to recover it (as
+  unsaved changes, with its original file) or to discard it. A window that is
+  still running is never offered.
+
 ### Fixed
 
 - **A command no longer writes over a file it reads**: `simulate --trace` or

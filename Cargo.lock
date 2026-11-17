@@ -1732,6 +1732,8 @@ dependencies = [
  "egui_kittest",
  "js-sys",
  "rfd",
+ "serde",
+ "serde_json",
  "wasm-bindgen-futures",
  "web-sys",
 ]

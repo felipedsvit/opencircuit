@@ -205,6 +205,13 @@ pub struct DesktopApp {
     waiving: Option<(String, Subject)>,
     /// The reason being typed.
     waive_reason: String,
+    /// The copy of a project with unsaved changes, kept for a recovery after
+    /// an unexpected exit; off unless `main` turns it on.
+    #[cfg(not(target_arch = "wasm32"))]
+    autosave: Option<crate::recovery::Autosave>,
+    /// Copies left by windows that ended without closing, offered once.
+    #[cfg(not(target_arch = "wasm32"))]
+    recover_offer: Vec<crate::recovery::Entry>,
 }
 
 impl DesktopApp {
@@ -216,6 +223,38 @@ impl DesktopApp {
             app.open_path(path);
         }
         app
+    }
+
+    /// Keep a copy of a project with unsaved changes in `store`, written at
+    /// most once per `interval_seconds`, and offer the copies that windows
+    /// which ended without closing left there.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_recovery(
+        &mut self,
+        store: crate::recovery::RecoveryStore,
+        interval_seconds: f64,
+    ) {
+        let autosave = crate::recovery::Autosave::new(store, interval_seconds, 0.0);
+        self.recover_offer = autosave
+            .store()
+            .orphans(autosave.key(), autosave.stale_after());
+        self.autosave = Some(autosave);
+    }
+
+    /// How many copies are offered for recovery.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn recovery_offered(&self) -> usize {
+        self.recover_offer.len()
+    }
+
+    /// Whether the copy kept for recovery is the project as it is now.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn recovery_current(&self) -> bool {
+        self.autosave
+            .as_ref()
+            .is_some_and(|autosave| autosave.is_current(self.session.as_ref()))
     }
 
     /// Open a project file. On failure the current project stays open and
@@ -486,9 +525,113 @@ impl DesktopApp {
                 }
             }
             Pending::Close => {
+                // Closed on purpose: no copy is kept for a recovery.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(autosave) = &mut self.autosave {
+                    autosave.clear();
+                }
                 self.allow_close = true;
                 self.close_now = true;
             }
+        }
+    }
+
+    /// Write, renew or remove the copy kept for a recovery, and wake the
+    /// window when the next one is due.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn autosave_tick(&mut self, ui: &Ui) {
+        let Some(autosave) = &mut self.autosave else {
+            return;
+        };
+        // Closing with the changes dropped: the copy was removed and is not
+        // written again while the window goes away.
+        if self.allow_close {
+            return;
+        }
+        let now = ui.input(|input| input.time);
+        autosave.tick(now, self.session.as_ref());
+        if self.session.as_ref().is_some_and(Session::is_dirty) {
+            let wait = autosave.due_in(now).max(0.1);
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
+    }
+
+    /// The offer to recover the copies of projects left by windows that
+    /// ended without closing. One copy is recovered at a time; the others
+    /// stay for the next start.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_dialog(&mut self, ui: &Ui) {
+        if self.recover_offer.is_empty() || self.confirm.is_some() {
+            return;
+        }
+        let mut chosen: Option<(usize, bool)> = None;
+        let mut later = false;
+        egui::Modal::new(egui::Id::unique("recover unsaved work")).show(ui.ctx(), |ui| {
+            ui.heading(tr("Recover unsaved work"));
+            ui.label(tr(
+                "OpenCircuit ended without saving these projects. A copy of each was kept.",
+            ));
+            for (index, entry) in self.recover_offer.iter().enumerate() {
+                ui.separator();
+                let place = entry.original.as_ref().map_or_else(
+                    || tr("never saved").to_owned(),
+                    |path| path.display().to_string(),
+                );
+                ui.label(format!("{} — {place}", entry.name));
+                ui.horizontal(|ui| {
+                    let button = |ui: &mut Ui, text: &str| {
+                        let response = ui.button(text);
+                        let label = format!("{text} {}", entry.name);
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
+                        });
+                        response
+                    };
+                    if button(ui, tr("Recover")).clicked() {
+                        chosen = Some((index, true));
+                    }
+                    if button(ui, tr("Discard")).clicked() {
+                        chosen = Some((index, false));
+                    }
+                });
+            }
+            ui.separator();
+            if ui.button(tr("Later")).clicked() {
+                later = true;
+            }
+        });
+        if later {
+            self.recover_offer.clear();
+            return;
+        }
+        let Some((index, recover)) = chosen else {
+            return;
+        };
+        if index >= self.recover_offer.len() {
+            return;
+        }
+        let entry = self.recover_offer.remove(index);
+        if !recover {
+            entry.discard();
+            return;
+        }
+        let loaded = entry
+            .read()
+            .map_err(|error| error.to_string())
+            .and_then(|text| {
+                Session::load(&text, entry.original.clone()).map_err(|error| error.to_string())
+            });
+        match loaded {
+            Ok(mut session) => {
+                session.mark_unsaved();
+                self.replace(session);
+                entry.discard();
+                // The others stay on disk and are offered at the next start:
+                // the window holds one project at a time.
+                self.recover_offer.clear();
+            }
+            Err(error) => self.error = Some(error),
         }
     }
 
@@ -531,6 +674,12 @@ impl DesktopApp {
     }
 
     fn replace(&mut self, mut session: Session) {
+        // The project that goes was saved, or its changes were dropped on
+        // purpose: its copy is not kept.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(autosave) = &mut self.autosave {
+            autosave.clear();
+        }
         if !self.libraries.is_empty() {
             match self.catalog() {
                 Ok(catalog) => session.set_catalog(catalog),
@@ -742,6 +891,11 @@ impl DesktopApp {
             self.save();
         }
         self.confirm_dialog(ui);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.recovery_dialog(ui);
+            self.autosave_tick(ui);
+        }
 
         let dropped = ui.input(|input| input.raw.dropped_files.clone());
         for file in dropped {
@@ -1439,6 +1593,21 @@ impl DesktopApp {
             if !self.traced.1.is_empty() {
                 ui.separator();
                 ui.label(RichText::new(self.traced.1.as_str()).color(tokens.text_dim));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(autosave) = &self.autosave {
+                if let Some(failure) = autosave.failure() {
+                    ui.separator();
+                    ui.colored_label(
+                        ui.visuals().error_fg_color,
+                        trf("Recovery copy failed: {0}", &[&failure]),
+                    );
+                } else if self.session.as_ref().is_some_and(Session::is_dirty)
+                    && autosave.is_current(self.session.as_ref())
+                {
+                    ui.separator();
+                    ui.label(RichText::new(tr("Recovery copy saved")).color(tokens.text_dim));
+                }
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let problems = self.session.as_ref().map_or(0, |session| {
