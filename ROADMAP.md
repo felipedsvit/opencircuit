@@ -254,8 +254,62 @@ Considered and not done in M7: off-page signal arrows (they would supersede
 ADR-0011), ladder diagrams and a text and annotation entity, terminal strips
 and PLC modules, a library tab of ready-made circuits with parameters, an MCP
 server (the edit file and the JSON output are still the interface it would sit
-on), manufacturer catalog import, and a static wire colour. New work starts
-with an issue.
+on), manufacturer catalog import, and a static wire colour. M8 did the signal
+arrows, the text entity, the terminal strips and the MCP server.
+
+## M8 — Panel documentation and an agent interface (done)
+
+Tracking issue #107 (issues #101 to #106 and #103). Clean room, as for M7: the
+workflows of other electrical CAD tools shaped the scope only. The window
+changed only by addition (`Conservative interface` in `AGENTS.md`). Schema
+version 4 (ADR-0015), library schema 3 (ADR-0016), ADR-0017.
+
+- [x] **MCP server** (`opencircuit mcp`, #104): JSON-RPC 2.0 over stdio with the
+  tools `new`, `validate`, `simulate`, `edit`, `report` and `export`, confined to
+  one root directory (no absolute path, no `..`, no symlink out), with bounded
+  messages and results. It calls the same code as the command line.
+- [x] **Terminal blocks and the terminal plan** (#105, ADR-0016): the name
+  parameter type (library schema 3), `std.terminal_block` (strip and number), the
+  report `strips`, and `OC-SEM-013` for a number used twice on a strip.
+- [x] **Signal arrows between sheets** (#106, ADR-0016): every arrow with one
+  name is one net, on a sheet or across sheets, joined by the compiler and by the
+  static nets; each arrow shows where the others are; `OC-SEM-014` for an arrow
+  with no partner. `std.signal_arrow`.
+- [x] **Text notes** (#101, ADR-0015, schema version 4): one line, 1 to 120
+  characters, documentation only (no effect on the circuit or the reports), drawn
+  and exported; the Text tool, `text` and the inspector section; `OC-STR-021`.
+- [x] **Layers** (#102, ADR-0015): hide (not drawn, exported or hit) and lock
+  (edits refused) named groups of symbols, wires and notes, with no effect on the
+  simulation; the `layer` command and a section of the inspector;
+  `OC-STR-022`.
+- [x] **The window in Brazilian Portuguese** (#103, ADR-0017): a catalog with
+  English as the source and default, chosen from the environment and from the
+  Help menu; diagnostics, the command line and the file formats stay English.
+
+Command line: `mcp`, and the edit-file operations `add_text`, `set_text`,
+`add_layer`, `set_layer`, `remove_layer` and `assign_layer`.
+
+**Exit criterion:** a control circuit drawn on two sheets with no wire between
+them (`examples/signal-arrows`) validates without warnings, simulates to the
+committed trace, and its wires report shows one net across both sheets; a strip of
+terminals (`examples/terminals`) is listed in the committed terminal plan and the
+circuit still runs through it; a project made only through the edit file gets
+notes and layers, a hidden layer is left out of the exported drawing, a locked
+layer refuses edits and the simulation is the same either way; the MCP server
+runs the same operations over a pipe and stays inside its root; and the window
+opens in Portuguese, edits and undoes. The tests are
+`a_circuit_continues_from_one_sheet_to_the_next_through_signal_arrows`,
+`the_terminal_plan_of_the_example_is_the_committed_one_and_the_circuit_runs_through_the_strip`,
+`text_notes_are_drawn_edited_and_left_out_of_every_report`,
+`layers_are_made_assigned_hidden_and_a_hidden_layer_is_left_out_of_the_drawing`
+and `the_mcp_server_answers_over_a_pipe_and_stays_inside_its_root` in
+`apps/cli/tests/cli.rs`, and `apps/desktop/tests/{notes,layers,language}.rs`.
+
+Considered and not done in M8: ladder diagrams and GRAFCET, PLC modules, a
+library tab of ready-made circuits, manufacturer catalog import, a static wire
+colour, colours and line types per layer, a "current layer", rotated or
+several-line text, other languages and a stored language setting, and a
+translated command line. New work starts with an issue.
 
 ## Out of scope for the MVP
 

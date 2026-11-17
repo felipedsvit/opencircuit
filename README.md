@@ -32,7 +32,11 @@ the simulation does not model. M7 is implemented: wire numbers, reports
 problems, as text, JSON, CSV and PDF), renumbering, warnings about drawings
 that look connected and are not, warnings accepted with a reason, and in the
 window a project tree, the connections and catalog data of a part, a net
-trace, recent parts and parts placed on a wire. How to extend OpenCircuit, and the safety limits of each interface,
+trace, recent parts and parts placed on a wire. M8 is implemented: terminal
+strips and a terminal plan, signal arrows that continue a circuit from one sheet
+to another, text notes, layers that hide and lock groups of elements, an MCP
+server (`opencircuit mcp`) for tools that edit and check projects, and the window
+in Brazilian Portuguese. How to extend OpenCircuit, and the safety limits of each interface,
 are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
