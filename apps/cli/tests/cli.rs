@@ -1423,3 +1423,153 @@ fn the_standard_parts_are_available_to_every_command_without_a_library_file() {
     let refused = opencircuit(&["edit", path, "--apply", edit.to_str().expect("UTF-8 path")]);
     assert_ne!(code(&refused), 0);
 }
+
+const STARTER: &str = "examples/direct-starter/starter.ocircuit";
+
+#[test]
+fn report_prints_a_table_as_text_by_default() {
+    let output = opencircuit(&["report", STARTER, "--kind", "bom"]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.starts_with("Bill of materials\n"), "{text}");
+    assert!(text.contains("contactor.generic v1"), "{text}");
+    // A supply tap is a point of the drawing, not a part.
+    assert!(!text.contains("supply.terminal"), "{text}");
+}
+
+#[test]
+fn report_writes_one_table_as_csv_on_standard_output() {
+    let output = opencircuit(&["report", STARTER, "--kind", "io", "--format", "csv"]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.starts_with("Table,Address,Words,Name,Meaning\n"),
+        "{text}"
+    );
+    assert!(text.contains("coil,0,1,Q1,1 = closed\n"), "{text}");
+}
+
+#[test]
+fn report_all_in_json_has_every_table_with_format_1() {
+    let output = opencircuit(&["report", STARTER, "--kind", "all", "--format", "json"]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let document: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
+    assert_eq!(document["format"], 1);
+    assert_eq!(document["command"], "report");
+    assert_eq!(document["ok"], true);
+    let kinds: Vec<&str> = document["reports"]
+        .as_array()
+        .expect("reports")
+        .iter()
+        .map(|report| report["kind"].as_str().expect("kind"))
+        .collect();
+    assert_eq!(
+        kinds,
+        ["bom", "wires", "terminals", "xref", "io", "problems"]
+    );
+    assert_eq!(document["reports"][0]["columns"][1], "Qty");
+}
+
+#[test]
+fn report_to_a_file_picks_the_format_from_the_extension() {
+    let directory = scratch("report-file");
+    let csv = directory.join("terminals.csv");
+
+    let output = opencircuit(&[
+        "report",
+        STARTER,
+        "--kind",
+        "terminals",
+        "--output",
+        csv.to_str().expect("utf-8 path"),
+    ]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).starts_with("wrote  "),
+        "{}",
+        stdout(&output)
+    );
+    let written = fs::read_to_string(&csv).expect("written");
+    assert!(
+        written.starts_with("Reference,Symbol,Terminal,Key,Wire,Connected to\n"),
+        "{written}"
+    );
+
+    let json = directory.join("all.json");
+    let output = opencircuit(&[
+        "report",
+        STARTER,
+        "--kind",
+        "all",
+        "--output",
+        json.to_str().expect("utf-8 path"),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let confirmation: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
+    assert_eq!(confirmation["kind"], "json");
+    assert_eq!(confirmation["reports"], 6);
+    let written: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&json).expect("written")).expect("JSON");
+    assert_eq!(written["reports"].as_array().expect("reports").len(), 6);
+}
+
+#[test]
+fn report_problems_lists_the_diagnostics_of_a_project_that_does_not_compile() {
+    let output = opencircuit(&[
+        "report",
+        STATIC_SHORT,
+        "--kind",
+        "problems",
+        "--format",
+        "csv",
+    ]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("error,OC-ELEC-001,"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn report_usage_errors_exit_with_2_and_a_broken_project_with_1() {
+    for words in [
+        &["report", STARTER][..],
+        &["report", STARTER, "--kind", "nope"],
+        &["report", STARTER, "--kind", "all", "--format", "csv"],
+        &[
+            "report",
+            STARTER,
+            "--kind",
+            "bom",
+            "--output",
+            "report.xlsx",
+        ],
+    ] {
+        let output = opencircuit(words);
+        assert_eq!(code(&output), 2, "{words:?}");
+    }
+
+    let directory = scratch("report-broken");
+    let broken = directory.join("broken.ocircuit");
+    fs::write(&broken, "{ not json").expect("write");
+    let output = opencircuit(&[
+        "report",
+        broken.to_str().expect("utf-8 path"),
+        "--kind",
+        "bom",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&output), 1);
+    let document: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
+    assert_eq!(document["ok"], false);
+    assert_eq!(document["command"], "report");
+}

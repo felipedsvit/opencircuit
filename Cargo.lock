@@ -318,6 +318,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-report"
+version = "0.0.1"
+dependencies = [
+ "circuit-io",
+ "circuit-model",
+ "proptest",
+]
+
+[[package]]
 name = "circuit-sim"
 version = "0.0.1"
 dependencies = [
@@ -1700,6 +1709,7 @@ dependencies = [
  "circuit-model",
  "circuit-project",
  "circuit-renderer",
+ "circuit-report",
  "circuit-sim",
  "proptest",
  "serde",

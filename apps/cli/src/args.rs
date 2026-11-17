@@ -72,6 +72,38 @@ pub(crate) enum Command {
         duration_ms: Option<u64>,
         report: OutputFormat,
     },
+    Report {
+        project: PathBuf,
+        which: ReportChoice,
+        /// What is written on standard output: the tables, or, with a file,
+        /// the confirmation.
+        format: TableFormat,
+        output: Option<(PathBuf, FileFormat)>,
+        library: Option<PathBuf>,
+    },
+}
+
+/// Which reports `report` makes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ReportChoice {
+    One(circuit_report::Kind),
+    All,
+}
+
+/// How `report` writes tables on standard output.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TableFormat {
+    Text,
+    Json,
+    Csv,
+}
+
+/// The file format of `report --output`, chosen by the extension.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum FileFormat {
+    Text,
+    Json,
+    Csv,
 }
 
 /// Address `serve` listens on unless `--listen` says otherwise: loopback
@@ -371,8 +403,77 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 report,
             })
         }
+        "report" => parse_report(rest),
         other => Err(format!("unknown command `{other}`")),
     }
+}
+
+/// `report <project> --kind <name>|all [--format text|json|csv]
+/// [--output <file.csv|json|txt>] [--library ...]`.
+fn parse_report(rest: &[String]) -> Result<Command, String> {
+    let words = Words::split(rest, &["--kind", "--format", "--output", "--library"], &[])?;
+    let names = circuit_report::Kind::ALL
+        .map(circuit_report::Kind::name)
+        .join("|");
+    let which = match words.value("--kind") {
+        None => return Err(format!("`report` needs `--kind {names}|all`")),
+        Some("all") => ReportChoice::All,
+        Some(name) => circuit_report::Kind::parse(name)
+            .map(ReportChoice::One)
+            .ok_or_else(|| format!("unknown report `{name}`; use {names} or all"))?,
+    };
+    let format = match words.value("--format") {
+        None | Some("text") => TableFormat::Text,
+        Some("json") => TableFormat::Json,
+        Some("csv") => TableFormat::Csv,
+        Some(other) => {
+            return Err(format!(
+                "unknown format `{other}`; use `text`, `json` or `csv`"
+            ));
+        }
+    };
+    let output = match words.value("--output").map(PathBuf::from) {
+        None => None,
+        Some(path) => {
+            let file = match path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .map(str::to_ascii_lowercase)
+                .as_deref()
+            {
+                Some("csv") => FileFormat::Csv,
+                Some("json") => FileFormat::Json,
+                Some("txt") => FileFormat::Text,
+                _ => {
+                    return Err(format!(
+                        "cannot tell the format of `{}`; the output must end in `.csv`, `.json` or `.txt`",
+                        path.display()
+                    ));
+                }
+            };
+            Some((path, file))
+        }
+    };
+    if output.is_some() && format == TableFormat::Csv {
+        return Err(
+            "`--format csv` writes the table on standard output; with `--output` the extension of the file picks the format and `--format` is `text` or `json`"
+                .to_owned(),
+        );
+    }
+    let csv = format == TableFormat::Csv
+        || output
+            .as_ref()
+            .is_some_and(|(_, file)| *file == FileFormat::Csv);
+    if csv && which == ReportChoice::All {
+        return Err("a CSV holds one table; give `--kind <name>` instead of `all`".to_owned());
+    }
+    Ok(Command::Report {
+        project: words.single_positional("project file")?,
+        which,
+        format,
+        output,
+        library: words.value("--library").map(PathBuf::from),
+    })
 }
 
 #[cfg(test)]
@@ -466,6 +567,73 @@ mod tests {
         assert!(parse_words(&["edit", "a.ocircuit"]).is_err());
         assert!(parse_words(&["new"]).is_err());
         assert!(parse_words(&["new", "a", "b"]).is_err());
+    }
+
+    #[test]
+    fn report_needs_a_known_kind_and_one_table_for_csv() {
+        assert!(parse_words(&["report", "a.ocircuit"]).is_err());
+        assert!(parse_words(&["report", "a.ocircuit", "--kind", "nope"]).is_err());
+        assert!(
+            parse_words(&["report", "a.ocircuit", "--kind", "all", "--format", "csv"]).is_err()
+        );
+        assert!(
+            parse_words(&["report", "a.ocircuit", "--kind", "all", "--output", "a.csv"]).is_err()
+        );
+        assert!(
+            parse_words(&[
+                "report",
+                "a.ocircuit",
+                "--kind",
+                "bom",
+                "--output",
+                "a.csv",
+                "--format",
+                "csv"
+            ])
+            .is_err()
+        );
+        assert!(
+            parse_words(&[
+                "report",
+                "a.ocircuit",
+                "--kind",
+                "bom",
+                "--output",
+                "a.xlsx"
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn report_reads_the_kind_the_format_and_the_file() {
+        assert_eq!(
+            parse_words(&["report", "a.ocircuit", "--kind", "wires", "--format", "csv"]),
+            Ok(Command::Report {
+                project: PathBuf::from("a.ocircuit"),
+                which: ReportChoice::One(circuit_report::Kind::Wires),
+                format: TableFormat::Csv,
+                output: None,
+                library: None,
+            })
+        );
+        assert_eq!(
+            parse_words(&[
+                "report",
+                "a.ocircuit",
+                "--kind",
+                "all",
+                "--output",
+                "out.json"
+            ]),
+            Ok(Command::Report {
+                project: PathBuf::from("a.ocircuit"),
+                which: ReportChoice::All,
+                format: TableFormat::Text,
+                output: Some((PathBuf::from("out.json"), FileFormat::Json)),
+                library: None,
+            })
+        );
     }
 
     #[test]

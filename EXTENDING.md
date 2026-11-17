@@ -137,7 +137,7 @@ and 1 024 waypoints in a wire. Positions are grid units.
 
 ## JSON output
 
-`validate`, `simulate`, `test`, `export`, `new`, `edit` and `serve --print-map` take
+`validate`, `simulate`, `test`, `export`, `new`, `edit`, `report` and `serve --print-map` take
 `--format json` and then write **one JSON document on stdout**, in place of
 their text. Every document starts with
 
@@ -161,6 +161,7 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 | `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
 | `new` | `file` |
 | `edit` | `operations`, `created` (each named element with `kind` and `id`), `wrote` (the file, or `null` for a dry run), `errors`, `warnings`, `diagnostics` |
+| `report` | `reports`: a list of `kind`, `title`, `columns` and `rows` (every cell is text); with `--output`, `file`, `kind` (`csv`, `json` or `txt`) and `reports` (how many tables) |
 | `serve --print-map` | `map`: a list of `table` (`coil`, `discrete_input` or `input_register`), `address`, `words`, `name`, `meaning`; the same lines as the text map |
 
 `diagnostics` are the structured diagnostics of `FORMAT.md` (`code`,
@@ -232,6 +233,29 @@ points); `--sheet <number>` writes one sheet as a PDF or an SVG, and
 `--sheet all` is the default for a PDF. An SVG without `--sheet` is the whole
 canvas. Text is set in Liberation Mono, embedded in the PDF as a subset
 (ADR-0012).
+
+## Reports
+
+`opencircuit report <project> --kind bom|wires|terminals|xref|io|problems|all`
+derives tables from the project, and writes them as text, JSON (`--format`)
+or, for one table, CSV. With `--output <file>` the extension picks the format
+(`.csv`, `.json` or `.txt`) and `--format` says how the confirmation is
+written. Nothing is stored in the project: the tables are a function of it
+(ADR-0014).
+
+| Kind | One row per |
+| --- | --- |
+| `bom` | kind of part: model and version, manufacturer, part number and description; supply taps are not parts |
+| `wires` | net with a wire, in numbering order: number, sheet, `From`, `To` and the other terminals under `Also` |
+| `terminals` | terminal of every symbol, with the number of its wire and the terminals it meets |
+| `xref` | exception: a coil with no contact, contacts whose coil is not drawn, a symbol outside every sheet |
+| `io` | address of the Modbus map |
+| `problems` | diagnostic of the project, compiled |
+
+Designators sort in natural order (`K2` before `K10`). A terminal is written
+`K1:A1`, with the printed number of the terminal. A CSV cell that a
+spreadsheet would read as a formula (it starts with `=`, `+`, `-`, `@`, a tab
+or a carriage return) gets a leading apostrophe.
 
 ## Rust crates
 

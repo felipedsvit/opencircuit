@@ -95,6 +95,15 @@ const PACKAGE_RULES: &[PackageRule] = &[
         dev: &["proptest"],
         core: true,
     },
+    // Reports (ADR-0014) are tables derived from a document and its catalog,
+    // plus the I/O map; they write nothing and never see the simulator.
+    PackageRule {
+        name: "circuit-report",
+        workspace: &["circuit-io", "circuit-model"],
+        external: &[],
+        dev: &["proptest"],
+        core: true,
+    },
     // The only package with egui/eframe, which it reaches through the eframe
     // re-export; the GUI never enters the core.
     PackageRule {
@@ -124,6 +133,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-model",
             "circuit-project",
             "circuit-renderer",
+            "circuit-report",
             "circuit-sim",
         ],
         external: &["serde", "serde_json"],
