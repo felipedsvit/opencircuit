@@ -1641,3 +1641,149 @@ mod terminal_blocks {
         );
     }
 }
+
+mod signal_arrows {
+    //! Arrows of one name are one net (ADR-0016).
+
+    use circuit_model::catalog::{
+        Category, ComponentModel, DeviceClass, ParamDefinition, ParamType, Provenance,
+        SymbolDefinition, SymbolKind,
+    };
+    use circuit_model::library::Library;
+
+    use super::*;
+
+    fn catalog_with_arrows() -> ComponentCatalog {
+        let provenance = Provenance {
+            origin: "test".to_owned(),
+            license: "MIT".to_owned(),
+            standard_reference: None,
+        };
+        let model = ComponentModel::new(
+            "std.signal_arrow",
+            1,
+            DeviceClass::SignalArrow,
+            vec![ParamDefinition {
+                key: "name".to_owned(),
+                ty: ParamType::Name,
+                default: Some(ParamValue::Text("SIGNAL".to_owned())),
+            }],
+            vec![SymbolDefinition::new(
+                "arrow",
+                SymbolKind::SignalArrow,
+                1,
+                1,
+                false,
+            )],
+            provenance.clone(),
+        )
+        .with_category(Category::Lines);
+        ComponentCatalog::builtin()
+            .with_library(Library {
+                id: "std".to_owned(),
+                version: 1,
+                name: "test".to_owned(),
+                provenance,
+                models: vec![model],
+            })
+            .unwrap()
+    }
+
+    /// 24 V to arrow `a`; arrow `b` to a lamp to 0 V. The lamp is fed only if
+    /// the two arrows are one net.
+    fn lamp_behind_two_arrows(first: &str, second: &str) -> (Schematic, SymbolId, SymbolId) {
+        let mut rig = Rig::new();
+        let (p24, p0) = rig.dc24();
+        let a = rig.part(
+            "SA1",
+            "std.signal_arrow",
+            "arrow",
+            &[("name", ParamValue::Text(first.to_owned()))],
+        );
+        let b = rig.part(
+            "SA2",
+            "std.signal_arrow",
+            "arrow",
+            &[("name", ParamValue::Text(second.to_owned()))],
+        );
+        let lamp = rig.part("H1", "lamp.generic", "lamp", &load(24_000, "dc"));
+        rig.wire(out(p24), pin(a, "t"));
+        rig.wire(pin(b, "t"), pin(lamp, "x1"));
+        rig.wire(pin(lamp, "x2"), out(p0));
+        (rig.finish(), a, b)
+    }
+
+    fn net(circuit: &CompiledCircuit, symbol: SymbolId) -> NetIx {
+        net_of(circuit, symbol, "t")
+    }
+
+    #[test]
+    fn arrows_with_the_same_name_are_one_net_and_with_different_names_are_not() {
+        let catalog = catalog_with_arrows();
+
+        let (doc, a, b) = lamp_behind_two_arrows("FEED", "FEED");
+        let joined = compile(&doc, &catalog).circuit.expect("compiles");
+        assert_eq!(net(&joined, a), net(&joined, b));
+
+        let (doc, a, b) = lamp_behind_two_arrows("FEED", "RUN");
+        let apart = compile(&doc, &catalog).circuit.expect("compiles");
+        assert_ne!(net(&apart, a), net(&apart, b));
+    }
+
+    #[test]
+    fn the_static_nets_agree_with_the_compiler_with_arrows_joined_and_apart() {
+        let catalog = catalog_with_arrows();
+        for names in [("FEED", "FEED"), ("FEED", "RUN")] {
+            let (doc, _, _) = lamp_behind_two_arrows(names.0, names.1);
+            let circuit = compile(&doc, &catalog).circuit.expect("compiles");
+            let nets = StaticNets::build(&doc, &catalog);
+
+            for compiled in circuit.pins() {
+                assert_eq!(
+                    nets.net_of_pin(&compiled.pin).map(|net| net.0),
+                    Some(compiled.net.0),
+                    "{names:?} {:?}",
+                    compiled.pin
+                );
+            }
+            for (wire, net) in circuit.wires() {
+                assert_eq!(nets.net_of_wire(*wire).map(|net| net.0), Some(net.0));
+            }
+        }
+    }
+
+    #[test]
+    fn a_lone_arrow_is_a_warning_and_a_pair_is_not() {
+        let catalog = catalog_with_arrows();
+
+        let (doc, _, _) = lamp_behind_two_arrows("FEED", "FEED");
+        let pair = compile(&doc, &catalog);
+        let (doc, _, _) = lamp_behind_two_arrows("FEED", "RUN");
+        let lone = compile(&doc, &catalog);
+
+        assert!(!codes(&pair).contains(&DiagnosticCode::LoneSignalArrow));
+        let warnings = lone
+            .diagnostics
+            .iter()
+            .filter(|d| d.code() == DiagnosticCode::LoneSignalArrow)
+            .count();
+        assert_eq!(warnings, 2, "each of the two arrows stands alone");
+        assert!(
+            lone.circuit.is_some(),
+            "a warning does not block the circuit"
+        );
+    }
+
+    #[test]
+    fn the_name_of_an_arrow_never_joins_it_to_a_device_of_another_class() {
+        let catalog = catalog_with_arrows();
+        let (mut doc, a, _) = lamp_behind_two_arrows("H1", "FEED");
+        doc.next_id += 1;
+
+        let circuit = compile(&doc, &catalog).circuit.expect("compiles");
+
+        // The first arrow is named like the lamp's designator: nothing joins.
+        let lamp_pin = net_of(&circuit, doc.symbols.last().map_or(a, |s| s.id), "x1");
+        assert_ne!(net(&circuit, a), lamp_pin);
+    }
+}

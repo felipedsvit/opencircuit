@@ -10,15 +10,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_model::catalog::{
-    PARAM_CONDUCTOR, PARAM_CONNECTION, PARAM_FIRST, PARAM_INITIAL_CLOSED, PARAM_PRESET_MS,
-    PARAM_RATED_VOLTAGE_MV, PARAM_SECOND, PARAM_SECONDARY, PARAM_SUPPLY,
+    PARAM_CONDUCTOR, PARAM_CONNECTION, PARAM_FIRST, PARAM_INITIAL_CLOSED, PARAM_NAME,
+    PARAM_PRESET_MS, PARAM_RATED_VOLTAGE_MV, PARAM_SECOND, PARAM_SECONDARY, PARAM_SUPPLY,
 };
 use circuit_model::{
     ComponentCatalog, ComponentModel, Conductor, Connection, Device, DeviceClass, DeviceId,
     Diagnostic, DiagnosticCode, Endpoint, JunctionId, LayoutIndex, PhaseSequence, PinRef,
     Schematic, Subject, SupplyId, SupplyKind, SupplyProfile, SymbolDefinition, SymbolId,
     SymbolInstance, SymbolKey, SymbolKind, TimerMode, duplicate_terminals, has_errors,
-    is_orthogonal, loose_geometry, sort_diagnostics,
+    is_orthogonal, lone_arrows, loose_geometry, sort_diagnostics,
 };
 
 use crate::compiled::{
@@ -64,6 +64,7 @@ pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutp
     // drawing, never an electrical fact (ADR-0014).
     diagnostics.extend(loose_geometry(schematic, catalog));
     diagnostics.extend(duplicate_terminals(schematic, catalog));
+    diagnostics.extend(lone_arrows(schematic, catalog));
 
     let circuit = if has_errors(&diagnostics) {
         None
@@ -567,6 +568,7 @@ const fn signal_kind(class: DeviceClass) -> Option<SignalKind> {
         DeviceClass::Transformer => Some(SignalKind::Powered),
         DeviceClass::Fuse
         | DeviceClass::TerminalBlock
+        | DeviceClass::SignalArrow
         | DeviceClass::Motor
         | DeviceClass::Lamp
         | DeviceClass::Buzzer
@@ -666,6 +668,28 @@ fn build(
             }
         }
         wire_nodes.push((wire.id, from));
+    }
+
+    // Signal arrows of one name are one net, wherever they are drawn
+    // (ADR-0016): the first terminal of each joins the first one of its name.
+    let mut named: BTreeMap<&str, u32> = BTreeMap::new();
+    for (position, symbol) in resolved.symbols.iter().enumerate() {
+        if symbol.definition.kind() != SymbolKind::SignalArrow {
+            continue;
+        }
+        let name = resolved
+            .devices
+            .get(symbol.device)
+            .and_then(|owner| owner.model.text_param(&owner.device.params, PARAM_NAME));
+        let (Some(name), Some(&node)) = (name, first_pin.get(position)) else {
+            continue;
+        };
+        match named.get(name) {
+            Some(&other) => copper.union(node, other),
+            None => {
+                named.insert(name, node);
+            }
+        }
     }
 
     // The representative of a set is its smallest node, and nodes are visited
@@ -922,6 +946,9 @@ fn build(
             // Not simulated (ADR-0013): no switch, source or load. The
             // terminals join nets only through the wires drawn to them.
             SymbolKind::Block2 | SymbolKind::Block4 | SymbolKind::Block8 => {}
+            // Joined to the arrows of its name in the copper phase; no switch,
+            // source or load of its own.
+            SymbolKind::SignalArrow => {}
             SymbolKind::SupplyTerminal => {
                 let (Some(net), Some(conductor), Some(supply)) = (
                     terminal_net(0),
@@ -1362,6 +1389,7 @@ fn fingerprint(circuit: &CompiledCircuit) -> Fingerprint {
             DeviceClass::Transformer => 14,
             DeviceClass::Symbolic => 15,
             DeviceClass::TerminalBlock => 16,
+            DeviceClass::SignalArrow => 17,
         });
         hash.u32(device.signal.map_or(u32::MAX, |sig| sig.0));
         hash.u32(device.coil.map_or(u32::MAX, |load| load.0));

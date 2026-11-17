@@ -185,6 +185,9 @@ diagnostic_codes! {
     WireNumberConflict = "OC-SEM-012", Semantic, Warning, latches = false;
     /// Two terminal blocks with the same strip and number (ADR-0016).
     DuplicateTerminal = "OC-SEM-013", Semantic, Warning, latches = false;
+    /// A signal arrow whose name no other arrow has, so it joins nothing
+    /// (ADR-0016).
+    LoneSignalArrow = "OC-SEM-014", Semantic, Warning, latches = false;
     /// Incompatible conductors meet in one group, including any AC/DC mix.
     ShortCircuit = "OC-ELEC-001", Electrical, Error, latches = true;
     /// Protective earth meets a live conductor.
@@ -440,6 +443,7 @@ mod tests {
         ("OC-SEM-011", "NotSimulated", "info", false),
         ("OC-SEM-012", "WireNumberConflict", "warning", false),
         ("OC-SEM-013", "DuplicateTerminal", "warning", false),
+        ("OC-SEM-014", "LoneSignalArrow", "warning", false),
         ("OC-ELEC-001", "ShortCircuit", "error", true),
         ("OC-ELEC-002", "ProtectiveEarthFault", "error", true),
         ("OC-ELEC-003", "NeutralEarthBond", "warning", false),

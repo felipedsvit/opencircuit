@@ -124,6 +124,10 @@ const REPORTED: &[(&str, &[circuit_report::Kind])] = &[
         "examples/terminals/terminals.ocircuit",
         &[circuit_report::Kind::Strips],
     ),
+    (
+        "examples/signal-arrows/signal-arrows.ocircuit",
+        &[circuit_report::Kind::Wires],
+    ),
 ];
 
 /// The reports of the reported examples, one CSV file each. They are made with
@@ -173,6 +177,11 @@ pub(crate) const EXAMPLES: &[Example] = &[
     Example {
         path: "examples/direct-starter/starter.ocircuit",
         build: starter,
+        library: None,
+    },
+    Example {
+        path: "examples/signal-arrows/signal-arrows.ocircuit",
+        build: signal_arrows,
         library: None,
     },
     Example {
@@ -462,6 +471,59 @@ fn terminals() -> Built<Schematic> {
     sheet.wire(pin(coil, "a2"), pin(back, "p1"))?;
     sheet.wire(pin(back, "p2"), out(p0))?;
     Ok(sheet.finish())
+}
+
+/// The control circuit of the direct-online starter on two sheets joined by
+/// signal arrows (ADR-0016): the supply and the stop button on the first, the
+/// start button, the seal-in contact and the coil on the second, with the arrow
+/// `FEED` on both. No wire crosses from one sheet to the other, and it behaves
+/// like `command.ocircuit`.
+fn signal_arrows() -> Built<Schematic> {
+    let name = |text: &str| [("name", ParamValue::Text(text.to_owned()))];
+    let mut sheet = Sheet::new("Control circuit on two sheets");
+    let (p24, p0) = sheet.control_supply((0, 0), (100, 28))?;
+    let stop = sheet.part("S2", "pushbutton_nc", "contact", &[], (0, 8))?;
+    let out_arrow = sheet.part("SA1", "std.signal_arrow", "arrow", &name("FEED"), (0, 16))?;
+    // The second sheet: the arrow comes in at the top.
+    let in_arrow = sheet.part("SA2", "std.signal_arrow", "arrow", &name("FEED"), (100, 0))?;
+    let start = sheet.part("S1", "pushbutton_no", "contact", &[], (96, 11))?;
+    let k1 = sheet.device("K1", "contactor.generic", &dc_load())?;
+    let coil = sheet.symbol(k1, "coil", None, (100, 20))?;
+    let seal = sheet.symbol(k1, "aux_no", Some(1), (104, 11))?;
+    let top = sheet.junction((100, 6))?;
+    let bottom = sheet.junction((100, 16))?;
+
+    sheet.wire(out(p24), pin(stop, "p1"))?;
+    sheet.wire(pin(stop, "p2"), pin(out_arrow, "t"))?;
+    sheet.wire(pin(in_arrow, "t"), top)?;
+    sheet.route(top, pin(start, "p1"), &[(96, 6)])?;
+    sheet.route(top, pin(seal, "p1"), &[(104, 6)])?;
+    sheet.route(pin(start, "p2"), bottom, &[(96, 16)])?;
+    sheet.route(pin(seal, "p2"), bottom, &[(104, 16)])?;
+    sheet.wire(bottom, pin(coil, "a1"))?;
+    sheet.wire(pin(coil, "a2"), out(p0))?;
+
+    let mut doc = sheet.finish();
+    for (number, title, origin) in [
+        (1, "Supply and stop", GridPoint::new(-14, -8)),
+        (2, "Start and coil", GridPoint::new(86, -8)),
+    ] {
+        let id = doc.next_id;
+        doc.next_id = id.checked_add(1).ok_or(IdExhausted)?;
+        doc.sheets.push(circuit_model::Sheet {
+            id: circuit_model::SheetId(id),
+            number,
+            title: title.to_owned(),
+            origin,
+            size: circuit_model::SheetSize::A4,
+            orientation: circuit_model::Orientation::Landscape,
+            zones: circuit_model::Zones {
+                columns: 8,
+                rows: 6,
+            },
+        });
+    }
+    Ok(doc)
 }
 
 /// Direct-online starter with its power circuit: main switch Q1, contactor

@@ -153,10 +153,24 @@ impl<'a> View<'a> {
         )
     }
 
-    /// Every pin of a list, named and in reading order.
+    /// Whether a symbol is a signal arrow: a name on the drawing, not a part
+    /// with terminals to list.
+    fn is_arrow(&self, symbol: SymbolId) -> bool {
+        self.symbols.get(&symbol).is_some_and(|instance| {
+            self.devices
+                .get(&instance.device_id)
+                .and_then(|device| self.catalog.model(&device.model))
+                .and_then(|model| model.symbol(&instance.symbol_key))
+                .is_some_and(|definition| definition.kind() == SymbolKind::SignalArrow)
+        })
+    }
+
+    /// Every pin of a list, named and in reading order; the terminals of signal
+    /// arrows are left out (ADR-0016).
     fn names_in_order(&self, pins: &[PinRef]) -> Vec<String> {
         let mut named: Vec<(Natural, SymbolId, usize, String)> = pins
             .iter()
+            .filter(|pin| !self.is_arrow(pin.symbol_id))
             .zip(0_usize..)
             .map(|(pin, index)| {
                 (
@@ -182,9 +196,12 @@ pub fn bom(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
     type Key = (String, u32, String, String, String);
     let mut groups: BTreeMap<Key, Vec<&str>> = BTreeMap::new();
     for device in view.devices.values() {
-        let is_tap = catalog
-            .model(&device.model)
-            .is_some_and(|model| model.class() == DeviceClass::PowerSupply);
+        let is_tap = catalog.model(&device.model).is_some_and(|model| {
+            matches!(
+                model.class(),
+                DeviceClass::PowerSupply | DeviceClass::SignalArrow
+            )
+        });
         if is_tap {
             continue;
         }
@@ -294,6 +311,9 @@ pub fn terminals(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
         ],
     );
     for symbol in symbols {
+        if view.is_arrow(symbol.id) {
+            continue;
+        }
         let Some(device) = view.devices.get(&symbol.device_id) else {
             continue;
         };

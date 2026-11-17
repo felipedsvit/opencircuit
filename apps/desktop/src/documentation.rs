@@ -159,6 +159,7 @@ pub fn xref_section(ui: &mut Ui, session: &Session, symbol: SymbolId) -> Option<
             | SymbolKind::Changeover
             | SymbolKind::PowerContacts { .. }
             | SymbolKind::TransformerSecondary
+            | SymbolKind::SignalArrow
     );
     if !linked {
         return None;

@@ -8,7 +8,7 @@ use circuit_model::{
     ComponentCatalog, ComponentModel, ConductorSet, CrossReferences, DeviceClass, DeviceId,
     JunctionId, LayoutIndex, Location, MotorState, PinRef, Schematic, SheetId, SimSnapshot,
     StaticNets, Subject, SymbolId, SymbolInstance, SymbolKind, TimerView, WindingConnection, Wire,
-    WireId, WireNumbers, cross_references, terminal_label,
+    WireId, WireNumbers, cross_references, signal_arrows, signal_references, terminal_label,
 };
 
 use crate::frame::{draw_sheets, frame_rect};
@@ -27,6 +27,10 @@ const LABEL_LINE: i64 = 12;
 const RING_RADIUS: i64 = 5;
 /// Gap between a terminal and its number, to the right of the lead.
 const TERMINAL_LABEL_GAP: i64 = 3;
+/// Distance between a signal arrow and its name.
+const SIGNAL_NAME_GAP: i64 = 8;
+/// Most places listed after the arrow of a signal.
+const MAX_SIGNAL_PLACES: usize = 4;
 /// Width of one glyph of the label font, in subunits (rounded up).
 const GLYPH_ADVANCE: i64 = 5;
 /// Distance between a wire and its number.
@@ -217,6 +221,7 @@ pub fn build_scene(
     }
 
     draw_wire_numbers(&mut scene, doc, catalog, &layout, &wires);
+    draw_signal_names(&mut scene, doc, catalog, &layout);
 
     if let Some(snapshot) = snapshot {
         let subjects: BTreeSet<&Subject> = snapshot
@@ -448,6 +453,63 @@ fn draw_label(
             StyleKey::Label,
             subject.clone(),
         );
+    }
+}
+
+/// The name of every signal arrow above it, and where the other arrows of its
+/// name are under its designator, as `-> 2/4B` (ADR-0016). Nothing is drawn
+/// for a drawing without arrows.
+fn draw_signal_names(
+    scene: &mut Scene,
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    layout: &LayoutIndex<'_>,
+) {
+    let references = signal_references(doc, catalog);
+    for (name, arrows) in signal_arrows(doc, catalog) {
+        for arrow in arrows {
+            let Some(bounds) = layout.symbol_bounds(arrow.symbol).map(scene_rect) else {
+                continue;
+            };
+            let middle =
+                |low: i64, high: i64| low.saturating_add(high).checked_div(2).unwrap_or(low);
+            let subject = Some(Subject::Symbol(arrow.symbol));
+            scene.push(
+                Shape::Text {
+                    at: ScenePoint::new(
+                        middle(bounds.min.x, bounds.max.x),
+                        bounds.min.y.saturating_sub(SIGNAL_NAME_GAP),
+                    ),
+                    text: name.clone(),
+                    anchor: Anchor::Center,
+                },
+                StyleKey::Label,
+                subject.clone(),
+            );
+            let Some(others) = references.get(&arrow.symbol) else {
+                continue;
+            };
+            let mut places: Vec<String> = others
+                .iter()
+                .take(MAX_SIGNAL_PLACES)
+                .map(|(_, location)| location.map_or_else(|| "-".to_owned(), |l| l.to_string()))
+                .collect();
+            if others.len() > MAX_SIGNAL_PLACES {
+                places.push("...".to_owned());
+            }
+            scene.push(
+                Shape::Text {
+                    at: ScenePoint::new(
+                        bounds.max.x.saturating_add(LABEL_GAP),
+                        middle(bounds.min.y, bounds.max.y).saturating_add(LABEL_LINE),
+                    ),
+                    text: format!("-> {}", places.join(" ")),
+                    anchor: Anchor::Left,
+                },
+                StyleKey::Label,
+                subject,
+            );
+        }
     }
 }
 

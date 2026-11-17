@@ -40,6 +40,9 @@ pub const PARAM_SECONDARY: &str = "secondary";
 pub const PARAM_FIRST: &str = "first";
 /// Parameter key: second contactor of a mechanical interlock.
 pub const PARAM_SECOND: &str = "second";
+/// Parameter key: the name of a signal arrow; every arrow with the same name is
+/// one net (ADR-0016).
+pub const PARAM_NAME: &str = "name";
 
 /// Largest pole count of a multi-pole symbol.
 pub const MAX_POLES: u8 = 4;
@@ -89,6 +92,9 @@ pub enum DeviceClass {
     /// A terminal of a terminal strip (ADR-0016): two terminals that always
     /// conduct, numbered by the parameters `strip` and `number`.
     TerminalBlock,
+    /// A signal arrow (ADR-0016): one terminal, and every arrow with the same
+    /// `name` is joined into one net, on the sheet or on another.
+    SignalArrow,
     /// A device that is drawn and wired but has no behaviour in the
     /// simulation (ADR-0013): a diode, a PLC block, a cylinder. It adds no
     /// switch, source or load; its terminals only join the nets their wires
@@ -161,6 +167,8 @@ pub enum SymbolKind {
     FuseLink,
     /// One terminal of a terminal strip; always conducting.
     TerminalPoint,
+    /// A signal arrow: one terminal `t`, joined to every arrow of its name.
+    SignalArrow,
     /// Three-terminal motor.
     Motor,
     /// Motor with both ends of its three windings brought out: `u1`-`u2`,
@@ -290,6 +298,7 @@ impl SymbolKind {
             Self::SupplyTerminal => {
                 vec![TerminalDefinition::new("out", false, GridPoint::new(0, 0))]
             }
+            Self::SignalArrow => vec![TerminalDefinition::new("t", false, GridPoint::new(0, 0))],
             Self::InterlockLink => Vec::new(),
             Self::Block2 => pair("t1", "t2", false),
             Self::Block4 => vec![
@@ -338,6 +347,7 @@ impl SymbolKind {
             Self::Motor => corners(MOTOR_LEFT, ABOVE, POLE_PITCH, 6),
             Self::MotorSixTerminal => corners(MOTOR_LEFT, ABOVE, POLE_PITCH, MOTOR_SECOND_ENDS),
             Self::SupplyTerminal => corners(-1, -2, 1, 0),
+            Self::SignalArrow => corners(-2, -2, 2, 0),
             Self::InterlockLink => corners(-2, -1, 2, 1),
         }
     }
@@ -714,7 +724,7 @@ impl Category {
         match class {
             DeviceClass::PowerSupply | DeviceClass::Transformer => Self::Supplies,
             DeviceClass::Fuse => Self::Protection,
-            DeviceClass::TerminalBlock => Self::Lines,
+            DeviceClass::TerminalBlock | DeviceClass::SignalArrow => Self::Lines,
             DeviceClass::Contactor
             | DeviceClass::ThermalOverload
             | DeviceClass::Pushbutton
@@ -1289,6 +1299,7 @@ const fn class_allows(class: DeviceClass, kind: SymbolKind) -> bool {
         ),
         DeviceClass::Fuse => matches!(kind, SymbolKind::FuseLink),
         DeviceClass::TerminalBlock => matches!(kind, SymbolKind::TerminalPoint),
+        DeviceClass::SignalArrow => matches!(kind, SymbolKind::SignalArrow),
         DeviceClass::Motor => matches!(kind, SymbolKind::Motor | SymbolKind::MotorSixTerminal),
         DeviceClass::Lamp => matches!(kind, SymbolKind::Lamp),
         DeviceClass::Buzzer => matches!(kind, SymbolKind::Buzzer),
@@ -1372,6 +1383,7 @@ const fn class_params(class: DeviceClass) -> &'static [(&'static str, ExpectedPa
         | DeviceClass::Pushbutton
         | DeviceClass::Fuse
         | DeviceClass::TerminalBlock
+        | DeviceClass::SignalArrow
         | DeviceClass::Symbolic => &[],
     }
 }

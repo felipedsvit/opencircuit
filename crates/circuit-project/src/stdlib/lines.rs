@@ -5,7 +5,7 @@ use circuit_model::catalog::{
 };
 use circuit_model::schematic::ParamValue;
 
-use super::{circle, line, model, symbol};
+use super::{circle, line, model, polyline, symbol};
 
 /// A terminal of a terminal strip (ADR-0016): always conducting, numbered by
 /// its strip and its number.
@@ -43,8 +43,40 @@ fn terminal_block() -> ComponentModel {
     .with_note("A terminal of a strip: it always conducts. Give it the `strip` and the `number` it has on the panel; the terminal plan lists it.")
 }
 
+/// A signal arrow (ADR-0016): every arrow with the same `name` is one net, on
+/// this sheet or on another.
+fn signal_arrow() -> ComponentModel {
+    model(
+        "signal_arrow",
+        DeviceClass::SignalArrow,
+        Category::Lines,
+        "Signal arrow",
+        vec![ParamDefinition {
+            key: "name".to_owned(),
+            ty: ParamType::Name,
+            default: Some(ParamValue::Text("SIGNAL".to_owned())),
+        }],
+        vec![symbol(
+            "arrow",
+            SymbolKind::SignalArrow,
+            1,
+            1,
+            false,
+            vec![polyline(&[
+                (0, 0),
+                (-14, -10),
+                (-14, -20),
+                (14, -20),
+                (14, -10),
+                (0, 0),
+            ])],
+        )],
+    )
+    .with_note("Give two arrows the same name to join their wires, even on another sheet. An arrow whose name nobody else has joins nothing, and is warned about.")
+}
+
 pub(super) fn models() -> Vec<ComponentModel> {
-    vec![terminal_block(), model(
+    vec![terminal_block(), signal_arrow(), model(
         "busbar",
         DeviceClass::Fuse,
         Category::Lines,

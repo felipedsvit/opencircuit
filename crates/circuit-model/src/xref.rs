@@ -203,11 +203,27 @@ pub fn links(doc: &Schematic, catalog: &ComponentCatalog, symbol: SymbolId) -> V
             })
             .collect();
     }
-    match (coil_of.get(&symbol), found.coil.get(&symbol)) {
-        (Some(coil), Some(location)) => vec![Link {
+    if let (Some(coil), Some(location)) = (coil_of.get(&symbol), found.coil.get(&symbol)) {
+        return vec![Link {
             symbol: *coil,
             text: with_location("coil".to_owned(), *location),
-        }],
+        }];
+    }
+    // A signal arrow goes to the other arrows of its name (ADR-0016).
+    let arrows = crate::signals::signal_arrows(doc, catalog);
+    let name = arrows
+        .iter()
+        .find(|(_, list)| list.iter().any(|arrow| arrow.symbol == symbol))
+        .map(|(name, _)| name.clone());
+    let others = crate::signals::signal_references(doc, catalog);
+    match (name, others.get(&symbol)) {
+        (Some(name), Some(others)) => others
+            .iter()
+            .map(|(other, location)| Link {
+                symbol: *other,
+                text: with_location(name.clone(), *location),
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }

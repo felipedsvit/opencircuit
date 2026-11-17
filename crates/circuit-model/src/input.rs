@@ -91,6 +91,7 @@ pub const fn operator_controls(class: DeviceClass) -> &'static [Control] {
         | DeviceClass::MechanicalInterlock
         | DeviceClass::Transformer
         | DeviceClass::TerminalBlock
+        | DeviceClass::SignalArrow
         | DeviceClass::Symbolic => &[],
     }
 }
