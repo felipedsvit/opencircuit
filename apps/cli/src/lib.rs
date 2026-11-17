@@ -27,6 +27,7 @@ mod args;
 mod commands;
 pub mod edit;
 mod fsio;
+mod mcp;
 pub mod scenario;
 mod serve;
 
@@ -65,6 +66,7 @@ usage:
   opencircuit report <project.ocircuit> --kind bom|wires|terminals|xref|io|problems|all
                      [--format text|json|csv] [--output <file.csv|json|txt|pdf>]
                      [--library <file.oclib|dir>]
+  opencircuit mcp [--root <directory>]
   opencircuit serve <project.ocircuit> [--listen <address:port>]
                     [--print-map [--format text|json]]
                     [--library <file.oclib|dir>] [--duration-ms N]
@@ -78,6 +80,11 @@ go to standard output in --format; with --output the extension of the file
 picks the format and --format (text or json) says how the confirmation is
 written. A CSV holds one table; a PDF sets every table on A4 landscape
 pages.
+
+mcp is a Model Context Protocol server on standard input and output (JSON-RPC,
+one message per line). Its tools run the commands new, validate, simulate,
+edit, report and export on files inside the root directory (the current one
+unless --root says otherwise); no path may leave it.
 
 serve answers Modbus TCP on 127.0.0.1:5020 unless --listen names another
 address. Modbus has no authentication. OpenCircuit is a simulator, not a

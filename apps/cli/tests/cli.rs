@@ -1882,3 +1882,66 @@ fn m7_exit_a_project_documented_through_the_command_line_reports_numbers_and_exp
         "{problems}"
     );
 }
+
+#[test]
+fn the_mcp_server_answers_over_a_pipe_and_stays_inside_its_root() {
+    use std::io::{BufRead as _, BufReader, Write as _};
+    use std::process::Stdio;
+
+    let directory = scratch("mcp-pipe");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_opencircuit"))
+        .args(["mcp", "--root", directory.to_str().expect("UTF-8 path")])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the server starts");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let mut answers = BufReader::new(child.stdout.take().expect("stdout"));
+    let mut ask = |request: serde_json::Value| -> serde_json::Value {
+        writeln!(stdin, "{request}").expect("write");
+        stdin.flush().expect("flush");
+        let mut line = String::new();
+        answers.read_line(&mut line).expect("an answer");
+        serde_json::from_str(&line).expect("JSON")
+    };
+
+    let init = ask(
+        serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "protocolVersion": "2025-06-18" } }),
+    );
+    assert_eq!(init["result"]["serverInfo"]["name"], "opencircuit");
+
+    let made = ask(
+        serde_json::json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": { "name": "new", "arguments": { "project": "p.ocircuit", "name": "Pipe" } } }),
+    );
+    assert_eq!(made["result"]["isError"], false);
+    assert!(directory.join("p.ocircuit").is_file());
+
+    let escaped = ask(
+        serde_json::json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": { "name": "new", "arguments": { "project": "../out.ocircuit" } } }),
+    );
+    assert_eq!(escaped["result"]["isError"], true);
+    assert!(
+        !directory
+            .parent()
+            .expect("parent")
+            .join("out.ocircuit")
+            .exists()
+    );
+
+    // Closing standard input ends the server with success.
+    drop(ask);
+    drop(stdin);
+    let status = child.wait().expect("exit");
+    assert!(status.success());
+}
+
+#[test]
+fn mcp_with_a_root_that_is_not_a_directory_is_a_usage_error() {
+    let output = opencircuit(&["mcp", "--root", "no/such/directory"]);
+
+    assert_eq!(code(&output), 2);
+}

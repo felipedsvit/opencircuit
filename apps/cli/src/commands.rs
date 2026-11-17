@@ -132,6 +132,14 @@ pub(crate) fn execute(
                 err,
             )
         }
+        Command::Mcp { root } => {
+            let root = match root {
+                Some(root) => root.clone(),
+                None => std::env::current_dir()?,
+            };
+            crate::mcp::serve_stdio(&root, env, out).map_err(CliError::Usage)?;
+            Ok(EXIT_OK)
+        }
         Command::Report {
             project,
             which,

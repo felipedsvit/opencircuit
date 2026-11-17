@@ -277,6 +277,35 @@ Designators sort in natural order (`K2` before `K10`). A terminal is written
 spreadsheet would read as a formula (it starts with `=`, `+`, `-`, `@`, a tab
 or a carriage return) gets a leading apostrophe.
 
+## MCP server
+
+`opencircuit mcp [--root <directory>]` is a [Model Context Protocol](https://modelcontextprotocol.io)
+server on standard input and output, so that an agent can make, change, check
+and draw projects. Messages are JSON-RPC 2.0, one per line; the server answers
+`initialize`, `ping`, `tools/list` and `tools/call` (protocol versions
+2025-06-18, 2025-03-26 and 2024-11-05), ignores notifications and refuses
+batches. Each tool runs the command of the same name with `--format json` and
+returns its document as text content (`format: 1`, see JSON output above);
+`isError` is true when the command fails.
+
+| Tool | Arguments | Runs |
+| --- | --- | --- |
+| `new` | `project`, `name`, `force` | `opencircuit new` |
+| `validate` | `project`, `library`, `deny_warnings` | `opencircuit validate` |
+| `simulate` | `project`, `scenario`, `library`, `tick_us`, `fault_policy` | `opencircuit simulate` |
+| `edit` | `project`, `operations` (the list of an edit file), `dry_run`, `library` | `opencircuit edit --apply` |
+| `report` | `project`, `kind`, `library` | `opencircuit report` |
+| `export` | `project`, `output`, `theme`, `sheet`, `library` | `opencircuit export` |
+
+**Limits.** Every path is relative to the root (the current directory unless
+`--root` says otherwise) and is refused when it is absolute, has `..`, or
+leaves the root through a symbolic link; nothing is read or written outside
+it. A message is at most 4 MiB and a result at most 4 MiB. The `edit` tool
+writes its operations to a temporary file in the root and removes it
+afterwards. The server has no authentication: run it for the agent that
+started it, as a child process, and give it a directory that holds only what
+the agent may change.
+
 ## Rust crates
 
 The crates under `crates/` are libraries with no GUI, filesystem, socket or
