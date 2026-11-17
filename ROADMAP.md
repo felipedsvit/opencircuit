@@ -355,7 +355,7 @@ Decisions, to be confirmed in #118:
 - [x] Load tests of the Modbus server; hostile-input property tests of the MCP
   server and of scenarios.
 - [x] CI runs locally with `act` (`docs/local-ci.md`).
-- [ ] The Modbus server frees the slots of closed connections before it
+- [x] The Modbus server frees the slots of closed connections before it
   refuses a new client.
 - [ ] CI, in its own pull request: clippy on Windows, actions pinned by
   commit, a `cargo test --release` job and a coverage threshold.

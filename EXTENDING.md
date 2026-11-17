@@ -395,7 +395,8 @@ protection or guarantee operational safety.
   not a controller. Modbus has no authentication: anyone who reaches the
   port can operate the simulated circuit. The server listens on loopback
   unless `--listen` names another address, and then it prints a warning.
-- **Server limits:** at most 4 clients (others are disconnected at once),
+- **Server limits:** at most 4 clients (others are disconnected at once;
+  a connection already closed by its client frees its slot first),
   frames up to 260 bytes (a longer or malformed frame closes the
   connection), idle connections closed after 30 s, at most 1000 ticks
   simulated per turn of the loop.

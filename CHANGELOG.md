@@ -33,6 +33,9 @@ here when it lands.
   saved: the temporary file of a save has a short name of its own.
 - **A file that starts with a byte order mark** (written by some Windows
   editors) is read: projects, libraries, scenarios and edit files.
+- **`opencircuit serve` refused a client** that arrived right after other
+  clients had closed their connections: closed connections still held the four
+  slots until the next turn. They now free their slot first.
 - **`opencircuit` with an argument that is not UTF-8** (a file name made of
   other bytes) stops with a usage error (exit code 2) instead of crashing.
 - **`opencircuit-desktop --help`** no longer crashes when its output cannot be

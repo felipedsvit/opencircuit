@@ -103,11 +103,9 @@ fn healthy(server: &Server) {
     assert_eq!(&pdu[..2], &[2, 1]);
 }
 
-/// A well-behaved client is served within a second. Connections that were
-/// closed while still waiting in the listen queue are accepted, and hold one
-/// of the four slots, until the next turn of the loop reads their end; a
-/// client that arrives right behind such a burst is refused once and gets
-/// in when it tries again, as Modbus clients do.
+/// A well-behaved client is served within a second. The retries only cover
+/// a slow machine: closed connections free their slot before a new client is
+/// refused (`closed_connections_in_the_queue_do_not_keep_a_new_client_out`).
 fn healthy_after_retrying(server: &Server) {
     for _ in 0..50 {
         let mut client = server.connect();
@@ -247,5 +245,28 @@ fn an_oversized_length_field_closes_only_that_connection() {
 
     assert!(closed);
     healthy(&server);
+    assert!(server.is_running());
+}
+
+/// Connections closed while they wait in the listen queue are accepted with
+/// the next client; they must not hold the four slots and get that client
+/// refused. No retry here: the first attempt must be served.
+#[test]
+fn closed_connections_in_the_queue_do_not_keep_a_new_client_out() {
+    let mut server = Server::start();
+
+    for round in 0..20 {
+        for _ in 0..4 {
+            drop(server.connect());
+        }
+        let mut client = server.connect();
+        let transaction = 1000 + round;
+        client
+            .write_all(&frame(transaction, &READ_K1))
+            .expect("sent");
+        let (answered, pdu) = answer(&mut client);
+        assert_eq!(answered, transaction, "round {round}");
+        assert_eq!(&pdu[..2], &[2, 1]);
+    }
     assert!(server.is_running());
 }
