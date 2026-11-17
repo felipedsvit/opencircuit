@@ -1357,7 +1357,7 @@ mod hostile {
                         to,
                         route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(), number: None,
                     })
-                    .collect(), waivers: Vec::new(),
+                    .collect(), waivers: Vec::new(), texts: Vec::new(),
             }
         }
     }

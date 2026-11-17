@@ -435,6 +435,70 @@ pub fn connect_touching(
     connect(doc, catalog, &from, &to, &[])
 }
 
+/// Add a text note at a point (ADR-0015).
+///
+/// # Errors
+///
+/// Returns [`CommandError::InvalidParameter`] for a text that is empty, longer
+/// than [`circuit_model::MAX_NOTE_CHARS`] characters or has a control
+/// character, and [`CommandError::Ids`] when the document has no ID left.
+pub fn add_text(
+    doc: &Schematic,
+    at: GridPoint,
+    text: &str,
+    anchor: circuit_model::TextAnchor,
+) -> Result<Transaction, CommandError> {
+    check_text(text)?;
+    let mut ids = IdAllocator::starting_at(doc.next_id);
+    let id = circuit_model::TextId(ids.alloc()?);
+    let mut tx = Transaction::new("Add text", ids.next_id());
+    tx.edits.push(Edit::InsertText(circuit_model::TextNote {
+        id,
+        position: at,
+        text: text.to_owned(),
+        anchor,
+    }));
+    Ok(tx)
+}
+
+/// Change the content of a text note.
+///
+/// # Errors
+///
+/// Returns [`CommandError::Missing`] for a text that does not exist and
+/// [`CommandError::InvalidParameter`] for a content [`add_text`] refuses.
+pub fn set_text(
+    doc: &Schematic,
+    id: circuit_model::TextId,
+    text: &str,
+) -> Result<Transaction, CommandError> {
+    check_text(text)?;
+    let note = doc
+        .texts
+        .iter()
+        .find(|t| t.id == id)
+        .ok_or(CommandError::Missing(Subject::Text(id)))?;
+    let mut tx = Transaction::new("Edit text", doc.next_id);
+    if note.text != text {
+        tx.edits.push(Edit::SetText {
+            text: id,
+            content: text.to_owned(),
+        });
+    }
+    Ok(tx)
+}
+
+fn check_text(text: &str) -> Result<(), CommandError> {
+    if circuit_model::TextNote::is_valid_text(text) {
+        Ok(())
+    } else {
+        Err(CommandError::InvalidParameter(format!(
+            "a text is 1 to {} characters with no control character",
+            circuit_model::MAX_NOTE_CHARS
+        )))
+    }
+}
+
 /// Add another symbol of an existing device, such as an auxiliary contact
 /// of a contactor. A slotted symbol takes the first free slot.
 ///
@@ -662,6 +726,7 @@ pub fn delete(
     let mut symbols = BTreeSet::new();
     let mut junctions = BTreeSet::new();
     let mut wires = BTreeSet::new();
+    let mut texts = BTreeSet::new();
     for subject in subjects {
         let missing = || CommandError::Missing(subject.clone());
         match subject {
@@ -689,6 +754,10 @@ pub fn delete(
             Subject::Wire(id) => {
                 doc.wires.iter().find(|w| w.id == *id).ok_or_else(missing)?;
                 wires.insert(*id);
+            }
+            Subject::Text(id) => {
+                doc.texts.iter().find(|t| t.id == *id).ok_or_else(missing)?;
+                texts.insert(*id);
             }
             Subject::Pin(_) | Subject::Supply(_) | Subject::Sheet(_) | Subject::Document => {}
         }
@@ -754,13 +823,15 @@ pub fn delete(
         .len()
         .saturating_add(junctions.len())
         .saturating_add(symbols.len())
-        .saturating_add(devices.len());
+        .saturating_add(devices.len())
+        .saturating_add(texts.len());
     let mut tx = Transaction::new(format!("Delete {count} items"), doc.next_id);
     tx.edits.extend(wires.into_iter().map(Edit::RemoveWire));
     tx.edits
         .extend(junctions.into_iter().map(Edit::RemoveJunction));
     tx.edits.extend(symbols.into_iter().map(Edit::RemoveSymbol));
     tx.edits.extend(devices.into_iter().map(Edit::RemoveDevice));
+    tx.edits.extend(texts.into_iter().map(Edit::RemoveText));
     Ok(tx)
 }
 
@@ -790,6 +861,7 @@ pub(crate) fn movable(
             | Subject::Pin(_)
             | Subject::Supply(_)
             | Subject::Sheet(_)
+            | Subject::Text(_)
             | Subject::Document => {}
         }
     }
@@ -901,6 +973,23 @@ pub fn move_by(
         tx.edits.push(Edit::MoveJunction {
             junction: *id,
             position: junction
+                .position
+                .checked_add(delta)
+                .ok_or(CommandError::OutOfRange)?,
+        });
+    }
+    for subject in subjects {
+        let Subject::Text(id) = subject else {
+            continue;
+        };
+        let note = doc
+            .texts
+            .iter()
+            .find(|t| t.id == *id)
+            .ok_or(CommandError::Missing(subject.clone()))?;
+        tx.edits.push(Edit::MoveText {
+            text: *id,
+            position: note
                 .position
                 .checked_add(delta)
                 .ok_or(CommandError::OutOfRange)?,

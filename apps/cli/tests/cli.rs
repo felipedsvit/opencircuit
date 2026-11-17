@@ -1145,7 +1145,7 @@ fn m5_exit_a_project_made_only_through_the_command_line_validates_simulates_and_
     // Two sheets with the title block filled in.
     let text = fs::read_to_string(&project).expect("written");
     let doc: serde_json::Value = serde_json::from_str(&text).expect("JSON");
-    assert_eq!(doc["schema_version"], 3);
+    assert_eq!(doc["schema_version"], 4);
     assert_eq!(doc["sheets"].as_array().expect("sheets").len(), 2);
     assert_eq!(doc["project"]["author"], "OpenCircuit");
 
@@ -2149,4 +2149,122 @@ fn a_lone_signal_arrow_is_warned_about_until_another_has_its_name() {
     .expect("write");
     let refused = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
     assert_eq!(code(&refused), 1);
+}
+
+#[test]
+fn text_notes_are_drawn_edited_and_left_out_of_every_report() {
+    // The documentation example has two notes; they are in the drawing and
+    // nowhere else.
+    let svg =
+        fs::read_to_string(root().join("examples/documentation/documentation.svg")).expect("svg");
+    assert!(svg.contains("Stop: normally closed"));
+    for kind in ["bom", "wires", "terminals", "xref", "problems"] {
+        let report = stdout(&opencircuit(&[
+            "report",
+            "examples/documentation/documentation.ocircuit",
+            "--kind",
+            kind,
+            "--format",
+            "csv",
+        ]));
+        assert!(!report.contains("Stop: normally closed"), "{kind}");
+    }
+
+    let directory = scratch("text-notes");
+    let project = directory.join("notes.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let apply = |operations: &str| {
+        let edit = directory.join("edit.json");
+        fs::write(
+            &edit,
+            format!(r#"{{ "schema_version": 1, "operations": {operations} }}"#),
+        )
+        .expect("write");
+        opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")])
+    };
+
+    let added = apply(
+        r#"[ { "op": "add_text", "at": [5, 5], "text": "Panel A", "as": "title" },
+             { "op": "add_text", "at": [5, 9], "text": "Rev 1", "anchor": "center" },
+             { "op": "set_text", "text": "title", "to": "Panel B" },
+             { "op": "move", "elements": [ { "text": "title" } ], "by": [2, 0] } ]"#,
+    );
+    assert_eq!(code(&added), 0, "{}{}", stdout(&added), stderr(&added));
+    let saved = fs::read_to_string(&project).expect("saved");
+    let doc: serde_json::Value = serde_json::from_str(&saved).expect("JSON");
+    assert_eq!(doc["schema_version"], 4);
+    assert_eq!(doc["texts"][0]["text"], "Panel B");
+    assert_eq!(doc["texts"][0]["position"]["x"], 7);
+    assert_eq!(doc["texts"][1]["anchor"], "center");
+    assert_eq!(
+        code(&opencircuit(&["validate", path, "--deny-warnings"])),
+        0
+    );
+
+    // Deleted by name in the next file, by ID in this one.
+    let id = doc["texts"][1]["id"].as_u64().expect("id");
+    let deleted = apply(&format!(
+        r#"[ {{ "op": "delete", "elements": [ {{ "text": {id} }} ] }} ]"#
+    ));
+    assert_eq!(
+        code(&deleted),
+        0,
+        "{}{}",
+        stdout(&deleted),
+        stderr(&deleted)
+    );
+    let kept = fs::read_to_string(&project).expect("saved");
+    let after: serde_json::Value = serde_json::from_str(&kept).expect("JSON");
+    assert_eq!(after["texts"].as_array().expect("texts").len(), 1);
+
+    // An empty text, a text of 121 characters and a bad anchor are refused,
+    // and the project does not change.
+    for operation in [
+        r#"{ "op": "add_text", "at": [0, 0], "text": "" }"#.to_owned(),
+        format!(
+            r#"{{ "op": "add_text", "at": [0, 0], "text": "{}" }}"#,
+            "x".repeat(121)
+        ),
+        r#"{ "op": "add_text", "at": [0, 0], "text": "ok", "anchor": "top" }"#.to_owned(),
+        r#"{ "op": "set_text", "text": 99999, "to": "x" }"#.to_owned(),
+    ] {
+        let refused = apply(&format!("[ {operation} ]"));
+        assert_eq!(code(&refused), 1, "{operation}");
+    }
+    assert_eq!(fs::read_to_string(&project).expect("saved"), kept);
+}
+
+#[test]
+fn a_version_3_project_opens_and_is_saved_as_version_4() {
+    let directory = scratch("v3-to-v4");
+    let old = directory.join("old.ocircuit");
+    let text = fs::read_to_string(root().join("examples/direct-starter/starter.ocircuit"))
+        .expect("example")
+        .replacen("\"schema_version\": 4", "\"schema_version\": 3", 1);
+    fs::write(&old, text).expect("write");
+    let path = old.to_str().expect("utf-8 path");
+
+    assert_eq!(
+        code(&opencircuit(&["validate", path, "--deny-warnings"])),
+        0
+    );
+    let edit = directory.join("edit.json");
+    fs::write(
+        &edit,
+        r#"{ "schema_version": 1, "operations": [ { "op": "add_text", "at": [0, 0], "text": "x" } ] }"#,
+    )
+    .expect("write");
+    assert_eq!(
+        code(&opencircuit(&[
+            "edit",
+            path,
+            "--apply",
+            edit.to_str().expect("utf-8 path")
+        ])),
+        0
+    );
+    let doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&old).expect("saved")).expect("JSON");
+    assert_eq!(doc["schema_version"], 4);
 }

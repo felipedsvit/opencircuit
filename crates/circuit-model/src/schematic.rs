@@ -15,7 +15,7 @@ use serde::de::{Deserializer, Error as _, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::Diagnostic;
-use crate::documentation::{DeviceInfo, Waiver, WireNumbering};
+use crate::documentation::{DeviceInfo, TextNote, Waiver, WireNumbering};
 use crate::geometry::{GridPoint, QuarterTurn};
 use crate::ids::{DeviceId, JunctionId, SymbolId, WireId};
 use crate::sheet::Sheet;
@@ -23,7 +23,7 @@ use crate::supply::SupplyProfile;
 use crate::validate;
 
 /// Schema version written by this build.
-pub const CURRENT_SCHEMA_VERSION: u32 = 3;
+pub const CURRENT_SCHEMA_VERSION: u32 = 4;
 
 /// User-visible label of a device, such as `K1` or `S2`.
 ///
@@ -267,6 +267,9 @@ pub struct Schematic {
     /// reason (ADR-0014), sorted by code and subject.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub waivers: Vec<Waiver>,
+    /// Text notes on the drawing (ADR-0015); absent when there are none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub texts: Vec<TextNote>,
 }
 
 impl Schematic {
@@ -292,6 +295,7 @@ impl Schematic {
             junctions: Vec::new(),
             wires: Vec::new(),
             waivers: Vec::new(),
+            texts: Vec::new(),
         }
     }
 
@@ -305,6 +309,7 @@ impl Schematic {
             && self.symbols.is_sorted_by_key(|symbol| symbol.id)
             && self.junctions.is_sorted_by_key(|junction| junction.id)
             && self.wires.is_sorted_by_key(|wire| wire.id)
+            && self.texts.is_sorted_by_key(|text| text.id)
             && self
                 .waivers
                 .is_sorted_by(|a, b| a.sort_key() <= b.sort_key())
@@ -318,6 +323,7 @@ impl Schematic {
         self.symbols.sort_by_key(|symbol| symbol.id);
         self.junctions.sort_by_key(|junction| junction.id);
         self.wires.sort_by_key(|wire| wire.id);
+        self.texts.sort_by_key(|text| text.id);
         self.waivers.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
     }
 

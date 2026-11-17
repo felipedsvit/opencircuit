@@ -12,10 +12,13 @@ use circuit_commands::copy::{self, Fragment};
 use circuit_commands::{Anchor, CommandError, Transaction, ops};
 use circuit_model::{
     Bend, ComponentCatalog, GridPoint, GridRect, LayoutIndex, ModelRef, QuarterTurn, Schematic,
-    Subject, SymbolId, SymbolKey, orthogonal_route_bent,
+    Subject, SymbolId, SymbolKey, TextAnchor, orthogonal_route_bent, text_bounds,
 };
 
 use crate::hit::{Hit, hit_test};
+
+/// The content of a text note the Text tool adds; it is edited afterwards.
+pub const DEFAULT_TEXT: &str = "Text";
 
 /// How far a duplicate, and each successive paste of one copy, lands from
 /// the original, in grid units: diagonal, so that the copy never hides the
@@ -36,6 +39,8 @@ pub enum Tool {
         /// The rotation of the next placement.
         rotation: QuarterTurn,
     },
+    /// Add a text note at each click (ADR-0015).
+    Text,
     /// Draw wires: click where the wire starts (a pin, a junction or a
     /// wire), click on empty space for each bend, click where it ends.
     Wire,
@@ -261,6 +266,7 @@ impl Editor {
             Subject::Supply(id) => doc.supplies.iter().any(|s| s.id == *id),
             Subject::Pin(pin) => doc.symbols.iter().any(|s| s.id == pin.symbol_id),
             Subject::Sheet(id) => doc.sheets.iter().any(|s| s.id == *id),
+            Subject::Text(id) => doc.texts.iter().any(|t| t.id == *id),
             Subject::Document => true,
         };
         let selected = self.selection.len();
@@ -330,6 +336,13 @@ impl Editor {
                 rotation,
             } => {
                 let result = place_at(doc, catalog, model, symbol, at, *rotation, hit.as_ref());
+                if let Ok(tx) = &result {
+                    self.selection = tx.inserted().into_iter().collect();
+                }
+                Outcome::from_result(result)
+            }
+            Tool::Text => {
+                let result = ops::add_text(doc, at, DEFAULT_TEXT, TextAnchor::Left);
                 if let Ok(tx) = &result {
                     self.selection = tx.inserted().into_iter().collect();
                 }
@@ -485,6 +498,11 @@ impl Editor {
                 found.insert(Subject::Junction(junction.id));
             }
         }
+        for note in &doc.texts {
+            if text_bounds(note).is_some_and(|b| area.overlaps(&b)) {
+                found.insert(Subject::Text(note.id));
+            }
+        }
         for wire in &doc.wires {
             let touched = layout.wire_polyline(wire).is_some_and(|path| {
                 path.iter().any(|p| area.contains(*p))
@@ -515,6 +533,13 @@ impl Editor {
         for junction in &doc.junctions {
             if area.contains(junction.position) {
                 found.insert(Subject::Junction(junction.id));
+            }
+        }
+        for note in &doc.texts {
+            let within =
+                text_bounds(note).is_some_and(|b| area.contains(b.min) && area.contains(b.max));
+            if within {
+                found.insert(Subject::Text(note.id));
             }
         }
         for wire in &doc.wires {
@@ -625,6 +650,7 @@ impl Editor {
                         .map(|symbol| Subject::Symbol(symbol.id))
                         .chain(doc.junctions.iter().map(|j| Subject::Junction(j.id)))
                         .chain(doc.wires.iter().map(|wire| Subject::Wire(wire.id)))
+                        .chain(doc.texts.iter().map(|note| Subject::Text(note.id)))
                         .collect();
                 }
                 Outcome::default()

@@ -26,6 +26,7 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     check_sheets(doc, &mut out);
     check_wire_numbers(doc, &mut out);
     check_waivers(doc, &mut out);
+    check_texts(doc, &mut out);
 
     sort_diagnostics(&mut out);
     out
@@ -58,12 +59,14 @@ fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
         .iter()
         .map(|j| (j.id.0, Subject::Junction(j.id)));
     let wires = doc.wires.iter().map(|w| (w.id.0, Subject::Wire(w.id)));
+    let texts = doc.texts.iter().map(|t| (t.id.0, Subject::Text(t.id)));
     sheets
         .chain(supplies)
         .chain(devices)
         .chain(symbols)
         .chain(junctions)
         .chain(wires)
+        .chain(texts)
 }
 
 fn check_schema_version(doc: &Schematic, out: &mut Vec<Diagnostic>) {
@@ -359,6 +362,24 @@ fn check_sheets(doc: &Schematic, out: &mut Vec<Diagnostic>) {
                 )
                 .with_related(overlapping),
             );
+        }
+    }
+}
+
+/// Text notes that are empty, too long or have a control character
+/// (ADR-0015).
+fn check_texts(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    for note in &doc.texts {
+        if !crate::documentation::TextNote::is_valid_text(&note.text) {
+            out.push(Diagnostic::new(
+                DiagnosticCode::InvalidText,
+                Subject::Text(note.id),
+                format!(
+                    "text {} must be 1 to {} characters, with no control character",
+                    note.id,
+                    crate::documentation::MAX_NOTE_CHARS
+                ),
+            ));
         }
     }
 }
@@ -1081,5 +1102,77 @@ mod tests {
             "fixture should produce several findings"
         );
         assert_eq!(doc.validate(), forward);
+    }
+
+    #[test]
+    fn a_text_note_that_is_empty_too_long_or_has_a_control_character_is_a_warning() {
+        use crate::documentation::{MAX_NOTE_CHARS, TextAnchor, TextNote};
+        use crate::ids::TextId;
+        let mut doc = Schematic::new("texts");
+        for (id, text) in [
+            (1, "fine".to_owned()),
+            (2, String::new()),
+            (3, "x".repeat(MAX_NOTE_CHARS + 1)),
+            (4, "a\nb".to_owned()),
+        ] {
+            doc.texts.push(TextNote {
+                id: TextId(id),
+                position: GridPoint::default(),
+                text,
+                anchor: TextAnchor::Left,
+            });
+        }
+        doc.next_id = 5;
+
+        let found: Vec<_> = doc
+            .validate()
+            .into_iter()
+            .filter(|d| d.code() == DiagnosticCode::InvalidText)
+            .map(|d| d.subject().clone())
+            .collect();
+
+        assert_eq!(
+            found,
+            [
+                Subject::Text(TextId(2)),
+                Subject::Text(TextId(3)),
+                Subject::Text(TextId(4))
+            ]
+        );
+    }
+
+    #[test]
+    fn a_text_shares_the_identifier_space_and_a_repeated_id_is_a_duplicate() {
+        use crate::documentation::{TextAnchor, TextNote};
+        use crate::ids::TextId;
+        let mut doc = Schematic::new("texts");
+        doc.texts.push(TextNote {
+            id: TextId(1),
+            position: GridPoint::default(),
+            text: "note".to_owned(),
+            anchor: TextAnchor::Left,
+        });
+        doc.sheets.push(crate::sheet::Sheet {
+            id: crate::ids::SheetId(1),
+            number: 1,
+            title: String::new(),
+            origin: GridPoint::default(),
+            size: crate::sheet::SheetSize::Custom {
+                width: 40,
+                height: 30,
+            },
+            orientation: crate::sheet::Orientation::Landscape,
+            zones: crate::sheet::Zones {
+                columns: 4,
+                rows: 2,
+            },
+        });
+        doc.next_id = 2;
+
+        assert!(
+            doc.validate()
+                .iter()
+                .any(|d| d.code() == DiagnosticCode::DuplicateId)
+        );
     }
 }

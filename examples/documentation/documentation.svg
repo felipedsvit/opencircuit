@@ -281,4 +281,6 @@
 <text x="-20" y="194" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.4</text>
 <text x="20" y="194" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.4</text>
 <text x="6" y="310" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.5</text>
+<text x="60" y="40" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Stop: normally closed</text>
+<text x="140" y="340" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Control circuit: 24 V DC</text>
 </svg>

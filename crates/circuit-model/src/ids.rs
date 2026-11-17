@@ -62,6 +62,10 @@ entity_id!(
     /// A drawing sheet: a frame over the canvas (ADR-0011).
     SheetId
 );
+entity_id!(
+    /// A text note on the drawing (ADR-0015).
+    TextId
+);
 
 /// The document ran out of identifiers below [`MAX_ENTITY_ID`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]

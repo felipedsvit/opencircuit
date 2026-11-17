@@ -1477,3 +1477,126 @@ mod signal_arrows {
         assert!(!texts(&scene).iter().any(|t| t.starts_with("->")));
     }
 }
+
+mod text_notes {
+    use crate::Anchor;
+    use circuit_model::{TextAnchor, TextId, TextNote};
+
+    use super::*;
+
+    fn note(id: u64, x: i32, text: &str, anchor: TextAnchor) -> TextNote {
+        TextNote {
+            id: TextId(id),
+            position: GridPoint::new(x, 6),
+            text: text.to_owned(),
+            anchor,
+        }
+    }
+
+    fn with_notes(notes: Vec<TextNote>) -> Schematic {
+        let mut doc = starter().doc;
+        doc.texts = notes;
+        doc
+    }
+
+    fn shapes_of(scene: &Scene, id: TextId) -> Vec<&Shape> {
+        scene
+            .items
+            .iter()
+            .filter(|item| item.subject == Some(Subject::Text(id)))
+            .map(|item| &item.shape)
+            .collect()
+    }
+
+    #[test]
+    fn a_note_is_drawn_as_a_label_at_its_point_with_its_anchor() {
+        let doc = with_notes(vec![
+            note(900, 3, "Feed", TextAnchor::Left),
+            note(901, 9, "Title", TextAnchor::Center),
+        ]);
+
+        let scene = build_scene(
+            &doc,
+            &ComponentCatalog::builtin(),
+            None,
+            &SceneOptions::default(),
+        );
+
+        assert_eq!(
+            shapes_of(&scene, TextId(900)),
+            [&Shape::Text {
+                at: ScenePoint::from_grid(GridPoint::new(3, 6)),
+                text: "Feed".to_owned(),
+                anchor: Anchor::Left,
+            }]
+        );
+        assert!(matches!(
+            shapes_of(&scene, TextId(901)).as_slice(),
+            [Shape::Text {
+                anchor: Anchor::Center,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn a_selected_note_is_outlined_by_its_area_and_a_drawing_without_notes_is_unchanged() {
+        let catalog = ComponentCatalog::builtin();
+        let plain = build_scene(&starter().doc, &catalog, None, &SceneOptions::default());
+        let doc = with_notes(vec![note(900, 3, "Feed", TextAnchor::Left)]);
+        let options = SceneOptions {
+            selected: BTreeSet::from([Subject::Text(TextId(900))]),
+            ..SceneOptions::default()
+        };
+
+        let scene = build_scene(&doc, &catalog, None, &options);
+
+        let styles = styles_of(&scene, &Subject::Text(TextId(900)));
+        assert_eq!(styles, [StyleKey::Label, StyleKey::Selected]);
+        assert!(
+            shapes_of(&scene, TextId(900))
+                .iter()
+                .any(|s| matches!(s, Shape::Rect(_)))
+        );
+        assert_eq!(scene.items.len(), plain.items.len() + 2);
+    }
+
+    #[test]
+    fn a_note_with_a_control_character_or_too_many_characters_is_drawn_clean_and_cut() {
+        let long = format!("a\tb{}", "x".repeat(200));
+        let doc = with_notes(vec![note(900, 3, &long, TextAnchor::Left)]);
+
+        let scene = build_scene(
+            &doc,
+            &ComponentCatalog::builtin(),
+            None,
+            &SceneOptions::default(),
+        );
+
+        let [Shape::Text { text, .. }] = shapes_of(&scene, TextId(900)).as_slice() else {
+            panic!("one label expected");
+        };
+        assert!(text.starts_with("a b"));
+        assert_eq!(text.chars().count(), circuit_model::MAX_NOTE_CHARS);
+    }
+
+    #[test]
+    fn the_scene_does_not_depend_on_the_order_of_the_notes() {
+        let catalog = ComponentCatalog::builtin();
+        let mut notes = vec![
+            note(900, 3, "A", TextAnchor::Left),
+            note(901, 9, "B", TextAnchor::Center),
+        ];
+        let forward = build_scene(
+            &with_notes(notes.clone()),
+            &catalog,
+            None,
+            &SceneOptions::default(),
+        );
+        notes.reverse();
+
+        let reversed = build_scene(&with_notes(notes), &catalog, None, &SceneOptions::default());
+
+        assert_eq!(forward, reversed);
+    }
+}

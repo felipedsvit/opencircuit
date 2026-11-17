@@ -56,17 +56,19 @@ pub use catalog::{
 pub use diagnostics::{
     Diagnostic, DiagnosticCategory, DiagnosticCode, Severity, Subject, has_errors, sort_diagnostics,
 };
-pub use documentation::{DeviceInfo, Waiver, WaiverIndex, WireNumbering};
+pub use documentation::{
+    DeviceInfo, MAX_NOTE_CHARS, TextAnchor, TextNote, Waiver, WaiverIndex, WireNumbering,
+};
 pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
     DeviceId, IdAllocator, IdExhausted, JunctionId, MAX_ENTITY_ID, SheetId, SupplyId, SymbolId,
-    WireId,
+    TextId, WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
 pub use labels::{natural_key, pin_name, terminal_label};
 pub use layout::{
     Bend, LayoutIndex, is_orthogonal, orthogonal_route, orthogonal_route_bent, segment_at,
-    segment_contains, stretch_route,
+    segment_contains, stretch_route, text_bounds,
 };
 pub use loose::loose_geometry;
 pub use nets::{Net, NetId, StaticNets};

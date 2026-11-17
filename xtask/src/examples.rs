@@ -651,6 +651,21 @@ fn documentation() -> Built<Schematic> {
             });
         }
     }
+    // Two notes (ADR-0015): a remark beside the stop button and one at the bottom, beside the
+    // 0 V line. They carry no electrical meaning and appear in no report.
+    for (at, text) in [
+        ((6, 4), "Stop: normally closed"),
+        ((14, 34), "Control circuit: 24 V DC"),
+    ] {
+        let id = circuit_model::TextId(doc.next_id);
+        doc.next_id = doc.next_id.checked_add(1).ok_or(IdExhausted)?;
+        doc.texts.push(circuit_model::TextNote {
+            id,
+            position: circuit_model::GridPoint::new(at.0, at.1),
+            text: text.to_owned(),
+            anchor: circuit_model::TextAnchor::Left,
+        });
+    }
     Ok(doc)
 }
 

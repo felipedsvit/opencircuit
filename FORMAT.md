@@ -8,7 +8,7 @@ is fixed in the same change.
 ## Rules
 
 - The file is JSON (UTF-8) with the `.ocircuit` extension.
-- `schema_version` is mandatory. The current version is 3.
+- `schema_version` is mandatory. The current version is 4.
 - `next_id` is mandatory. Every entity of every collection draws its ID from
   this one counter: IDs start at 1, are unique across collections, are below
   `next_id`, are at most `2^53 - 1`, and are never reused.
@@ -22,11 +22,11 @@ is fixed in the same change.
 - Unknown fields, repeated fields and repeated parameter keys are rejected.
   Unknown fields are not preserved.
 
-## Shape (schema version 3)
+## Shape (schema version 4)
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "next_id": 6,
   "project": {
     "name": "demo",
@@ -121,6 +121,7 @@ none of them:
 | `devices[].info` | object with the optional text fields `manufacturer`, `part_no`, `description` and `location`, each at most 256 bytes |
 | `project.wire_numbering` | `{ "prefix": <text of at most 16 bytes>, "start": <integer>, "step": <integer, at least 1>, "per_sheet": <boolean> }`; absent: wires are not numbered |
 | `waivers` | list of `{ "code": "OC-STR-018", "subject": <subject>, "reason": <text> }`, sorted by code and then subject, at most 10 000 |
+| `texts` | list of text notes (ADR-0015), sorted by `id`: `{ "id": <id>, "position": { "x", "y" }, "text": <one line, 1 to 120 characters and at most 256 bytes, no control character>, "anchor": "left" or "center" }`; absent: no notes |
 
 Wire numbers are derived from the nets and are never stored (ADR-0014): one
 number per net, in the order of the first point of the net (sheet, then zone
@@ -326,7 +327,9 @@ absent `null` fields) is accepted and saves canonically. The repository keeps
 2. **Phase 2:** deserialize the current schema strictly.
 3. **Limits:** text at most 16 MiB; at most 100 000 entities per collection,
    1 024 route points per wire, 64 parameters per device, 256 bytes per text
-   value, 10 000 waivers.
+   value, 10 000 waivers. A text note longer than 256 bytes is refused as any
+   text is; one with more than 120 characters, no characters or a control
+   character loads and is the warning `OC-STR-021`.
 
 Loading checks syntax, schema and limits only. Whether the document makes
 sense (ID ranges and uniqueness, references, designators, models, terminals,
@@ -358,3 +361,4 @@ migration and an entry below.
 | 1 | First schema. |
 | 2 | `sheets`, and `author`, `company`, `revision` and `date` in `project` (ADR-0011). The migration adds no sheet and sets the four fields to `null`. |
 | 3 | `wires[].number`, `devices[].info`, `project.wire_numbering` and `waivers` (ADR-0014). All are optional and omitted when empty, so the migration only raises the version. |
+| 4 | `texts` (ADR-0015). Optional and omitted when empty, so the migration only raises the version. |

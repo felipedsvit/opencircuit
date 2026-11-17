@@ -5,7 +5,7 @@ use circuit_model::{
     ComponentCatalog, Device, DeviceId, DeviceInfo, Endpoint, GridPoint, Junction, JunctionId,
     ModelRef, ParamValue, PhaseSequence, PinRef, ProjectMeta, QuarterTurn, ReferenceDesignator,
     SchematicBuilder, SupplyId, SupplyKind, SupplyProfile, SymbolId, SymbolInstance, SymbolKey,
-    TerminalKey, Waiver, Wire, WireId, WireNumbering,
+    TerminalKey, TextAnchor, TextId, TextNote, Waiver, Wire, WireId, WireNumbering,
 };
 use proptest::prelude::*;
 
@@ -14,7 +14,7 @@ use super::*;
 /// The canonical text of [`sample`]. It fixes field order, indentation,
 /// explicit nulls, line endings and the final newline.
 const SAMPLE: &str = r#"{
-  "schema_version": 3,
+  "schema_version": 4,
   "next_id": 6,
   "project": {
     "name": "demo",
@@ -204,7 +204,7 @@ fn sample_with(from: &str, to: &str) -> String {
 fn schema_message(result: Result<Schematic, ProjectError>) -> String {
     match result {
         Err(ProjectError::Schema {
-            version: 3,
+            version: 4,
             message,
         }) => message,
         other => panic!("expected a schema error, got {other:?}"),
@@ -212,7 +212,7 @@ fn schema_message(result: Result<Schematic, ProjectError>) -> String {
 }
 
 #[test]
-fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_3() {
+fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_4() {
     let loaded = from_str(SAMPLE_V1).unwrap();
 
     assert_eq!(loaded, sample());
@@ -238,13 +238,52 @@ fn a_version_1_file_that_already_has_version_2_fields_is_refused() {
 }
 
 #[test]
-fn a_version_2_file_loads_and_saves_as_version_3_with_only_the_version_changed() {
-    let v2 = sample_with("\"schema_version\": 3", "\"schema_version\": 2");
+fn a_version_2_file_loads_and_saves_as_version_4_with_only_the_version_changed() {
+    let v2 = sample_with("\"schema_version\": 4", "\"schema_version\": 2");
 
     let loaded = from_str(&v2).unwrap();
 
     assert_eq!(loaded, sample());
     assert_eq!(to_string(&loaded).unwrap(), SAMPLE);
+}
+
+#[test]
+fn a_version_3_file_loads_and_saves_as_version_4_with_only_the_version_changed() {
+    let v3 = sample_with("\"schema_version\": 4", "\"schema_version\": 3");
+
+    let loaded = from_str(&v3).unwrap();
+
+    assert_eq!(loaded, sample());
+    assert_eq!(to_string(&loaded).unwrap(), SAMPLE);
+}
+
+#[test]
+fn text_notes_survive_a_round_trip_in_canonical_order() {
+    let mut doc = sample();
+    for (id, x, words) in [(900_u64, 5, "second"), (700, 0, "first")] {
+        doc.texts.push(TextNote {
+            id: TextId(id),
+            position: GridPoint::new(x, 2),
+            text: words.to_owned(),
+            anchor: if id == 700 {
+                TextAnchor::Left
+            } else {
+                TextAnchor::Center
+            },
+        });
+    }
+    doc.next_id = 1_000;
+
+    let text = to_string(&doc).unwrap();
+    let loaded = from_str(&text).unwrap();
+
+    // Saved in ID order, loaded the same, and written again byte for byte.
+    assert!(text.find("first").unwrap() < text.find("second").unwrap());
+    assert_eq!(loaded.texts.len(), 2);
+    assert_eq!(loaded.texts[0].id, TextId(700));
+    assert_eq!(to_string(&loaded).unwrap(), text);
+    // A document without notes does not mention them.
+    assert!(!SAMPLE.contains("texts"));
 }
 
 /// A document that uses every field of ADR-0014.
@@ -520,13 +559,13 @@ fn negative_or_oversized_id_is_rejected() {
 
 #[test]
 fn newer_schema_is_refused_without_reading_the_rest() {
-    let text = r#"{ "schema_version": 4, "something": { "new": true } }"#;
+    let text = r#"{ "schema_version": 5, "something": { "new": true } }"#;
 
     assert_eq!(
         from_str(text),
         Err(ProjectError::NewerSchema {
-            found: 4,
-            supported: 3
+            found: 5,
+            supported: 4
         })
     );
 }
@@ -804,6 +843,7 @@ fn schematic() -> impl Strategy<Value = Schematic> {
                     junctions,
                     wires,
                     waivers: Vec::new(),
+                    texts: Vec::new(),
                 }
             },
         )

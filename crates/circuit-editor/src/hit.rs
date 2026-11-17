@@ -3,7 +3,7 @@
 use circuit_commands::Anchor;
 use circuit_model::{
     ComponentCatalog, Endpoint, GridPoint, JunctionId, LayoutIndex, PinRef, Schematic, Subject,
-    SymbolId, WireId, segment_at,
+    SymbolId, TextId, WireId, segment_at, text_bounds,
 };
 
 /// The element under a grid point.
@@ -20,6 +20,8 @@ pub enum Hit {
         /// The point.
         at: GridPoint,
     },
+    /// A text note.
+    Text(TextId),
     /// The body of a symbol.
     Symbol(SymbolId),
 }
@@ -33,6 +35,7 @@ impl Hit {
             Self::Junction(id) => Subject::Junction(*id),
             Self::Wire { wire, .. } => Subject::Wire(*wire),
             Self::Symbol(id) => Subject::Symbol(*id),
+            Self::Text(id) => Subject::Text(*id),
         }
     }
 
@@ -47,7 +50,7 @@ impl Hit {
                 wire: *wire,
                 at: *at,
             }),
-            Self::Symbol(_) => None,
+            Self::Symbol(_) | Self::Text(_) => None,
         }
     }
 }
@@ -84,6 +87,17 @@ pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -
         .max();
     if let Some(id) = junction {
         return Some(Hit::Junction(id));
+    }
+
+    // A text note is above wires and symbols, below pins and junctions.
+    let text = doc
+        .texts
+        .iter()
+        .filter(|note| text_bounds(note).is_some_and(|area| area.contains(point)))
+        .map(|note| note.id)
+        .max();
+    if let Some(id) = text {
+        return Some(Hit::Text(id));
     }
 
     let wire = doc

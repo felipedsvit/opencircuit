@@ -8,6 +8,7 @@
 //! | --- | --- | --- |
 //! | 1 | 2 | sheets (ADR-0011) and the title-block fields of `project` |
 //! | 2 | 3 | nothing is added: the new fields of ADR-0014 are all optional |
+//! | 3 | 4 | nothing is added: `texts` of ADR-0015 is optional |
 
 use circuit_model::CURRENT_SCHEMA_VERSION;
 use serde_json::Value;
@@ -18,7 +19,7 @@ use crate::ProjectError;
 pub(crate) type Migration = (u32, fn(Value) -> Result<Value, String>);
 
 /// Migrations of the shipped schema versions, in ascending order.
-const MIGRATIONS: &[Migration] = &[(1, v1_to_v2), (2, v2_to_v3)];
+const MIGRATIONS: &[Migration] = &[(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4)];
 
 /// Version 2 adds `sheets` (none: the drawing stays one page sized to its
 /// content) and the title-block fields `author`, `company`, `revision` and
@@ -76,6 +77,21 @@ fn v2_to_v3(mut value: Value) -> Result<Value, String> {
         return Err("a version 2 `project` has no `wire_numbering`".to_owned());
     }
     document.insert("schema_version".to_owned(), Value::from(3_u32));
+    Ok(value)
+}
+
+/// Version 4 adds `texts` (ADR-0015), which is optional and omitted when
+/// empty, so a version 3 document is already a valid version 4 document and
+/// only the version changes. A version 3 document that already has `texts` is
+/// refused rather than reinterpreted.
+fn v3_to_v4(mut value: Value) -> Result<Value, String> {
+    let document = value
+        .as_object_mut()
+        .ok_or("the document is not a JSON object")?;
+    if document.contains_key("texts") {
+        return Err("a version 3 document has no `texts`".to_owned());
+    }
+    document.insert("schema_version".to_owned(), Value::from(4_u32));
     Ok(value)
 }
 
@@ -242,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn version_2_only_changes_its_version_to_become_version_3() {
+    fn version_2_only_changes_its_version_to_become_the_current_one() {
         let v2 = json!({
             "schema_version": 2,
             "project": { "name": "demo" },
@@ -250,7 +266,7 @@ mod tests {
             "wires": [{ "id": 2 }]
         });
         let mut expected = v2.clone();
-        expected["schema_version"] = json!(3);
+        expected["schema_version"] = json!(4);
 
         assert_eq!(migrate(v2), Ok(expected));
     }
@@ -271,6 +287,23 @@ mod tests {
                 "{document}"
             );
         }
+    }
+
+    #[test]
+    fn version_3_only_changes_its_version_to_become_version_4() {
+        let v3 = json!({ "schema_version": 3, "project": { "name": "demo" }, "wires": [] });
+        let mut expected = v3.clone();
+        expected["schema_version"] = json!(4);
+
+        assert_eq!(migrate(v3), Ok(expected));
+    }
+
+    #[test]
+    fn version_3_with_texts_is_refused() {
+        assert!(matches!(
+            migrate(json!({ "schema_version": 3, "texts": [] })),
+            Err(ProjectError::Migration { from: 3, .. })
+        ));
     }
 
     #[test]

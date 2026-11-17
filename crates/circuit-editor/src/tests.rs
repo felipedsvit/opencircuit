@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use circuit_commands::{History, SupplyPreset, ops};
 use circuit_model::{
     ComponentCatalog, DeviceId, DiagnosticCode, GridPoint, InputAction, LayoutIndex, ModelRef,
-    ParamValue, QuarterTurn, Schematic, Subject, SymbolId, SymbolKey, is_orthogonal,
+    ParamValue, QuarterTurn, Schematic, Subject, SymbolId, SymbolKey, TextAnchor, is_orthogonal,
 };
 use circuit_sim::{SimConfig, Simulator, compile};
 use proptest::prelude::*;
@@ -1175,5 +1175,104 @@ mod in_series {
         assert_eq!(shown.wires.len(), 2);
         // Nothing has been done to the real document.
         assert_eq!(bench.doc.wires.len(), 1);
+    }
+}
+
+mod text_notes {
+    use super::*;
+
+    fn bench_with_note() -> (Bench, circuit_model::TextId) {
+        let mut bench = Bench::new();
+        bench.editor.set_tool(Tool::Text);
+        bench.click(point(10, 10));
+        bench.editor.set_tool(Tool::Select);
+        let id = bench.doc.texts[0].id;
+        (bench, id)
+    }
+
+    #[test]
+    fn the_text_tool_adds_a_note_at_each_click_and_selects_it() {
+        let mut bench = Bench::new();
+        bench.editor.set_tool(Tool::Text);
+
+        bench.click(point(10, 10));
+        let first = bench.doc.texts[0].id;
+        assert_eq!(bench.doc.texts[0].text, crate::editor::DEFAULT_TEXT);
+        assert_eq!(bench.doc.texts[0].position, point(10, 10));
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Text(first)])
+        );
+
+        bench.click(point(30, 10));
+        assert_eq!(bench.doc.texts.len(), 2);
+        assert!(bench.history.undo(&mut bench.doc).unwrap());
+        assert_eq!(bench.doc.texts.len(), 1);
+    }
+
+    #[test]
+    fn a_click_on_a_note_selects_it_and_hover_finds_it() {
+        let (mut bench, id) = bench_with_note();
+
+        // "Text" is four characters: about two grid units from the anchor.
+        assert_eq!(
+            hit_test(&bench.doc, &bench.catalog, point(11, 10)),
+            Some(Hit::Text(id))
+        );
+        assert_eq!(hit_test(&bench.doc, &bench.catalog, point(40, 40)), None);
+        bench.click(point(11, 10));
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Text(id)])
+        );
+    }
+
+    #[test]
+    fn dragging_a_note_moves_it_and_one_undo_puts_it_back() {
+        let (mut bench, id) = bench_with_note();
+
+        bench.drag(point(11, 10), point(15, 14));
+
+        assert_eq!(bench.doc.texts[0].position, point(14, 14));
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Text(id)])
+        );
+        assert!(bench.history.undo(&mut bench.doc).unwrap());
+        assert_eq!(bench.doc.texts[0].position, point(10, 10));
+    }
+
+    #[test]
+    fn a_box_and_select_all_take_notes_and_delete_removes_them() {
+        let (mut bench, id) = bench_with_note();
+        bench.editor.set_selection(BTreeSet::new());
+
+        bench.drag(point(5, 5), point(25, 20));
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Text(id)])
+        );
+
+        bench.editor.set_selection(BTreeSet::new());
+        bench.key(Key::SelectAll);
+        assert_eq!(
+            bench.editor.selection(),
+            &BTreeSet::from([Subject::Text(id)])
+        );
+
+        bench.key(Key::Delete);
+        assert!(bench.doc.texts.is_empty());
+        assert!(bench.editor.selection().is_empty());
+    }
+
+    #[test]
+    fn a_note_that_disappears_leaves_the_selection() {
+        let (mut bench, _) = bench_with_note();
+        assert!(!bench.editor.selection().is_empty());
+
+        assert!(bench.history.undo(&mut bench.doc).unwrap());
+        bench.editor.retain_existing(&bench.doc);
+        assert!(bench.editor.selection().is_empty());
+        let _ = TextAnchor::Left;
     }
 }

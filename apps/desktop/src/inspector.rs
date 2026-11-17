@@ -154,6 +154,11 @@ pub fn show(
                 request = Some(change);
             }
         }
+        (Some(Subject::Text(text)), None) => {
+            if let Some(change) = documentation::text_section(ui, session, *text, state) {
+                request = Some(change);
+            }
+        }
         _ => {}
     }
     egui::CollapsingHeader::new("Project tree")
@@ -187,6 +192,7 @@ fn selection_summary(session: &Session, selection: &BTreeSet<Subject>) -> String
                     },
                 )
         }
+        (Some(Subject::Text(_)), None) => "1 text selected".to_owned(),
         (Some(_), None) => "1 element selected".to_owned(),
         _ => format!("{} elements selected", selection.len()),
     }

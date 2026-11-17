@@ -260,6 +260,29 @@ pub fn wire_section(
     request
 }
 
+/// The text of a note, after the other sections: its words, and where it sits
+/// on its point.
+pub fn text_section(
+    ui: &mut Ui,
+    session: &Session,
+    text: circuit_model::TextId,
+    state: &mut InspectorState,
+) -> Option<Request> {
+    let doc = session.document();
+    let found = doc.texts.iter().find(|candidate| candidate.id == text)?;
+    let mut request = None;
+    egui::CollapsingHeader::new("Text")
+        .default_open(true)
+        .show(ui, |ui| {
+            if let Some(words) =
+                state.text_field(ui, format!("text:{text}:words"), "Words", &found.text)
+            {
+                request = Some(edits::set_text(doc, text, &words));
+            }
+        });
+    request
+}
+
 /// The rule that numbers the wires, at the end of the sheets section: a switch,
 /// and its prefix, first number, step and whether it restarts on each sheet.
 pub fn numbering_block(

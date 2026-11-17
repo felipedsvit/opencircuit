@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::diagnostics::{Diagnostic, DiagnosticCode, Severity, Subject};
+use crate::geometry::GridPoint;
+use crate::ids::TextId;
 use crate::schematic::Schematic;
 
 /// Longest prefix of a wire number, in bytes.
@@ -66,6 +68,51 @@ pub struct WireNumbering {
     /// Whether the counter starts again on every sheet, and the number is
     /// written `sheet.counter`.
     pub per_sheet: bool,
+}
+
+/// Most characters of a text note (ADR-0015).
+pub const MAX_NOTE_CHARS: usize = 120;
+
+/// Where a text note sits on its anchor point.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAnchor {
+    /// The text starts at the point.
+    #[default]
+    Left,
+    /// The text is centred on the point.
+    Center,
+}
+
+/// A line of text on the drawing: a title, a remark, a label (ADR-0015).
+///
+/// It is documentation only: it has no electrical meaning, joins nothing and
+/// is not in any report. The text is one line of at most [`MAX_NOTE_CHARS`]
+/// printable characters and 256 bytes.
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextNote {
+    /// Stable identifier, from the document counter.
+    pub id: TextId,
+    /// The anchor point.
+    pub position: GridPoint,
+    /// The text.
+    pub text: String,
+    /// Where the text sits on the point.
+    pub anchor: TextAnchor,
+}
+
+impl TextNote {
+    /// Whether `text` is acceptable: not empty, at most [`MAX_NOTE_CHARS`]
+    /// characters and at most [`crate::limits::MAX_TEXT_BYTES`] bytes (the
+    /// bound of every text of a project file), and no control character.
+    #[must_use]
+    pub fn is_valid_text(text: &str) -> bool {
+        !text.is_empty()
+            && text.chars().count() <= MAX_NOTE_CHARS
+            && text.len() <= crate::limits::MAX_TEXT_BYTES
+            && !text.chars().any(char::is_control)
+    }
 }
 
 /// A warning or informational diagnostic that a person accepted, with the
@@ -142,6 +189,21 @@ impl<'a> WaiverIndex<'a> {
 mod tests {
     use super::*;
     use crate::ids::WireId;
+
+    #[test]
+    fn a_text_is_one_to_120_characters_without_control_characters() {
+        let valid = |text: &str| TextNote::is_valid_text(text);
+
+        assert!(valid("Motor 1"));
+        assert!(valid(&"x".repeat(MAX_NOTE_CHARS)));
+        assert!(valid("Ação de partida"));
+        assert!(!valid(""));
+        assert!(!valid(&"x".repeat(MAX_NOTE_CHARS + 1)));
+        assert!(!valid("two\nlines"));
+        assert!(!valid("tab\there"));
+        // Few characters, too many bytes for any text of a project file.
+        assert!(!valid(&"€".repeat(MAX_NOTE_CHARS)));
+    }
 
     #[test]
     fn device_info_is_empty_until_a_field_is_set() {
