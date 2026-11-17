@@ -33,6 +33,19 @@ pub(crate) enum Actuator {
     Position,
 }
 
+impl Actuator {
+    /// The operator part a model of `operator` draws.
+    pub(crate) const fn of(operator: circuit_model::Operator) -> Self {
+        match operator {
+            circuit_model::Operator::Push => Self::Push,
+            circuit_model::Operator::Latch => Self::Latch,
+            circuit_model::Operator::Emergency => Self::Emergency,
+            circuit_model::Operator::Position => Self::Position,
+            circuit_model::Operator::None => Self::None,
+        }
+    }
+}
+
 /// The state a drawing shows.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Look {

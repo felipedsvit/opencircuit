@@ -27,6 +27,7 @@
 
 mod build;
 mod frame;
+mod preview;
 pub mod scene;
 mod symbols;
 
@@ -34,6 +35,7 @@ mod symbols;
 mod tests;
 
 pub use build::{SceneOptions, build_scene, build_sheet_scene, sheet_scenes};
+pub use preview::symbol_preview;
 pub use scene::{
     Anchor, SUBUNITS_PER_GRID, Scene, SceneItem, ScenePoint, SceneRect, Shape, StyleKey,
 };

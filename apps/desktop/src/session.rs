@@ -147,7 +147,7 @@ impl Session {
         let mut session = Self {
             path,
             doc,
-            catalog: ComponentCatalog::builtin(),
+            catalog: circuit_project::stdlib::catalog(),
             diagnostics: Vec::new(),
             simulator: None,
             snapshot: None,

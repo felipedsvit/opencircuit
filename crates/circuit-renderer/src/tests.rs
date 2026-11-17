@@ -1141,3 +1141,54 @@ fn a_document_without_sheets_has_no_cross_reference_lines() {
             .any(|text| text.contains('/'))
     );
 }
+
+#[test]
+fn every_builtin_symbol_has_a_preview_inside_the_area_of_its_kind() {
+    let catalog = ComponentCatalog::builtin();
+    for model in catalog.models() {
+        for definition in model.symbols() {
+            let scene = crate::symbol_preview(model, definition.key())
+                .unwrap_or_else(|| panic!("no preview for {}", model.id()));
+            let area = definition.kind().bounds();
+            let limit = crate::SceneRect::from_corners(
+                ScenePoint::from_grid(area.min),
+                ScenePoint::from_grid(area.max),
+            );
+
+            assert!(!scene.items.is_empty(), "{}", model.id());
+            let bounds = scene
+                .bounds
+                .unwrap_or_else(|| panic!("{} has no bounds", model.id()));
+            // Texts may stick out of the area; the lines and shapes may not.
+            let has_text = scene
+                .items
+                .iter()
+                .any(|item| matches!(item.shape, Shape::Text { .. }));
+            assert!(
+                has_text || limit.union(&bounds) == limit,
+                "{} {:?} leaves {limit:?}: {bounds:?}",
+                model.id(),
+                definition.key()
+            );
+            assert!(scene.items.iter().all(|item| item.subject.is_none()));
+        }
+    }
+}
+
+#[test]
+fn a_preview_has_no_designator_and_an_unknown_symbol_has_none() {
+    let catalog = ComponentCatalog::builtin();
+    let model = catalog
+        .model(&ModelRef {
+            id: "contactor.generic".to_owned(),
+            version: 1,
+        })
+        .unwrap();
+
+    let coil = crate::symbol_preview(model, &circuit_model::SymbolKey("coil".to_owned())).unwrap();
+
+    assert!(texts(&coil, StyleKey::Label).is_empty());
+    assert!(
+        crate::symbol_preview(model, &circuit_model::SymbolKey("nothing".to_owned())).is_none()
+    );
+}
