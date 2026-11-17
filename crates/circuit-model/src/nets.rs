@@ -483,6 +483,7 @@ mod tests {
             route: Vec::new(),
             number: None,
             layer: None,
+            spec: None,
         });
 
         let nets = StaticNets::build(&doc, &ComponentCatalog::builtin());

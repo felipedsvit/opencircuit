@@ -93,6 +93,7 @@ pub fn add_sheet(doc: &Schematic, spec: &SheetSpec) -> Result<Transaction, Comma
         size: spec.size,
         orientation: spec.orientation,
         zones: spec.zones,
+        kind: Default::default(),
     };
     let mut candidate = doc.clone();
     candidate.sheets.push(sheet.clone());
@@ -191,10 +192,39 @@ pub fn set_project_info(
         revision: revision.map(str::to_owned),
         date: date.map(str::to_owned),
         wire_numbering: doc.project.wire_numbering.clone(),
+        client: doc.project.client.clone(),
     };
     let mut tx = Transaction::new("Edit project information", doc.next_id);
     if info != doc.project {
         tx.edits.push(Edit::SetProject(info));
+    }
+    Ok(tx)
+}
+
+/// Set or clear the client of the title block (ADR-0018).
+///
+/// # Errors
+///
+/// [`CommandError::Invalid`] for a text longer than
+/// [`MAX_CLIENT_CHARS`](circuit_model::MAX_CLIENT_CHARS) characters or with a
+/// control character.
+pub fn set_client(doc: &Schematic, client: Option<&str>) -> Result<Transaction, CommandError> {
+    let client = client.map(str::trim).filter(|text| !text.is_empty());
+    if let Some(text) = client
+        && !circuit_model::annotations::is_valid_text(text, circuit_model::MAX_CLIENT_CHARS)
+    {
+        return Err(CommandError::Invalid(format!(
+            "a client is 1 to {} characters with no control character",
+            circuit_model::MAX_CLIENT_CHARS
+        )));
+    }
+    let mut tx = Transaction::new("Set the client", doc.next_id);
+    let client = client.map(str::to_owned);
+    if client != doc.project.client {
+        tx.edits.push(Edit::SetProject(ProjectMeta {
+            client,
+            ..doc.project.clone()
+        }));
     }
     Ok(tx)
 }

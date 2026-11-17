@@ -424,7 +424,12 @@ Decisions, to be confirmed in #118:
 
 ### M9.3 — Schema version 5 (ADR-0018)
 
-- [ ] The client in the project data.
+- [x] ADR-0018 and schema version 5, with the migration from version 4
+  (`crates/circuit-project/src/migrate.rs`) and the model of every item below
+  (`crates/circuit-model/src/annotations.rs`, warnings `OC-STR-023` to
+  `OC-STR-025`).
+- [x] The client in the project data (title block; inspector Project tree >
+  Project data; `apps/desktop/tests/schema5.rs`).
 - [ ] Wires: a stored colour, cross-section, type, material and insulation, in
   the wires report.
 - [ ] Revision clouds, comments on an element, and shapes (polyline,

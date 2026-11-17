@@ -241,6 +241,7 @@ pub fn place(
         position: at,
         rotation,
         layer: None,
+        mirrored: false,
     }));
     Ok(tx)
 }
@@ -370,6 +371,7 @@ pub fn place_on_wire(
         position: at,
         rotation: turn,
         layer: None,
+        mirrored: false,
     }));
     let pin = |terminal: &circuit_model::TerminalDefinition| {
         Endpoint::Terminal(circuit_model::PinRef {
@@ -384,6 +386,7 @@ pub fn place_on_wire(
         route: waypoints(1..index.saturating_add(1)),
         number: old.number.clone(),
         layer: None,
+        spec: None,
     }));
     tx.edits.push(Edit::InsertWire(Wire {
         id: second_half,
@@ -392,6 +395,7 @@ pub fn place_on_wire(
         route: waypoints(index.saturating_add(1)..last),
         number: None,
         layer: None,
+        spec: None,
     }));
     Ok(tx)
 }
@@ -569,6 +573,7 @@ pub fn add_symbol(
         position: at,
         rotation,
         layer: None,
+        mirrored: false,
     }));
     Ok(tx)
 }
@@ -643,6 +648,7 @@ pub(crate) fn resolve(
                 route: before,
                 number: split.number.clone(),
                 layer: None,
+                spec: None,
             }));
             edits.push(Edit::InsertWire(Wire {
                 id: second,
@@ -651,6 +657,7 @@ pub(crate) fn resolve(
                 route: after,
                 number: split.number.clone(),
                 layer: None,
+                spec: None,
             }));
             Ok((Endpoint::Junction(junction), *at))
         }
@@ -704,6 +711,7 @@ pub fn connect(
         route,
         number: None,
         layer: None,
+        spec: None,
     }));
     let mut tx = Transaction::new("Connect", ids.next_id());
     tx.edits = edits;
@@ -781,6 +789,11 @@ pub fn delete(
             | Subject::Supply(_)
             | Subject::Sheet(_)
             | Subject::Layer(_)
+            | Subject::Shape(_)
+            | Subject::Comment(_)
+            | Subject::Group(_)
+            | Subject::View(_)
+            | Subject::Plc(_)
             | Subject::Document => {}
         }
     }
@@ -895,6 +908,11 @@ pub(crate) fn movable(
             | Subject::Sheet(_)
             | Subject::Text(_)
             | Subject::Layer(_)
+            | Subject::Shape(_)
+            | Subject::Comment(_)
+            | Subject::Group(_)
+            | Subject::View(_)
+            | Subject::Plc(_)
             | Subject::Document => {}
         }
     }

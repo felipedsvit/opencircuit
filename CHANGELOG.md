@@ -102,6 +102,10 @@ here when it lands.
   open already is shown instead of opened twice. Closing the window asks
   about each tab with unsaved changes in turn; at most 16 projects are open
   at once.
+- **The client** of a project (Project tree > Project data in the inspector,
+  `"client"` in the `project` operation of edit files), printed in a row
+  above the title block of every sheet; a project without a client draws the
+  title block as before.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.
@@ -112,6 +116,14 @@ here when it lands.
   ("Open in another window"): saving in both overwrites each other's changes.
   The lock lives in the user's data folder, never next to the project, and is
   released when the first window lets the project go or ends.
+
+### Changed
+
+- **Project files are schema version 5** (ADR-0018). A version 4 file opens and
+  is saved as version 5; the migration only raises the version, because every
+  new field is optional and left out when empty. A version 5 file does not
+  open in an older build. The new fields are documentation only: the compiled
+  circuit, the simulation and every golden trace are the same.
 
 ### Fixed
 

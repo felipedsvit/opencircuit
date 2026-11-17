@@ -725,7 +725,15 @@ fn outline(
         );
     };
     match subject {
-        Subject::Document | Subject::Supply(_) | Subject::Sheet(_) | Subject::Layer(_) => {}
+        Subject::Document
+        | Subject::Supply(_)
+        | Subject::Sheet(_)
+        | Subject::Layer(_)
+        | Subject::Shape(_)
+        | Subject::Comment(_)
+        | Subject::Group(_)
+        | Subject::View(_)
+        | Subject::Plc(_) => {}
         Subject::Device(device) => {
             for symbol in symbols.values().filter(|s| s.device_id == *device) {
                 around_symbol(scene, symbol.id);

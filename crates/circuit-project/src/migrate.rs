@@ -9,6 +9,7 @@
 //! | 1 | 2 | sheets (ADR-0011) and the title-block fields of `project` |
 //! | 2 | 3 | nothing is added: the new fields of ADR-0014 are all optional |
 //! | 3 | 4 | nothing is added: `texts`, `layers` and `layer` of ADR-0015 are optional |
+//! | 4 | 5 | nothing is added: the documentation fields of ADR-0018 are optional |
 
 use circuit_model::CURRENT_SCHEMA_VERSION;
 use serde_json::Value;
@@ -19,7 +20,7 @@ use crate::ProjectError;
 pub(crate) type Migration = (u32, fn(Value) -> Result<Value, String>);
 
 /// Migrations of the shipped schema versions, in ascending order.
-const MIGRATIONS: &[Migration] = &[(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4)];
+const MIGRATIONS: &[Migration] = &[(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4), (4, v4_to_v5)];
 
 /// Version 2 adds `sheets` (none: the drawing stays one page sized to its
 /// content) and the title-block fields `author`, `company`, `revision` and
@@ -106,6 +107,56 @@ fn v3_to_v4(mut value: Value) -> Result<Value, String> {
         }
     }
     document.insert("schema_version".to_owned(), Value::from(4_u32));
+    Ok(value)
+}
+
+/// Version 5 adds the documentation fields of ADR-0018: `project.client`,
+/// `Wire.spec`, `SymbolInstance.mirrored`, `Sheet.kind`,
+/// `DeviceInfo.datasheet`, and the collections `shapes`, `comments`,
+/// `groups`, `views` and `plcs`. Each is optional and omitted when empty, so
+/// a version 4 document is already a valid version 5 document and only the
+/// version changes. A version 4 document that already has one of them is
+/// refused rather than reinterpreted.
+fn v4_to_v5(mut value: Value) -> Result<Value, String> {
+    let document = value
+        .as_object_mut()
+        .ok_or("the document is not a JSON object")?;
+    for collection in ["shapes", "comments", "groups", "views", "plcs"] {
+        if document.contains_key(collection) {
+            return Err(format!("a version 4 document has no `{collection}`"));
+        }
+    }
+    if document
+        .get("project")
+        .is_some_and(|project| project.get("client").is_some())
+    {
+        return Err("a version 4 `project` has no `client`".to_owned());
+    }
+    let any_has = |collection: &str, field: &dyn Fn(&Value) -> bool| {
+        document
+            .get(collection)
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.iter().any(field))
+    };
+    let has = |key: &'static str| move |item: &Value| item.get(key).is_some();
+    for (collection, key) in [
+        ("wires", "spec"),
+        ("symbols", "mirrored"),
+        ("sheets", "kind"),
+    ] {
+        if any_has(collection, &has(key)) {
+            return Err(format!("a version 4 {collection} entry has no `{key}`"));
+        }
+    }
+    let datasheet = |device: &Value| {
+        device
+            .get("info")
+            .is_some_and(|info| info.get("datasheet").is_some())
+    };
+    if any_has("devices", &datasheet) {
+        return Err("a version 4 device has no `datasheet`".to_owned());
+    }
+    document.insert("schema_version".to_owned(), Value::from(5_u32));
     Ok(value)
 }
 
@@ -280,7 +331,7 @@ mod tests {
             "wires": [{ "id": 2 }]
         });
         let mut expected = v2.clone();
-        expected["schema_version"] = json!(4);
+        expected["schema_version"] = json!(CURRENT_SCHEMA_VERSION);
 
         assert_eq!(migrate(v2), Ok(expected));
     }
@@ -304,10 +355,10 @@ mod tests {
     }
 
     #[test]
-    fn version_3_only_changes_its_version_to_become_version_4() {
+    fn version_3_only_changes_its_version_to_become_the_current_one() {
         let v3 = json!({ "schema_version": 3, "project": { "name": "demo" }, "wires": [] });
         let mut expected = v3.clone();
-        expected["schema_version"] = json!(4);
+        expected["schema_version"] = json!(CURRENT_SCHEMA_VERSION);
 
         assert_eq!(migrate(v3), Ok(expected));
     }
@@ -324,6 +375,47 @@ mod tests {
                 matches!(
                     migrate(document.clone()),
                     Err(ProjectError::Migration { from: 3, .. })
+                ),
+                "{document}"
+            );
+        }
+    }
+
+    #[test]
+    fn version_4_only_changes_its_version_to_become_version_5() {
+        let v4 = json!({
+            "schema_version": 4,
+            "project": { "name": "demo", "author": "A" },
+            "devices": [{ "id": 1, "info": { "manufacturer": "M" } }],
+            "symbols": [{ "id": 2, "layer": 3 }],
+            "wires": [{ "id": 4, "number": "7" }],
+            "sheets": [{ "id": 5 }],
+            "texts": []
+        });
+        let mut expected = v4.clone();
+        expected["schema_version"] = json!(5);
+
+        assert_eq!(migrate(v4), Ok(expected));
+    }
+
+    #[test]
+    fn version_4_with_a_version_5_field_is_refused() {
+        for document in [
+            json!({ "schema_version": 4, "shapes": [] }),
+            json!({ "schema_version": 4, "comments": [] }),
+            json!({ "schema_version": 4, "groups": [] }),
+            json!({ "schema_version": 4, "views": [] }),
+            json!({ "schema_version": 4, "plcs": [] }),
+            json!({ "schema_version": 4, "project": { "client": null } }),
+            json!({ "schema_version": 4, "wires": [{ "id": 1, "spec": {} }] }),
+            json!({ "schema_version": 4, "symbols": [{ "id": 1, "mirrored": true }] }),
+            json!({ "schema_version": 4, "sheets": [{ "id": 1, "kind": "panel_layout" }] }),
+            json!({ "schema_version": 4, "devices": [{ "id": 1, "info": { "datasheet": "a.pdf" } }] }),
+        ] {
+            assert!(
+                matches!(
+                    migrate(document.clone()),
+                    Err(ProjectError::Migration { from: 4, .. })
                 ),
                 "{document}"
             );

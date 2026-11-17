@@ -28,6 +28,9 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     check_waivers(doc, &mut out);
     check_texts(doc, &mut out);
     check_layers(doc, &mut out);
+    check_annotations(doc, &mut out);
+    check_sheet_kinds(doc, &mut out);
+    check_plc_channels(doc, &mut out);
 
     sort_diagnostics(&mut out);
     out
@@ -62,6 +65,14 @@ fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
     let wires = doc.wires.iter().map(|w| (w.id.0, Subject::Wire(w.id)));
     let texts = doc.texts.iter().map(|t| (t.id.0, Subject::Text(t.id)));
     let layers = doc.layers.iter().map(|l| (l.id.0, Subject::Layer(l.id)));
+    let shapes = doc.shapes.iter().map(|s| (s.id.0, Subject::Shape(s.id)));
+    let comments = doc
+        .comments
+        .iter()
+        .map(|c| (c.id.0, Subject::Comment(c.id)));
+    let groups = doc.groups.iter().map(|g| (g.id.0, Subject::Group(g.id)));
+    let views = doc.views.iter().map(|v| (v.id.0, Subject::View(v.id)));
+    let plcs = doc.plcs.iter().map(|p| (p.id.0, Subject::Plc(p.id)));
     sheets
         .chain(supplies)
         .chain(devices)
@@ -70,6 +81,11 @@ fn entities(doc: &Schematic) -> impl Iterator<Item = (u64, Subject)> + '_ {
         .chain(wires)
         .chain(texts)
         .chain(layers)
+        .chain(shapes)
+        .chain(comments)
+        .chain(groups)
+        .chain(views)
+        .chain(plcs)
 }
 
 fn check_schema_version(doc: &Schematic, out: &mut Vec<Diagnostic>) {
@@ -170,6 +186,8 @@ fn check_references(doc: &Schematic, out: &mut Vec<Diagnostic>) {
         .map(|s| (Subject::Symbol(s.id), s.layer))
         .chain(doc.wires.iter().map(|w| (Subject::Wire(w.id), w.layer)))
         .chain(doc.texts.iter().map(|t| (Subject::Text(t.id), t.layer)))
+        .chain(doc.shapes.iter().map(|s| (Subject::Shape(s.id), s.layer)))
+        .chain(doc.views.iter().map(|v| (Subject::View(v.id), v.layer)))
     {
         if let Some(missing) = on_missing_layer(layer) {
             out.push(
@@ -182,6 +200,8 @@ fn check_references(doc: &Schematic, out: &mut Vec<Diagnostic>) {
             );
         }
     }
+
+    check_annotation_references(doc, &devices, out);
 
     for symbol in &doc.symbols {
         if !devices.contains(&symbol.device_id) {
@@ -409,6 +429,249 @@ fn check_texts(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// References of the documentation of ADR-0018: the device of a view or a
+/// channel, the element of a comment and the members of a group.
+fn check_annotation_references(
+    doc: &Schematic,
+    devices: &BTreeSet<DeviceId>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let dangling = |out: &mut Vec<Diagnostic>, subject: Subject, missing: Subject| {
+        out.push(
+            Diagnostic::new(
+                DiagnosticCode::DanglingReference,
+                subject.clone(),
+                format!("{subject} refers to {missing}, which does not exist"),
+            )
+            .with_related(vec![missing]),
+        );
+    };
+    for view in &doc.views {
+        if !devices.contains(&view.device_id) {
+            dangling(out, Subject::View(view.id), Subject::Device(view.device_id));
+        }
+    }
+    for plc in &doc.plcs {
+        let missing: BTreeSet<DeviceId> = plc
+            .channels
+            .iter()
+            .filter_map(|channel| channel.device)
+            .filter(|device| !devices.contains(device))
+            .collect();
+        for device in missing {
+            dangling(out, Subject::Plc(plc.id), Subject::Device(device));
+        }
+    }
+    if doc.comments.is_empty() && doc.groups.is_empty() {
+        return;
+    }
+    let known: BTreeSet<Subject> = entities(doc).map(|(_, subject)| subject).collect();
+    let exists = |subject: &Subject| match subject {
+        Subject::Document => true,
+        Subject::Pin(pin) => known.contains(&Subject::Symbol(pin.symbol_id)),
+        other => known.contains(other),
+    };
+    for comment in &doc.comments {
+        if !exists(&comment.subject) || matches!(comment.subject, Subject::Comment(_)) {
+            dangling(out, Subject::Comment(comment.id), comment.subject.clone());
+        }
+    }
+    for group in &doc.groups {
+        let missing: BTreeSet<&Subject> = group
+            .members
+            .iter()
+            .filter(|member| !exists(member))
+            .collect();
+        for member in missing {
+            dangling(out, Subject::Group(group.id), member.clone());
+        }
+    }
+}
+
+/// The bounds of ADR-0018: the client, wire specifications, datasheets,
+/// shapes, comments, groups, views and PLC modules.
+fn check_annotations(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    use crate::annotations::{
+        Group, MAX_AUTHOR_CHARS, MAX_CLIENT_CHARS, MAX_COMMENT_CHARS, MAX_GROUP_MEMBERS,
+        MAX_GROUP_NAME_CHARS, is_valid_datasheet, is_valid_text,
+    };
+    let mut warn = |subject: Subject, message: String| {
+        out.push(Diagnostic::new(
+            DiagnosticCode::InvalidAnnotation,
+            subject,
+            message,
+        ));
+    };
+    if let Some(client) = &doc.project.client
+        && !is_valid_text(client, MAX_CLIENT_CHARS)
+    {
+        warn(
+            Subject::Document,
+            format!(
+                "the client must be 1 to {MAX_CLIENT_CHARS} characters, with no control character"
+            ),
+        );
+    }
+    for wire in &doc.wires {
+        if wire.spec.as_ref().is_some_and(|spec| !spec.is_valid()) {
+            warn(
+                Subject::Wire(wire.id),
+                format!(
+                    "each field of the specification of wire {} must be 1 to {} characters",
+                    wire.id,
+                    crate::annotations::MAX_SPEC_CHARS
+                ),
+            );
+        }
+    }
+    for device in &doc.devices {
+        if let Some(link) = device
+            .info
+            .as_ref()
+            .and_then(|info| info.datasheet.as_deref())
+            && !is_valid_datasheet(link)
+        {
+            warn(
+                Subject::Device(device.id),
+                format!(
+                    "the datasheet of {} must be an http, https or file link, or a relative path",
+                    device.reference.0
+                ),
+            );
+        }
+    }
+    for shape in &doc.shapes {
+        if let Some(problem) = shape.kind.problem() {
+            warn(
+                Subject::Shape(shape.id),
+                format!("shape {}: {problem}", shape.id),
+            );
+        }
+    }
+    for comment in &doc.comments {
+        let author_bad = comment
+            .author
+            .as_deref()
+            .is_some_and(|author| !is_valid_text(author, MAX_AUTHOR_CHARS));
+        if !is_valid_text(&comment.text, MAX_COMMENT_CHARS) || author_bad {
+            warn(
+                Subject::Comment(comment.id),
+                format!(
+                    "comment {} must be 1 to {MAX_COMMENT_CHARS} characters, its author at most {MAX_AUTHOR_CHARS}",
+                    comment.id
+                ),
+            );
+        }
+    }
+    let mut owner: BTreeMap<&Subject, crate::ids::GroupId> = BTreeMap::new();
+    for group in &doc.groups {
+        let problem = if !is_valid_text(&group.name, MAX_GROUP_NAME_CHARS) {
+            Some(format!(
+                "a group name is 1 to {MAX_GROUP_NAME_CHARS} characters"
+            ))
+        } else if group.members.is_empty() || group.members.len() > MAX_GROUP_MEMBERS {
+            Some(format!("a group has 1 to {MAX_GROUP_MEMBERS} members"))
+        } else if let Some(member) = group.members.iter().find(|member| !Group::may_hold(member)) {
+            Some(format!("a group cannot hold {member}"))
+        } else {
+            group.members.iter().find_map(|member| {
+                owner
+                    .insert(member, group.id)
+                    .filter(|other| *other != group.id)
+                    .map(|other| format!("{member} is also in group {other}"))
+            })
+        };
+        if let Some(problem) = problem {
+            warn(
+                Subject::Group(group.id),
+                format!("group {}: {problem}", group.id),
+            );
+        }
+    }
+    for view in &doc.views {
+        if !view.has_valid_size() || view.bounds().is_none() {
+            warn(
+                Subject::View(view.id),
+                format!(
+                    "view {} must be 1 to {} grid units wide and high",
+                    view.id,
+                    crate::annotations::MAX_VIEW_SIDE
+                ),
+            );
+        }
+    }
+    for plc in &doc.plcs {
+        if let Some(problem) = plc.problem() {
+            warn(Subject::Plc(plc.id), format!("{}: {problem}", plc.name));
+        }
+    }
+}
+
+/// Device views outside a single-line or panel-layout sheet, and symbols
+/// inside one (ADR-0018).
+fn check_sheet_kinds(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    if doc.views.is_empty() && !doc.sheets.iter().any(|sheet| sheet.kind.shows_views()) {
+        return;
+    }
+    let shows_views =
+        |point| crate::sheet::sheet_at(doc, point).is_some_and(|sheet| sheet.kind.shows_views());
+    for view in &doc.views {
+        if !shows_views(view.position) {
+            out.push(Diagnostic::new(
+                DiagnosticCode::ViewOffItsSheet,
+                Subject::View(view.id),
+                format!(
+                    "view {} is not on a single-line or panel-layout sheet",
+                    view.id
+                ),
+            ));
+        }
+    }
+    for symbol in &doc.symbols {
+        if shows_views(symbol.position) {
+            out.push(Diagnostic::new(
+                DiagnosticCode::ViewOffItsSheet,
+                Subject::Symbol(symbol.id),
+                format!(
+                    "symbol {} is on a single-line or panel-layout sheet, where devices are shown as views",
+                    symbol.id
+                ),
+            ));
+        }
+    }
+}
+
+/// Two channels of a module with one address, or one device on two channels
+/// of the same direction (ADR-0018).
+fn check_plc_channels(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    let mut driven: BTreeMap<(DeviceId, crate::annotations::PlcDirection), crate::ids::PlcId> =
+        BTreeMap::new();
+    for plc in &doc.plcs {
+        let mut addresses = BTreeSet::new();
+        let mut problems = BTreeSet::new();
+        for channel in &plc.channels {
+            if !addresses.insert(channel.address.as_str()) {
+                problems.insert(format!("address {} is used twice", channel.address));
+            }
+            if let Some(device) = channel.device
+                && driven.insert((device, channel.direction), plc.id).is_some()
+            {
+                problems.insert(format!(
+                    "device {device} is on two {} channels",
+                    channel.direction.name()
+                ));
+            }
+        }
+        for problem in problems {
+            out.push(Diagnostic::new(
+                DiagnosticCode::PlcChannelConflict,
+                Subject::Plc(plc.id),
+                format!("{}: {problem}", plc.name),
+            ));
+        }
+    }
+}
+
 /// Layers with a bad or repeated name (ADR-0015).
 fn check_layers(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     let mut seen = BTreeSet::new();
@@ -606,6 +869,7 @@ mod tests {
             position: GridPoint::default(),
             rotation: QuarterTurn::Deg0,
             layer: None,
+            mirrored: false,
         }
     }
 
@@ -624,6 +888,7 @@ mod tests {
             route: Vec::new(),
             number: None,
             layer: None,
+            spec: None,
         }
     }
 
@@ -1054,6 +1319,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         }
     }
 
@@ -1219,6 +1485,7 @@ mod tests {
                 columns: 4,
                 rows: 2,
             },
+            kind: Default::default(),
         });
         doc.next_id = 2;
 
@@ -1296,5 +1563,250 @@ mod tests {
                 .iter()
                 .any(|d| d.code() == DiagnosticCode::DuplicateId)
         );
+    }
+
+    mod annotations {
+        use super::*;
+        use crate::annotations::{
+            Comment, DeviceView, Group, PlcChannel, PlcDirection, PlcModule, Shape, ShapeKind,
+            WireSpec,
+        };
+        use crate::ids::{CommentId, GroupId, PlcId, ShapeId, ViewId};
+        use crate::sheet::{Orientation, Sheet, SheetKind, SheetSize, Zones};
+
+        fn found(doc: &Schematic, code: DiagnosticCode) -> Vec<Subject> {
+            doc.validate()
+                .into_iter()
+                .filter(|d| d.code() == code)
+                .map(|d| d.subject().clone())
+                .collect()
+        }
+
+        fn shape(id: u64, kind: ShapeKind) -> Shape {
+            Shape {
+                id: ShapeId(id),
+                kind,
+                layer: None,
+            }
+        }
+
+        fn panel_sheet(id: u64) -> Sheet {
+            Sheet {
+                id: SheetId(id),
+                number: 1,
+                title: "Panel".to_owned(),
+                origin: GridPoint::new(100, 0),
+                size: SheetSize::A4,
+                orientation: Orientation::Landscape,
+                zones: Zones {
+                    columns: 4,
+                    rows: 3,
+                },
+                kind: SheetKind::PanelLayout,
+            }
+        }
+
+        #[test]
+        fn a_valid_document_with_every_kind_of_annotation_has_no_finding() {
+            let mut doc = valid();
+            let base = doc.next_id;
+            let device = doc.devices[0].id;
+            let symbol = doc.symbols[0].id;
+            doc.project.client = Some("ACME".to_owned());
+            doc.wires[0].spec = Some(WireSpec {
+                colour: Some("BU".to_owned()),
+                ..WireSpec::default()
+            });
+            doc.sheets.push(panel_sheet(base));
+            doc.shapes.push(shape(
+                base + 1,
+                ShapeKind::Qr {
+                    position: GridPoint::new(0, 30),
+                    size: 4,
+                    text: "https://example.com".to_owned(),
+                },
+            ));
+            doc.comments.push(Comment {
+                id: CommentId(base + 2),
+                subject: Subject::Symbol(symbol),
+                text: "check".to_owned(),
+                author: None,
+            });
+            doc.groups.push(Group {
+                id: GroupId(base + 3),
+                name: "G".to_owned(),
+                members: vec![Subject::Symbol(symbol), Subject::Shape(ShapeId(base + 1))],
+            });
+            doc.views.push(DeviceView {
+                id: ViewId(base + 4),
+                device_id: device,
+                position: GridPoint::new(110, 10),
+                width: 4,
+                height: 6,
+                layer: None,
+            });
+            doc.plcs.push(PlcModule {
+                id: PlcId(base + 5),
+                name: "A1".to_owned(),
+                description: None,
+                position: None,
+                channels: vec![PlcChannel {
+                    address: "I0.0".to_owned(),
+                    direction: PlcDirection::Input,
+                    device: Some(device),
+                    label: None,
+                }],
+            });
+            doc.next_id = base + 6;
+            assert_eq!(doc.validate(), Vec::new());
+        }
+
+        #[test]
+        fn references_of_annotations_to_missing_elements_are_dangling() {
+            let mut doc = valid();
+            let base = doc.next_id;
+            doc.views.push(DeviceView {
+                id: ViewId(base),
+                device_id: DeviceId(999),
+                position: GridPoint::new(0, 0),
+                width: 2,
+                height: 2,
+                layer: None,
+            });
+            doc.comments.push(Comment {
+                id: CommentId(base + 1),
+                subject: Subject::Wire(WireId(998)),
+                text: "x".to_owned(),
+                author: None,
+            });
+            doc.groups.push(Group {
+                id: GroupId(base + 2),
+                name: "G".to_owned(),
+                members: vec![Subject::Shape(ShapeId(997))],
+            });
+            doc.next_id = base + 3;
+            let dangling = |doc: &Schematic| {
+                doc.integrity_errors()
+                    .into_iter()
+                    .filter(|d| d.code() == DiagnosticCode::DanglingReference)
+                    .map(|d| d.subject().clone())
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                dangling(&doc),
+                [
+                    Subject::Comment(CommentId(base + 1)),
+                    Subject::Group(GroupId(base + 2)),
+                    Subject::View(ViewId(base)),
+                ]
+            );
+        }
+
+        #[test]
+        fn annotations_out_of_bounds_are_warnings() {
+            let mut doc = valid();
+            let base = doc.next_id;
+            doc.project.client = Some("x".repeat(65));
+            doc.wires[0].spec = Some(WireSpec {
+                kind: Some(String::new()),
+                ..WireSpec::default()
+            });
+            doc.shapes.push(shape(
+                base,
+                ShapeKind::Circle {
+                    center: GridPoint::new(0, 0),
+                    radius: 0,
+                },
+            ));
+            let symbol = Subject::Symbol(doc.symbols[0].id);
+            for (offset, name) in [(1, "One"), (2, "Two")] {
+                doc.groups.push(Group {
+                    id: GroupId(base + offset),
+                    name: name.to_owned(),
+                    members: vec![symbol.clone()],
+                });
+            }
+            doc.next_id = base + 3;
+            let bad = found(&doc, DiagnosticCode::InvalidAnnotation);
+            assert_eq!(
+                bad,
+                [
+                    Subject::Document,
+                    Subject::Wire(doc.wires[0].id),
+                    Subject::Shape(ShapeId(base)),
+                    Subject::Group(GroupId(base + 2)),
+                ]
+            );
+        }
+
+        #[test]
+        fn views_belong_on_panel_or_single_line_sheets_and_symbols_do_not() {
+            let mut doc = valid();
+            let base = doc.next_id;
+            let device = doc.devices[0].id;
+            doc.sheets.push(panel_sheet(base));
+            doc.views.push(DeviceView {
+                id: ViewId(base + 1),
+                device_id: device,
+                position: GridPoint::new(-50, -50),
+                width: 2,
+                height: 2,
+                layer: None,
+            });
+            doc.symbols[0].position = GridPoint::new(120, 20);
+            doc.next_id = base + 2;
+            assert_eq!(
+                found(&doc, DiagnosticCode::ViewOffItsSheet),
+                [
+                    Subject::Symbol(doc.symbols[0].id),
+                    Subject::View(ViewId(base + 1)),
+                ]
+            );
+        }
+
+        #[test]
+        fn plc_channels_with_one_address_or_one_device_twice_conflict() {
+            let mut doc = valid();
+            let base = doc.next_id;
+            let device = doc.devices[0].id;
+            let channel = |address: &str| PlcChannel {
+                address: address.to_owned(),
+                direction: PlcDirection::Output,
+                device: Some(device),
+                label: None,
+            };
+            doc.plcs.push(PlcModule {
+                id: PlcId(base),
+                name: "A1".to_owned(),
+                description: None,
+                position: None,
+                channels: vec![channel("Q0.0"), channel("Q0.0")],
+            });
+            doc.next_id = base + 1;
+            let found: Vec<Diagnostic> = doc
+                .validate()
+                .into_iter()
+                .filter(|d| d.code() == DiagnosticCode::PlcChannelConflict)
+                .collect();
+            assert_eq!(found.len(), 2, "{found:?}");
+        }
+
+        #[test]
+        fn annotation_ids_share_the_identifier_space() {
+            let mut doc = valid();
+            let taken = doc.symbols[0].id.0;
+            doc.shapes.push(shape(
+                taken,
+                ShapeKind::Rectangle {
+                    from: GridPoint::new(0, 0),
+                    to: GridPoint::new(2, 2),
+                },
+            ));
+            assert!(
+                doc.integrity_errors()
+                    .iter()
+                    .any(|d| d.code() == DiagnosticCode::DuplicateId)
+            );
+        }
     }
 }

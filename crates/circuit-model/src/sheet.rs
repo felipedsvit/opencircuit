@@ -90,6 +90,63 @@ impl std::fmt::Display for Zone {
     }
 }
 
+/// What a sheet shows (ADR-0018).
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SheetKind {
+    /// The circuit diagram, the default.
+    #[default]
+    Schematic,
+    /// A single-line diagram of the power distribution.
+    SingleLine,
+    /// The layout of the devices in a panel.
+    PanelLayout,
+}
+
+impl SheetKind {
+    /// Every kind, in menu order.
+    pub const ALL: [Self; 3] = [Self::Schematic, Self::SingleLine, Self::PanelLayout];
+
+    /// The name, as edit files write it.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Schematic => "schematic",
+            Self::SingleLine => "single_line",
+            Self::PanelLayout => "panel_layout",
+        }
+    }
+
+    /// The kind called `name`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
+    }
+
+    /// The English label of the title block, empty for a schematic.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Schematic => "Schematic",
+            Self::SingleLine => "Single-line diagram",
+            Self::PanelLayout => "Panel layout",
+        }
+    }
+
+    /// Whether the kind shows device views rather than symbols.
+    #[must_use]
+    pub const fn shows_views(self) -> bool {
+        matches!(self, Self::SingleLine | Self::PanelLayout)
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)] // The signature serde asks for.
+    fn is_schematic(&self) -> bool {
+        *self == Self::Schematic
+    }
+}
+
 /// One drawing sheet.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -109,6 +166,9 @@ pub struct Sheet {
     pub orientation: Orientation,
     /// Zones along the frame.
     pub zones: Zones,
+    /// What the sheet shows (ADR-0018); absent: a schematic.
+    #[serde(default, skip_serializing_if = "SheetKind::is_schematic")]
+    pub kind: SheetKind,
 }
 
 impl Sheet {
@@ -207,6 +267,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         }
     }
 

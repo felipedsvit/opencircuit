@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use circuit_model::{
-    Device, Junction, Layer, ProjectMeta, Schematic, Sheet, SupplyProfile, SymbolInstance, Table,
-    TextNote, Waiver, Wire,
+    Comment, Device, DeviceView, Group, Junction, Layer, PlcModule, ProjectMeta, Schematic, Shape,
+    Sheet, SupplyProfile, SymbolInstance, Table, TextNote, Waiver, Wire,
 };
 
 /// The fields of `$a` that differ from those of `$b`. The pattern names
@@ -91,6 +91,7 @@ fn project_fields(a: &ProjectMeta, b: &ProjectMeta) -> Vec<&'static str> {
             revision,
             date,
             wire_numbering,
+            client,
         }
     )
 }
@@ -107,6 +108,7 @@ fn sheet_fields(a: &Sheet, b: &Sheet) -> Vec<&'static str> {
             size,
             orientation,
             zones,
+            kind,
         }
     )
 }
@@ -152,6 +154,7 @@ fn symbol_fields(a: &SymbolInstance, b: &SymbolInstance) -> Vec<&'static str> {
             position,
             rotation,
             layer,
+            mirrored,
         }
     )
 }
@@ -171,6 +174,7 @@ fn wire_fields(a: &Wire, b: &Wire) -> Vec<&'static str> {
             route,
             number,
             layer,
+            spec,
         }
     )
 }
@@ -197,6 +201,56 @@ fn text_fields(a: &TextNote, b: &TextNote) -> Vec<&'static str> {
             text,
             anchor,
             layer,
+        }
+    )
+}
+
+fn shape_fields(a: &Shape, b: &Shape) -> Vec<&'static str> {
+    changed!(a, b, Shape { id, kind, layer })
+}
+
+fn comment_fields(a: &Comment, b: &Comment) -> Vec<&'static str> {
+    changed!(
+        a,
+        b,
+        Comment {
+            id,
+            subject,
+            text,
+            author,
+        }
+    )
+}
+
+fn group_fields(a: &Group, b: &Group) -> Vec<&'static str> {
+    changed!(a, b, Group { id, name, members })
+}
+
+fn view_fields(a: &DeviceView, b: &DeviceView) -> Vec<&'static str> {
+    changed!(
+        a,
+        b,
+        DeviceView {
+            id,
+            device_id,
+            position,
+            width,
+            height,
+            layer,
+        }
+    )
+}
+
+fn plc_fields(a: &PlcModule, b: &PlcModule) -> Vec<&'static str> {
+    changed!(
+        a,
+        b,
+        PlcModule {
+            id,
+            name,
+            description,
+            position,
+            channels,
         }
     )
 }
@@ -329,6 +383,64 @@ pub fn diff(before: &Schematic, after: &Schematic) -> Table {
         |layer| layer.id.get(),
         |layer| layer.name.clone(),
         layer_fields,
+    );
+    compare(
+        &mut rows,
+        "shape",
+        &before.shapes,
+        &after.shapes,
+        |shape| shape.id.get(),
+        |shape| shape.kind.name().to_owned(),
+        shape_fields,
+    );
+    compare(
+        &mut rows,
+        "comment",
+        &before.comments,
+        &after.comments,
+        |comment| comment.id.get(),
+        |comment| comment.text.chars().take(40).collect(),
+        comment_fields,
+    );
+    compare(
+        &mut rows,
+        "group",
+        &before.groups,
+        &after.groups,
+        |group| group.id.get(),
+        |group| group.name.clone(),
+        group_fields,
+    );
+    let viewed = |doc: &Schematic, view: &DeviceView| {
+        doc.devices
+            .iter()
+            .find(|device| device.id == view.device_id)
+            .map(|device| device.reference.0.clone())
+            .unwrap_or_default()
+    };
+    compare(
+        &mut rows,
+        "view",
+        &before.views,
+        &after.views,
+        |view| view.id.get(),
+        |view| {
+            if after.views.iter().any(|other| other.id == view.id) {
+                viewed(after, view)
+            } else {
+                viewed(before, view)
+            }
+        },
+        view_fields,
+    );
+    compare(
+        &mut rows,
+        "plc",
+        &before.plcs,
+        &after.plcs,
+        |plc| plc.id.get(),
+        |plc| plc.name.clone(),
+        plc_fields,
     );
 
     let mut table = Table::new("Changes", &["Change", "Element", "ID", "Name", "Fields"]);

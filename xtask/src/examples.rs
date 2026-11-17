@@ -523,6 +523,7 @@ fn signal_arrows() -> Built<Schematic> {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         });
     }
     Ok(doc)
@@ -605,6 +606,7 @@ fn starter_sheets() -> Built<Schematic> {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         });
     }
     Ok(doc)
@@ -650,6 +652,7 @@ fn documentation() -> Built<Schematic> {
                 part_no: Some(part_no.to_owned()),
                 description: Some(description.to_owned()),
                 location: Some(location.to_owned()),
+                datasheet: None,
             });
         }
     }

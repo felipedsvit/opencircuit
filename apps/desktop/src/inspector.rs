@@ -182,8 +182,35 @@ pub fn show(
                         request = Some(change);
                     }
                 });
+            // The data of schema version 5 (ADR-0018), closed here too.
+            egui::CollapsingHeader::new(tr("Project data"))
+                .default_open(false)
+                .show(ui, |ui| {
+                    if let Some(change) = project_data_section(ui, session, state) {
+                        request = Some(change);
+                    }
+                });
         });
     request
+}
+
+/// The data of the project that schema version 5 added (ADR-0018): the
+/// client of the title block.
+fn project_data_section(
+    ui: &mut Ui,
+    session: &Session,
+    state: &mut InspectorState,
+) -> Option<Request> {
+    let doc = session.document();
+    // An empty text clears the client.
+    state
+        .text_field(
+            ui,
+            "project:client".to_owned(),
+            tr("Client"),
+            doc.project.client.as_deref().unwrap_or(""),
+        )
+        .map(|text| sheets::set_client(doc, Some(&text)))
 }
 
 /// One line about the selection: nothing, one symbol of a part, or how many.

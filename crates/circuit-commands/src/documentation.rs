@@ -38,6 +38,7 @@ pub fn set_device_info(
         part_no: clean(info.part_no),
         description: clean(info.description),
         location: clean(info.location),
+        datasheet: None,
     };
     let info = (!info.is_empty()).then_some(info);
     let mut tx = Transaction::new("Edit catalog data", doc.next_id);

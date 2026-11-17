@@ -283,6 +283,7 @@ mod tests {
             route: Vec::new(),
             number: None,
             layer: None,
+            spec: None,
         });
         broken.next_id += 1;
         let mut tx = Transaction::new("move", broken.next_id);

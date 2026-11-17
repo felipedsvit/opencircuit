@@ -235,6 +235,18 @@ impl Edit {
                             .iter()
                             .find(|t| t.layer == Some(id))
                             .map(|t| Subject::Text(t.id))
+                    })
+                    .or_else(|| {
+                        doc.shapes
+                            .iter()
+                            .find(|s| s.layer == Some(id))
+                            .map(|s| Subject::Shape(s.id))
+                    })
+                    .or_else(|| {
+                        doc.views
+                            .iter()
+                            .find(|v| v.layer == Some(id))
+                            .map(|v| Subject::View(v.id))
                     });
                 if let Some(by) = user {
                     return Err(CommandError::InUse {
@@ -262,6 +274,12 @@ impl Edit {
                     }
                     Subject::Text(id) => {
                         sorted::find_mut(&mut doc.texts, id, |t| t.id).map(|t| &mut t.layer)
+                    }
+                    Subject::Shape(id) => {
+                        sorted::find_mut(&mut doc.shapes, id, |s| s.id).map(|s| &mut s.layer)
+                    }
+                    Subject::View(id) => {
+                        sorted::find_mut(&mut doc.views, id, |v| v.id).map(|v| &mut v.layer)
                     }
                     _ => None,
                 }
@@ -562,6 +580,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         };
         for edit in [
             Edit::SetProject(ProjectMeta {
@@ -615,6 +634,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             }),
             Edit::RemoveWire(wire.id),
             Edit::SetRoute {
@@ -734,6 +754,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         };
         let original = edited.clone();
         let mut inverses = vec![Edit::InsertSheet(sheet.clone()).apply(&mut edited).unwrap()];
@@ -862,6 +883,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             })
             .apply(&mut edited),
             Err(CommandError::SelfLoop)
@@ -881,6 +903,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Symbol(SymbolId(77))))
@@ -900,6 +923,7 @@ mod tests {
                 position: GridPoint::default(),
                 rotation: QuarterTurn::Deg0,
                 layer: None,
+                mirrored: false,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Device(DeviceId(77))))

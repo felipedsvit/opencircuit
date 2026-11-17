@@ -167,6 +167,7 @@ fn a_net_of_three_terminals_lists_the_third_under_also() {
         route: Vec::new(),
         number: None,
         layer: None,
+        spec: None,
     });
     doc.next_id += 1;
 
@@ -266,6 +267,7 @@ fn with_sheets_every_symbol_outside_them_is_an_exception() {
             columns: 4,
             rows: 2,
         },
+        kind: Default::default(),
     });
     doc.next_id += 1;
 

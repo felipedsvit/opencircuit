@@ -9,7 +9,7 @@ is fixed in the same change.
 
 - The file is JSON (UTF-8) with the `.ocircuit` extension. A byte order mark
   at the start is accepted when reading and never written.
-- `schema_version` is mandatory. The current version is 4.
+- `schema_version` is mandatory. The current version is 5.
 - `next_id` is mandatory. Every entity of every collection draws its ID from
   this one counter: IDs start at 1, are unique across collections, are below
   `next_id`, are at most `2^53 - 1`, and are never reused.
@@ -23,11 +23,11 @@ is fixed in the same change.
 - Unknown fields, repeated fields and repeated parameter keys are rejected.
   Unknown fields are not preserved.
 
-## Shape (schema version 4)
+## Shape (schema version 5)
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "next_id": 6,
   "project": {
     "name": "demo",
@@ -124,7 +124,24 @@ none of them:
 | `waivers` | list of `{ "code": "OC-STR-018", "subject": <subject>, "reason": <text> }`, sorted by code and then subject, at most 10 000 |
 | `texts` | list of text notes (ADR-0015), sorted by `id`: `{ "id": <id>, "position": { "x", "y" }, "text": <one line, 1 to 120 characters and at most 256 bytes, no control character>, "anchor": "left" or "center" }`; absent: no notes |
 | `layers` | list of layers (ADR-0015), sorted by `id`: `{ "id": <id>, "name": <1 to 32 characters>, "visible": <boolean>, "locked": <boolean> }`, at most 256; absent: no layers |
-| `symbols[].layer`, `wires[].layer`, `texts[].layer` | the `id` of a layer; absent: the default layer, which always shows and edits |
+| `symbols[].layer`, `wires[].layer`, `texts[].layer`, `shapes[].layer`, `views[].layer` | the `id` of a layer; absent: the default layer, which always shows and edits |
+
+The documentation fields of schema version 5 (ADR-0018) are optional too, and
+omitted when empty or at their default. None of them changes the compiled
+circuit:
+
+| Field | Meaning |
+| --- | --- |
+| `project.client` | the client, at most 64 characters, in the title block |
+| `wires[].spec` | `{ "colour", "cross_section", "kind", "material", "insulation" }`, each an optional text of at most 32 characters |
+| `symbols[].mirrored` | `true`: the symbol is mirrored about the vertical line through its origin, then rotated; absent: not mirrored |
+| `sheets[].kind` | `single_line` or `panel_layout`; absent: a schematic |
+| `devices[].info.datasheet` | an `http://`, `https://` or `file:` link, or a relative path |
+| `shapes` | list sorted by `id`: `{ "id", "kind": <kind>, "layer" }`, where `kind` is `{ "polyline": { "points": [..], "closed": <bool> } }`, `{ "rectangle": { "from", "to" } }`, `{ "circle": { "center", "radius" } }`, `{ "arc": { "center", "radius", "start", "sweep" } }` (whole degrees), `{ "cloud": { "from", "to", "revision" } }` or `{ "qr": { "position", "size", "text" } }` |
+| `comments` | list sorted by `id`: `{ "id", "subject": <subject>, "text": <1 to 200 characters>, "author" }` |
+| `groups` | list sorted by `id`: `{ "id", "name": <1 to 32 characters>, "members": [<subject>, ..] }` |
+| `views` | list sorted by `id`: `{ "id", "device_id", "position", "width", "height", "layer" }`, a device shown again on a panel layout or single-line sheet |
+| `plcs` | list sorted by `id`: `{ "id", "name": <a designator>, "description", "position", "channels": [{ "address", "direction": "input" or "output", "device", "label" }] }` |
 
 Wire numbers are derived from the nets and are never stored (ADR-0014): one
 number per net, in the order of the first point of the net (sheet, then zone
@@ -143,8 +160,9 @@ document, or that repeats another is itself the warning `OC-STR-020`.
 
 A subject is the tagged form the command line prints: `"document"`,
 `{ "supply": 1 }`, `{ "device": 2 }`, `{ "symbol": 3 }`, `{ "wire": 5 }`,
-`{ "junction": 4 }`, `{ "sheet": 7 }` or
-`{ "pin": { "symbol_id": 3, "terminal": "out" } }`.
+`{ "junction": 4 }`, `{ "sheet": 7 }`, `{ "text": 8 }`, `{ "layer": 9 }`,
+`{ "shape": 10 }`, `{ "comment": 11 }`, `{ "group": 12 }`, `{ "view": 13 }`,
+`{ "plc": 14 }` or `{ "pin": { "symbol_id": 3, "terminal": "out" } }`.
 
 Field values:
 
@@ -370,3 +388,4 @@ migration and an entry below.
 | 2 | `sheets`, and `author`, `company`, `revision` and `date` in `project` (ADR-0011). The migration adds no sheet and sets the four fields to `null`. |
 | 3 | `wires[].number`, `devices[].info`, `project.wire_numbering` and `waivers` (ADR-0014). All are optional and omitted when empty, so the migration only raises the version. |
 | 4 | `texts`, `layers` and the `layer` of symbols, wires and texts (ADR-0015). All are optional and omitted when empty, so the migration only raises the version. |
+| 5 | `project.client`, `wires[].spec`, `symbols[].mirrored`, `sheets[].kind`, `devices[].info.datasheet`, `shapes`, `comments`, `groups`, `views` and `plcs` (ADR-0018). All are optional and omitted when empty, so the migration only raises the version. |

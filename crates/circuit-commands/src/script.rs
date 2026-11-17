@@ -91,6 +91,9 @@ enum Operation {
         revision: Field,
         #[serde(default)]
         date: Field,
+        /// The client of the title block (ADR-0018).
+        #[serde(default)]
+        client: Field,
     },
     /// Add a supply profile: `dc_24v`, `single_phase_230v` or
     /// `three_phase_400v`.
@@ -534,7 +537,13 @@ impl Run<'_> {
                 company,
                 revision,
                 date,
+                client,
             } => {
+                if !matches!(client, Field::Keep) {
+                    let value = client.apply(self.doc.project.client.as_ref());
+                    let tx = sheets::set_client(&self.doc, value.as_deref()).map_err(refused)?;
+                    self.commit(&tx)?;
+                }
                 let project = &self.doc.project;
                 let tx = sheets::set_project_info(
                     &self.doc,
@@ -750,6 +759,7 @@ impl Run<'_> {
                     part_no: part_no.apply(current.part_no.as_ref()),
                     description: description.apply(current.description.as_ref()),
                     location: location.apply(current.location.as_ref()),
+                    datasheet: None,
                 };
                 let tx =
                     documentation::set_device_info(&self.doc, device, info).map_err(refused)?;
@@ -1592,7 +1602,7 @@ mod tests {
         let doc = run(
             doc,
             r#"[
-              { "op": "project", "author": null, "company": "Acme" },
+              { "op": "project", "author": null, "company": "Acme", "client": "Plant 4" },
               { "op": "remove_sheet", "number": 2 }
             ]"#,
         )
@@ -1600,6 +1610,7 @@ mod tests {
         .doc;
         assert_eq!(doc.project.author, None);
         assert_eq!(doc.project.company.as_deref(), Some("Acme"));
+        assert_eq!(doc.project.client.as_deref(), Some("Plant 4"));
         assert_eq!(doc.project.revision.as_deref(), Some("B"));
         assert_eq!(doc.sheets.len(), 2);
     }

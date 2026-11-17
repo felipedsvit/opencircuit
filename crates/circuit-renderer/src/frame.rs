@@ -159,6 +159,44 @@ fn draw_sheet(scene: &mut Scene, doc: &Schematic, sheet: &Sheet, total: usize) {
     }
     let left = inner.max.x.saturating_sub(BLOCK_WIDTH);
     let top = inner.max.y.saturating_sub(BLOCK_HEIGHT);
+    // A row above the block for the client and the kind of the sheet
+    // (ADR-0018), only when there is one: a block without them is as
+    // before.
+    let meta = &doc.project;
+    let kind = sheet.kind;
+    if meta.client.is_some() || kind != circuit_model::SheetKind::Schematic {
+        let extra = top.saturating_sub(ROW);
+        scene.push(
+            Shape::Rect(SceneRect::from_corners(
+                point(left, extra),
+                point(inner.max.x, top),
+            )),
+            StyleKey::Frame,
+            subject.clone(),
+        );
+        line(
+            scene,
+            point(left.saturating_add(SECOND_COLUMN), extra),
+            point(left.saturating_add(SECOND_COLUMN), top),
+        );
+        let y = extra.saturating_add(ROW / 2);
+        if let Some(client) = &meta.client {
+            text(
+                scene,
+                point(left.saturating_add(PAD), y),
+                fit(&format!("Client {client}"), NARROW_CHARS),
+                Anchor::Left,
+            );
+        }
+        if kind != circuit_model::SheetKind::Schematic {
+            text(
+                scene,
+                point(left.saturating_add(SECOND_COLUMN).saturating_add(PAD), y),
+                fit(kind.label(), NARROW_CHARS),
+                Anchor::Left,
+            );
+        }
+    }
     scene.push(
         Shape::Rect(SceneRect::from_corners(point(left, top), inner.max)),
         StyleKey::Frame,
@@ -174,7 +212,6 @@ fn draw_sheet(scene: &mut Scene, doc: &Schematic, sheet: &Sheet, total: usize) {
         point(left.saturating_add(SECOND_COLUMN), inner.max.y),
     );
 
-    let meta = &doc.project;
     let or_blank = |value: &Option<String>| value.as_deref().unwrap_or("").to_owned();
     let cells = [
         (0, 0, WIDE_CHARS, sheet.title.clone()),

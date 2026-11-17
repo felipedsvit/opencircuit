@@ -273,6 +273,7 @@ mod tests {
                     columns: 8,
                     rows: 6,
                 },
+                kind: Default::default(),
             });
         }
         (doc, [coil, near, far, lamp])
@@ -440,6 +441,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         });
         doc.next_id += 1;
 

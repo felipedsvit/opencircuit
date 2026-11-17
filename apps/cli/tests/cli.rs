@@ -1145,7 +1145,7 @@ fn m5_exit_a_project_made_only_through_the_command_line_validates_simulates_and_
     // Two sheets with the title block filled in.
     let text = fs::read_to_string(&project).expect("written");
     let doc: serde_json::Value = serde_json::from_str(&text).expect("JSON");
-    assert_eq!(doc["schema_version"], 4);
+    assert_eq!(doc["schema_version"], 5);
     assert_eq!(doc["sheets"].as_array().expect("sheets").len(), 2);
     assert_eq!(doc["project"]["author"], "OpenCircuit");
 
@@ -2194,7 +2194,7 @@ fn text_notes_are_drawn_edited_and_left_out_of_every_report() {
     assert_eq!(code(&added), 0, "{}{}", stdout(&added), stderr(&added));
     let saved = fs::read_to_string(&project).expect("saved");
     let doc: serde_json::Value = serde_json::from_str(&saved).expect("JSON");
-    assert_eq!(doc["schema_version"], 4);
+    assert_eq!(doc["schema_version"], 5);
     assert_eq!(doc["texts"][0]["text"], "Panel B");
     assert_eq!(doc["texts"][0]["position"]["x"], 7);
     assert_eq!(doc["texts"][1]["anchor"], "center");
@@ -2237,12 +2237,12 @@ fn text_notes_are_drawn_edited_and_left_out_of_every_report() {
 }
 
 #[test]
-fn a_version_3_project_opens_and_is_saved_as_version_4() {
+fn a_version_3_project_opens_and_is_saved_as_the_current_version() {
     let directory = scratch("v3-to-v4");
     let old = directory.join("old.ocircuit");
     let text = fs::read_to_string(root().join("examples/direct-starter/starter.ocircuit"))
         .expect("example")
-        .replacen("\"schema_version\": 4", "\"schema_version\": 3", 1);
+        .replacen("\"schema_version\": 5", "\"schema_version\": 3", 1);
     fs::write(&old, text).expect("write");
     let path = old.to_str().expect("utf-8 path");
 
@@ -2267,7 +2267,7 @@ fn a_version_3_project_opens_and_is_saved_as_version_4() {
     );
     let doc: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&old).expect("saved")).expect("JSON");
-    assert_eq!(doc["schema_version"], 4);
+    assert_eq!(doc["schema_version"], 5);
 }
 
 /// A project with a note and two layers, made only through an edit file.
@@ -2323,7 +2323,7 @@ fn layers_are_made_assigned_hidden_and_a_hidden_layer_is_left_out_of_the_drawing
     let path = project.to_str().expect("utf-8 path");
     let doc: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&project).expect("saved")).expect("JSON");
-    assert_eq!(doc["schema_version"], 4);
+    assert_eq!(doc["schema_version"], 5);
     assert_eq!(doc["layers"].as_array().expect("layers").len(), 2);
     assert_eq!(
         code(&opencircuit(&["validate", path, "--deny-warnings"])),

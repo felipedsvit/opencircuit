@@ -161,6 +161,7 @@ mod tests {
             route: Vec::new(),
             number: None,
             layer: layer.map(LayerId),
+            spec: None,
         };
         let mut doc = doc(&[(1, false, false)]);
         for id in [1, 2, 101, 102] {

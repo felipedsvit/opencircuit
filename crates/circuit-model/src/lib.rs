@@ -22,6 +22,7 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+pub mod annotations;
 pub mod builder;
 pub mod catalog;
 pub mod diagnostics;
@@ -48,6 +49,10 @@ mod validate;
 pub mod wire_numbers;
 pub mod xref;
 
+pub use annotations::{
+    Comment, DeviceView, Group, MAX_CLIENT_CHARS, PlcChannel, PlcDirection, PlcModule, Shape,
+    ShapeKind, WireSpec,
+};
 pub use builder::SchematicBuilder;
 pub use catalog::{
     CatalogError, Category, ComponentCatalog, ComponentModel, Connection, DeviceClass, Operator,
@@ -62,8 +67,8 @@ pub use documentation::{
 };
 pub use geometry::{GridPoint, GridRect, QuarterTurn};
 pub use ids::{
-    DeviceId, IdAllocator, IdExhausted, JunctionId, LayerId, MAX_ENTITY_ID, SheetId, SupplyId,
-    SymbolId, TextId, WireId,
+    CommentId, DeviceId, GroupId, IdAllocator, IdExhausted, JunctionId, LayerId, MAX_ENTITY_ID,
+    PlcId, ShapeId, SheetId, SupplyId, SymbolId, TextId, ViewId, WireId,
 };
 pub use input::{Control, InputAction, InputEvent, operator_controls};
 pub use labels::{natural_key, pin_name, terminal_label};
@@ -78,7 +83,9 @@ pub use schematic::{
     CURRENT_SCHEMA_VERSION, Device, Endpoint, Junction, ModelRef, ParamValue, PinRef, ProjectMeta,
     ReferenceDesignator, Schematic, SymbolInstance, SymbolKey, TerminalKey, Wire,
 };
-pub use sheet::{Orientation, ReadingKey, Sheet, SheetSize, Zone, Zones, reading_key, sheet_at};
+pub use sheet::{
+    Orientation, ReadingKey, Sheet, SheetKind, SheetSize, Zone, Zones, reading_key, sheet_at,
+};
 pub use signals::{ArrowAt, lone_arrows, signal_arrows, signal_references};
 pub use snapshot::{Live, MotorState, MotorView, SimSnapshot, TimerView, WindingConnection};
 pub use supply::{

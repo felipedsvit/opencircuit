@@ -269,6 +269,11 @@ impl Editor {
             Subject::Sheet(id) => doc.sheets.iter().any(|s| s.id == *id),
             Subject::Text(id) => doc.texts.iter().any(|t| t.id == *id),
             Subject::Layer(id) => doc.layers.iter().any(|l| l.id == *id),
+            Subject::Shape(id) => doc.shapes.iter().any(|s| s.id == *id),
+            Subject::Comment(id) => doc.comments.iter().any(|c| c.id == *id),
+            Subject::Group(id) => doc.groups.iter().any(|g| g.id == *id),
+            Subject::View(id) => doc.views.iter().any(|v| v.id == *id),
+            Subject::Plc(id) => doc.plcs.iter().any(|p| p.id == *id),
             Subject::Document => true,
         };
         let selected = self.selection.len();

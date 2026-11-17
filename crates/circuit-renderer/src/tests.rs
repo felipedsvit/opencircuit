@@ -1004,6 +1004,7 @@ fn a4(id: u64, number: u32, title: &str, origin: GridPoint) -> circuit_model::Sh
             columns: 8,
             rows: 6,
         },
+        kind: Default::default(),
     }
 }
 
@@ -1420,6 +1421,7 @@ mod signal_arrows {
                     columns: 4,
                     rows: 2,
                 },
+                kind: Default::default(),
             });
         }
         doc
@@ -1745,4 +1747,40 @@ mod layers {
 
         assert!(!drawn(&scene, &Subject::Junction(junction)));
     }
+}
+
+#[test]
+fn the_client_and_the_kind_of_a_sheet_get_a_row_above_the_title_block_only_when_set() {
+    let catalog = ComponentCatalog::builtin();
+    let mut doc = two_sheets();
+    let plain = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let frame_items = |scene: &Scene| {
+        scene
+            .items
+            .iter()
+            .filter(|item| item.style == StyleKey::Frame)
+            .count()
+    };
+
+    doc.project.client = Some("ACME".to_owned());
+    doc.sheets[1].kind = circuit_model::SheetKind::PanelLayout;
+    let scene = build_scene(&doc, &catalog, None, &SceneOptions::default());
+    let marks = texts(&scene, StyleKey::Frame);
+    assert_eq!(
+        marks.iter().filter(|text| **text == "Client ACME").count(),
+        2
+    );
+    assert_eq!(
+        marks.iter().filter(|text| **text == "Panel layout").count(),
+        1
+    );
+    assert!(frame_items(&scene) > frame_items(&plain));
+
+    // Without a client and with schematic sheets, the block is as before.
+    doc.project.client = None;
+    doc.sheets[1].kind = circuit_model::SheetKind::Schematic;
+    assert_eq!(
+        build_scene(&doc, &catalog, None, &SceneOptions::default()),
+        plain
+    );
 }

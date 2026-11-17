@@ -1522,6 +1522,7 @@ fn arbitrary_edit() -> impl Strategy<Value = Edit> {
             position: p,
             rotation: QuarterTurn::Deg0,
             layer: None,
+            mirrored: false,
         })),
         id().prop_map(|i| Edit::RemoveSymbol(SymbolId(i))),
         (id(), at()).prop_map(|(i, p)| Edit::Place {
@@ -1545,6 +1546,7 @@ fn arbitrary_edit() -> impl Strategy<Value = Edit> {
             route: Vec::new(),
             number: None,
             layer: None,
+            spec: None,
         })),
         id().prop_map(|i| Edit::RemoveWire(WireId(i))),
         (id(), prop::collection::vec(at(), 0..3)).prop_map(|(i, route)| Edit::SetRoute {
