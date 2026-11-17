@@ -24,7 +24,10 @@ more precise editor (snapping, a visible grid, keys, copy and paste, aligning),
 terminal numbers, drawing sheets with a frame, zones and a title block, PDF
 with one page per sheet, cross-references between coils and contacts, and
 `opencircuit new` and `opencircuit edit` to make and change a project from a
-script. How to extend OpenCircuit, and the safety limits of each interface,
+script. M6 is implemented: a window with menus, a status bar, a palette in
+eight tabs with symbol drawings, a command line, selection by window or
+crossing, the standard parts library `std`, and symbol-only devices for what
+the simulation does not model. How to extend OpenCircuit, and the safety limits of each interface,
 are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
@@ -59,6 +62,15 @@ circuit-model <- circuit-io
 the renderer consumes SimSnapshot, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```
+
+## Install
+
+Packages for each release are on the
+[releases page](https://github.com/felipedsvit/opencircuit/releases): a `.zip`
+for Windows, a `.dmg` for macOS, a `.deb` for Debian and Ubuntu, an `.rpm` for
+Fedora and an `.AppImage` for any Linux, each with the window
+(`opencircuit-desktop`) and the command line (`opencircuit`). They are not
+signed yet. How they are built is in [`docs/releasing.md`](docs/releasing.md).
 
 ## Try it
 

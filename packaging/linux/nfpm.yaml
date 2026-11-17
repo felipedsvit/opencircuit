@@ -1,0 +1,89 @@
+# The .deb and the .rpm, from one description. Run from the root of the
+# repository, after `cargo build --release`, with VERSION set:
+#
+#   VERSION=0.0.1 nfpm package --packager deb --config packaging/linux/nfpm.yaml
+#   VERSION=0.0.1 nfpm package --packager rpm --config packaging/linux/nfpm.yaml
+name: opencircuit
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: electronics
+priority: optional
+maintainer: OpenCircuit contributors <noreply@github.com>
+vendor: OpenCircuit project
+homepage: https://github.com/felipedsvit/opencircuit
+license: MIT OR Apache-2.0
+description: |
+  Editor and simulator for industrial control circuits.
+  Draw contactors, relays, timers, motors and their supplies, run the
+  circuit and watch what is energized. Includes the command line
+  `opencircuit` (validate, simulate, edit, export, serve).
+
+contents:
+  - src: target/release/opencircuit-desktop
+    dst: /usr/bin/opencircuit-desktop
+    file_info:
+      mode: 0755
+  - src: target/release/opencircuit
+    dst: /usr/bin/opencircuit
+    file_info:
+      mode: 0755
+  - src: packaging/linux/opencircuit.desktop
+    dst: /usr/share/applications/opencircuit.desktop
+  - src: packaging/linux/opencircuit.xml
+    dst: /usr/share/mime/packages/opencircuit.xml
+  - src: assets/icons/opencircuit.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/opencircuit.svg
+  - src: assets/icons/png/opencircuit-16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/opencircuit.png
+  - src: assets/icons/png/opencircuit-32.png
+    dst: /usr/share/icons/hicolor/32x32/apps/opencircuit.png
+  - src: assets/icons/png/opencircuit-48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/opencircuit.png
+  - src: assets/icons/png/opencircuit-64.png
+    dst: /usr/share/icons/hicolor/64x64/apps/opencircuit.png
+  - src: assets/icons/png/opencircuit-128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/opencircuit.png
+  - src: assets/icons/png/opencircuit-256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/opencircuit.png
+  - src: assets/icons/png/opencircuit-512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/opencircuit.png
+  - src: LICENSE-MIT
+    dst: /usr/share/doc/opencircuit/LICENSE-MIT
+  - src: LICENSE-APACHE
+    dst: /usr/share/doc/opencircuit/LICENSE-APACHE
+  - src: assets/fonts/liberation-mono/LICENSE
+    dst: /usr/share/doc/opencircuit/LICENSE-LiberationMono
+  - src: examples
+    dst: /usr/share/doc/opencircuit/examples
+    type: tree
+
+# Every library the window needs besides the C library is opened when it
+# starts (graphics, keyboard, Wayland, X11), so they are recommended, which
+# apt and dnf install by default, and not required.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.35)
+      - libgcc-s1
+    recommends:
+      - libgl1
+      - libegl1
+      - libxkbcommon0
+      - libxkbcommon-x11-0
+      - libwayland-client0
+      - xdg-desktop-portal
+  rpm:
+    depends:
+      - glibc
+      - libgcc
+    recommends:
+      - mesa-libGL
+      - mesa-libEGL
+      - libxkbcommon
+      - libxkbcommon-x11
+      - libwayland-client
+      - xdg-desktop-portal
+rpm:
+  group: Applications/Engineering
+  compression: zstd

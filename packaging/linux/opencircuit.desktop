@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OpenCircuit
+GenericName=Electrical schematic editor
+Comment=Draw and simulate industrial control circuits
+Exec=opencircuit-desktop %f
+Icon=opencircuit
+Terminal=false
+Categories=Development;Engineering;Electronics;
+MimeType=application/x-opencircuit-project;
+StartupWMClass=opencircuit
