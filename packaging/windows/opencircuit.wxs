@@ -64,7 +64,7 @@
               Description="Editor and simulator for industrial control circuits"
               Directory="ProgramMenuFolder"
               WorkingDirectory="INSTALLFOLDER"
-              Icon="OpenCircuitIcon" />
+              Icon="OpenCircuit.ico" />
         </File>
         <ProgId Id="OpenCircuit.Project" Description="OpenCircuit project" Icon="OpenCircuitIcon">
           <Extension Id="ocircuit" ContentType="application/json">
@@ -82,7 +82,7 @@
 
   <Fragment>
     <ComponentGroup Id="Documents" Directory="INSTALLFOLDER">
-      <!-- The icon of the shortcut and of the .ocircuit files: these two name an installed file. -->
+      <!-- The icon of the .ocircuit files names an installed file (the shortcut and the entry in Programs and Features name the Icon above). -->
       <Component Id="IconFile"><File Id="OpenCircuitIcon" Source="$(Root)\assets\icons\opencircuit.ico" /></Component>
       <Component Id="LicenseMit"><File Source="$(Root)\LICENSE-MIT" /></Component>
       <Component Id="LicenseApache"><File Source="$(Root)\LICENSE-APACHE" /></Component>
