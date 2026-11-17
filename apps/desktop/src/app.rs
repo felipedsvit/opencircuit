@@ -241,6 +241,11 @@ pub struct DesktopApp {
     recent: Option<crate::recent::RecentProjects>,
     /// The command palette (Ctrl+K).
     command_palette: crate::command_palette::PaletteState,
+    /// The find and replace window (Ctrl+H).
+    find_replace: crate::find_replace::FindReplace,
+    /// The label being typed over the drawing (F2): the element, its text,
+    /// and whether the field still has to take the keyboard.
+    label_edit: Option<(Subject, String, bool)>,
 }
 
 impl DesktopApp {
@@ -327,6 +332,135 @@ impl DesktopApp {
         };
         // Best effort: a list that cannot be written only loses an entry.
         let _ = recent.record(path);
+    }
+
+    /// Open the find and replace window, as Ctrl+H does in edit mode.
+    pub fn open_find_replace(&mut self) {
+        self.find_replace.open();
+    }
+
+    /// Whether the find and replace window is open.
+    #[must_use]
+    pub const fn find_replace_open(&self) -> bool {
+        self.find_replace.is_open()
+    }
+
+    /// Start typing the label of the selected element over the drawing, as
+    /// F2 does: the designator of a symbol's device, the words of a text
+    /// note or the number of a wire. Nothing happens unless one such element
+    /// is selected in edit mode.
+    pub fn edit_label(&mut self) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        if self.mode != Mode::Edit {
+            return;
+        }
+        let mut selected = self.editor.selection().iter();
+        let (Some(subject), None) = (selected.next(), selected.next()) else {
+            return;
+        };
+        let doc = session.document();
+        let text = match subject {
+            Subject::Symbol(id) => doc
+                .symbols
+                .iter()
+                .find(|symbol| symbol.id == *id)
+                .and_then(|symbol| doc.devices.iter().find(|d| d.id == symbol.device_id))
+                .map(|device| device.reference.0.clone()),
+            Subject::Text(id) => doc
+                .texts
+                .iter()
+                .find(|note| note.id == *id)
+                .map(|note| note.text.clone()),
+            Subject::Wire(id) => {
+                let nets = StaticNets::build(doc, session.catalog());
+                let numbers = circuit_model::WireNumbers::build(doc, session.catalog(), &nets);
+                Some(numbers.of_wire(*id).unwrap_or_default().to_owned())
+            }
+            _ => None,
+        };
+        if let Some(text) = text {
+            self.label_edit = Some((subject.clone(), text, true));
+        }
+    }
+
+    /// Whether a label is being typed over the drawing.
+    #[must_use]
+    pub const fn label_editing(&self) -> bool {
+        self.label_edit.is_some()
+    }
+
+    /// The field of the label over its element; Enter commits it, anything
+    /// else that takes the focus away drops it.
+    fn label_editor(&mut self, ui: &Ui, scene: &Scene, events: &canvas::CanvasEvents) {
+        if self.mode != Mode::Edit {
+            self.label_edit = None;
+        }
+        let Some((subject, text, focus)) = &mut self.label_edit else {
+            return;
+        };
+        let Some(bounds) = scene.subject_bounds(subject) else {
+            self.label_edit = None;
+            return;
+        };
+        let [x, y] = self.camera.to_screen(bounds.min);
+        let at = egui::pos2(events.origin[0] + x, events.origin[1] + y - 28.0);
+        let mut finished = None;
+        egui::Area::new(ui.scope_id().with(egui::IdSalt::new("label editor")))
+            .order(egui::Order::Foreground)
+            .fixed_pos(at)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let label = ui.label(tr("Label"));
+                    let field = ui
+                        .add(
+                            egui::TextEdit::singleline(text)
+                                .id_salt("label editor input")
+                                .desired_width(160.0),
+                        )
+                        .labelled_by(label.id);
+                    if std::mem::take(focus) {
+                        field.request_focus();
+                    }
+                    if field.lost_focus() {
+                        finished = Some(ui.input(|input| input.key_pressed(egui::Key::Enter)));
+                    }
+                });
+            });
+        let Some(commit) = finished else {
+            return;
+        };
+        let Some((subject, text)) = self.label_edit.take().map(|(s, t, _)| (s, t)) else {
+            return;
+        };
+        let Some(session) = &self.session else {
+            return;
+        };
+        if !commit {
+            return;
+        }
+        let doc = session.document();
+        let text = text.trim();
+        let request = match subject {
+            Subject::Symbol(id) => doc
+                .symbols
+                .iter()
+                .find(|symbol| symbol.id == id)
+                .map(|symbol| ops::set_reference(doc, symbol.device_id, text)),
+            Subject::Text(id) => Some(ops::set_text(doc, id, text)),
+            Subject::Wire(id) => {
+                let nets = StaticNets::build(doc, session.catalog());
+                let numbers = circuit_model::WireNumbers::build(doc, session.catalog(), &nets);
+                // The number as it is generated needs no override.
+                (numbers.of_wire(id) != Some(text))
+                    .then(|| circuit_commands::documentation::set_wire_number(doc, id, Some(text)))
+            }
+            _ => None,
+        };
+        if let Some(request) = request {
+            self.commit(request);
+        }
     }
 
     /// Open the command palette, as Ctrl+K does.
@@ -1325,6 +1459,13 @@ impl DesktopApp {
         }
         self.confirm_dialog(ui);
         self.command_palette(ui);
+        if let Some(session) = &self.session
+            && let Some(request) = self
+                .find_replace
+                .show(ui, session.document(), session.catalog())
+        {
+            self.commit(request);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.recovery_dialog(ui);
@@ -1445,6 +1586,12 @@ impl DesktopApp {
         }
         if pressed(ui, egui::Modifiers::NONE, egui::Key::W) {
             self.editor.set_tool(Tool::Wire);
+        }
+        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::H) {
+            self.find_replace.open();
+        }
+        if pressed(ui, egui::Modifiers::NONE, egui::Key::F2) {
+            self.edit_label();
         }
         let mut actions = Vec::new();
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::A) {
@@ -1773,6 +1920,24 @@ impl DesktopApp {
                             let request = designators::renumber(session.document(), Scope::All);
                             self.commit(request);
                         }
+                    }
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Find and replace…")))
+                        .on_hover_text("Ctrl+H")
+                        .clicked()
+                    {
+                        ui.close();
+                        self.find_replace.open();
+                    }
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Edit label")))
+                        .on_hover_text(tr(
+                            "F2: the designator, text or wire number of the selection",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.edit_label();
                     }
                 });
                 ui.menu_button(tr("View"), |ui| {
@@ -2254,6 +2419,7 @@ impl DesktopApp {
         let editing = self.mode == Mode::Edit && !self.editor.selection().is_empty();
         let mut chosen: Option<Key> = None;
         let mut fit = false;
+        let mut label = false;
         let area = egui::Area::new(ui.scope_id().with(egui::IdSalt::new("context menu")))
             .order(egui::Order::Foreground)
             .fixed_pos(at)
@@ -2276,6 +2442,12 @@ impl DesktopApp {
                     {
                         chosen = Some(Key::Paste);
                     }
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Edit label")))
+                        .clicked()
+                    {
+                        label = true;
+                    }
                     ui.separator();
                     if ui.button(tr("Zoom to the whole drawing")).clicked() {
                         fit = true;
@@ -2284,8 +2456,11 @@ impl DesktopApp {
             });
         // The click that opened the menu is not one that closes it.
         let outside = events.context.is_none() && area.response.clicked_elsewhere();
-        if chosen.is_some() || fit || outside {
+        if chosen.is_some() || fit || label || outside {
             self.context_menu = None;
+        }
+        if label {
+            self.edit_label();
         }
         if fit {
             self.fit_pending = true;
@@ -2811,6 +2986,7 @@ impl DesktopApp {
             self.camera.fit(corners, events.size, canvas::FIT_MARGIN);
         }
         self.paint_over_canvas(ui, &events, selecting);
+        self.label_editor(ui, &scene, &events);
         self.navigation(ui, events.origin, events.size);
         self.command_line_overlay(ui, events.origin, events.size);
         self.context_menu(ui, &events);

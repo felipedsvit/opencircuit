@@ -143,6 +143,7 @@ elements with their kind and ID.
 | `unwaive` | `code`, `subject` | takes a waiver away |
 | `renumber` | `sheet` | gives the designators the next numbers in reading order, on every sheet or on the sheet with this number |
 | `renumber_sheets` | | numbers the sheets 1, 2, 3… in reading order of their frames (top to bottom, then left to right); the cross-references follow |
+| `replace` | `find`, `with`, `designators`, `notes`, `parameters` | replaces `find` (exactly, with its case) by `with` in the designators, the text notes and the text parameters; each kind is on unless set to `false`. Refused as a whole when a designator would be invalid or taken twice, or a value would not fit |
 | `add_text` | `at`, `text`, `anchor`, `as` | a text note (ADR-0015): one line of 1 to 120 characters; `anchor` is `left` (default) or `center` |
 | `set_text` | `text` (name or ID), `to` | changes the words of a note |
 | `add_layer` | `name`, `visible`, `locked`, `as` | a layer (ADR-0015), visible and unlocked unless said otherwise; a name of 1 to 32 characters, with no space at either end, not used by another layer |

@@ -26,6 +26,7 @@ mod command_palette;
 mod dialogs;
 mod documentation;
 pub mod files;
+mod find_replace;
 mod i18n;
 mod icons;
 mod inspector;

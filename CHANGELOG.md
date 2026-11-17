@@ -48,6 +48,17 @@ here when it lands.
   an element of the project (devices by designator, model, catalog data or
   parameter; wires by number; sheets; text notes) and selects it. Arrows move,
   Enter chooses, Esc closes.
+- **Find and replace** (Modify > Find and replace, Ctrl+H, in edit mode;
+  `{ "op": "replace" }` in edit files): replaces a text in the designators,
+  text notes and text parameters in one undoable step, shows how many changes
+  it makes, and refuses a result with an invalid or repeated designator.
+- **Catalog data of several devices**: with two or more devices selected, of
+  any models, the inspector has a closed section "Catalog data of N devices"
+  whose fields set the manufacturer, part number, description or location of
+  all of them.
+- **A label typed over the drawing** (F2, Modify > Edit label, or the context
+  menu): the designator of the selected symbol's device, the words of a text
+  note or the number of a wire. Enter commits, Esc drops it.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

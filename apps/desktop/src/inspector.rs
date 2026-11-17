@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use circuit_commands::arrange::{self, Align, Axis};
+use circuit_commands::documentation::InfoField;
 use circuit_commands::sheets::{self, SheetSpec};
 use circuit_commands::{CommandError, SupplyPreset, Transaction, ops};
 use circuit_model::{
@@ -412,6 +413,47 @@ fn selection_section(
                 request = Some(change);
             }
         }
+    }
+
+    // The catalog data of every device of the selection, of any model: a
+    // field shows its text when all have the same, and a text typed in it
+    // goes to all of them.
+    let devices: BTreeSet<DeviceId> = devices
+        .into_iter()
+        .chain(selection.iter().filter_map(|subject| match subject {
+            Subject::Device(id) => Some(*id),
+            _ => None,
+        }))
+        .collect();
+    if devices.len() >= 2 {
+        egui::CollapsingHeader::new(trf("Catalog data of {0} devices", &[&devices.len()]))
+            .default_open(false)
+            .show(ui, |ui| {
+                for (field, label) in [
+                    (InfoField::Manufacturer, tr("Manufacturer")),
+                    (InfoField::PartNo, tr("Part no")),
+                    (InfoField::Description, tr("Description")),
+                    (InfoField::Location, tr("Location")),
+                ] {
+                    let values: BTreeSet<Option<&str>> = doc
+                        .devices
+                        .iter()
+                        .filter(|device| devices.contains(&device.id))
+                        .map(|device| device.info.as_ref().and_then(|info| field.of(info)))
+                        .collect();
+                    let common = match values.len() {
+                        1 => values.into_iter().next().flatten().unwrap_or(""),
+                        _ => "",
+                    };
+                    if let Some(text) =
+                        state.text_field(ui, format!("common info:{field:?}"), label, common)
+                    {
+                        request = Some(circuit_commands::documentation::set_common_info(
+                            doc, &devices, field, &text,
+                        ));
+                    }
+                }
+            });
     }
     request
 }

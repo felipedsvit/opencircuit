@@ -4,8 +4,11 @@
 //! the search is here so that every front end finds the same things.
 
 use circuit_model::{
-    ComponentCatalog, ParamValue, Schematic, StaticNets, Subject, WireNumbers, natural_key,
+    ComponentCatalog, ParamValue, ReferenceDesignator, Schematic, StaticNets, Subject, WireNumbers,
+    natural_key,
 };
+
+use crate::{CommandError, Edit, Transaction, layers, ops};
 
 /// One element found.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,6 +145,121 @@ pub fn find(doc: &Schematic, catalog: &ComponentCatalog, query: &str, limit: usi
     found
 }
 
+/// What a replacement changes.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Fields {
+    /// The designators of the devices.
+    pub designators: bool,
+    /// The text notes.
+    pub notes: bool,
+    /// The text parameters of the devices.
+    pub parameters: bool,
+}
+
+impl Fields {
+    /// Designators, notes and parameters.
+    pub const ALL: Self = Self {
+        designators: true,
+        notes: true,
+        parameters: true,
+    };
+}
+
+/// Replace every occurrence of `find` (matched exactly, with its case) by
+/// `with` in the chosen fields, in one transaction: undone in one step. The
+/// result is refused as a whole when one new designator is not valid or
+/// would be taken twice, when a new note or parameter value is not valid,
+/// or when an element to change is on a locked layer. An empty `find`
+/// changes nothing.
+///
+/// # Errors
+///
+/// Returns [`CommandError::InvalidReference`],
+/// [`CommandError::DuplicateReference`], [`CommandError::InvalidParameter`]
+/// or [`CommandError::Locked`] as above.
+pub fn replace(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    fields: Fields,
+    find: &str,
+    with: &str,
+) -> Result<Transaction, CommandError> {
+    let mut tx = Transaction::new(
+        format!("Replace \u{201c}{find}\u{201d} with \u{201c}{with}\u{201d}"),
+        doc.next_id,
+    );
+    if find.is_empty() {
+        return Ok(tx);
+    }
+    let mut devices: Vec<_> = doc.devices.iter().collect();
+    devices.sort_by_key(|device| device.id);
+
+    if fields.designators {
+        let renamed: Vec<_> = devices
+            .iter()
+            .filter(|device| device.reference.0.contains(find))
+            .map(|device| {
+                (
+                    device.id,
+                    ReferenceDesignator(device.reference.0.replace(find, with)),
+                )
+            })
+            .collect();
+        for (id, reference) in &renamed {
+            if !reference.is_valid() {
+                return Err(CommandError::InvalidReference(reference.0.clone()));
+            }
+            layers::ensure_unlocked(doc, [&Subject::Device(*id)])?;
+        }
+        // The designators after the replacement, all of them, must differ.
+        let mut after: Vec<&str> = devices
+            .iter()
+            .map(|device| {
+                renamed
+                    .iter()
+                    .find(|(id, _)| *id == device.id)
+                    .map_or(device.reference.0.as_str(), |(_, new)| new.0.as_str())
+            })
+            .collect();
+        after.sort_unstable();
+        if let Some(pair) = after.windows(2).find(|pair| pair.first() == pair.get(1)) {
+            let taken = pair.first().copied().unwrap_or_default();
+            return Err(CommandError::DuplicateReference(taken.to_owned()));
+        }
+        tx.edits.extend(
+            renamed
+                .into_iter()
+                .map(|(device, reference)| Edit::SetReference { device, reference }),
+        );
+    }
+
+    if fields.parameters {
+        for device in &devices {
+            for (key, value) in &device.params {
+                let ParamValue::Text(text) = value else {
+                    continue;
+                };
+                if !text.contains(find) {
+                    continue;
+                }
+                let new = ParamValue::Text(text.replace(find, with));
+                let one = ops::set_param(doc, catalog, device.id, key, Some(new))?;
+                tx.edits.extend(one.edits);
+            }
+        }
+    }
+
+    if fields.notes {
+        let mut notes: Vec<_> = doc.texts.iter().collect();
+        notes.sort_by_key(|note| note.id);
+        for note in notes.into_iter().filter(|note| note.text.contains(find)) {
+            let one = ops::set_text(doc, note.id, &note.text.replace(find, with))?;
+            tx.edits.extend(one.edits);
+        }
+    }
+    Ok(tx)
+}
+
 #[cfg(test)]
 mod tests {
     use circuit_model::builder::pin;
@@ -200,6 +318,86 @@ mod tests {
 
         assert_eq!(labels(&found), [("wire", "W17")]);
         assert_eq!(found[0].subject, Subject::Wire(doc.wires[0].id));
+    }
+
+    fn apply(doc: &Schematic, tx: &Transaction) -> Schematic {
+        tx.apply_to(doc).unwrap().0
+    }
+
+    fn references(doc: &Schematic) -> Vec<&str> {
+        let mut names: Vec<&str> = doc.devices.iter().map(|d| d.reference.0.as_str()).collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[test]
+    fn designators_are_replaced_in_one_step() {
+        let doc = project();
+        let tx = replace(
+            &doc,
+            &ComponentCatalog::builtin(),
+            Fields {
+                designators: true,
+                ..Fields::default()
+            },
+            "K",
+            "KA",
+        )
+        .unwrap();
+
+        assert_eq!(tx.edits.len(), 2);
+        assert_eq!(references(&apply(&doc, &tx)), ["KA10", "KA2", "S1"]);
+    }
+
+    #[test]
+    fn a_swap_is_allowed_and_a_collision_is_refused() {
+        let doc = project();
+        let catalog = ComponentCatalog::builtin();
+        let designators = Fields {
+            designators: true,
+            ..Fields::default()
+        };
+
+        // K10 becomes K20, K2 stays: no clash.
+        assert!(replace(&doc, &catalog, designators, "10", "20").is_ok());
+        // K10 would become K2, which K2 is.
+        assert_eq!(
+            replace(&doc, &catalog, designators, "10", "2"),
+            Err(CommandError::DuplicateReference("K2".to_owned()))
+        );
+        assert!(matches!(
+            replace(&doc, &catalog, designators, "K", " "),
+            Err(CommandError::InvalidReference(_))
+        ));
+    }
+
+    #[test]
+    fn notes_change_and_fields_not_chosen_stay() {
+        let mut doc = project();
+        let tx = crate::ops::add_text(
+            &doc,
+            GridPoint::new(0, 20),
+            "Pump K2 start",
+            circuit_model::TextAnchor::default(),
+        )
+        .unwrap();
+        doc = apply(&doc, &tx);
+        let notes = Fields {
+            notes: true,
+            ..Fields::default()
+        };
+
+        let tx = replace(&doc, &ComponentCatalog::builtin(), notes, "K2", "KM2").unwrap();
+        let after = apply(&doc, &tx);
+
+        assert_eq!(after.texts[0].text, "Pump KM2 start");
+        assert_eq!(references(&after), references(&doc));
+        assert!(
+            replace(&doc, &ComponentCatalog::builtin(), Fields::ALL, "", "x")
+                .unwrap()
+                .edits
+                .is_empty()
+        );
     }
 
     #[test]

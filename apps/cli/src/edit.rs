@@ -200,6 +200,15 @@ enum Operation {
     Renumber { sheet: Option<u32> },
     /// Number the sheets 1, 2, 3 in reading order of their frames.
     RenumberSheets {},
+    /// Replace a text in the designators, the text notes and the text
+    /// parameters; each kind can be left out.
+    Replace {
+        find: String,
+        with: String,
+        designators: Option<bool>,
+        notes: Option<bool>,
+        parameters: Option<bool>,
+    },
     /// Add a text note (ADR-0015): one line of at most 120 characters.
     AddText {
         at: [i32; 2],
@@ -255,6 +264,7 @@ impl Operation {
             Self::Unwaive { .. } => "unwaive",
             Self::Renumber { .. } => "renumber",
             Self::RenumberSheets {} => "renumber_sheets",
+            Self::Replace { .. } => "replace",
             Self::AddText { .. } => "add_text",
             Self::SetText { .. } => "set_text",
             Self::AddLayer { .. } => "add_layer",
@@ -840,6 +850,23 @@ impl Run<'_> {
                 self.commit(&tx)
             }
             Operation::RenumberSheets {} => self.commit(&sheets::renumber_sheets(&self.doc)),
+            Operation::Replace {
+                find,
+                with,
+                designators,
+                notes,
+                parameters,
+            } => {
+                let fields = circuit_commands::find::Fields {
+                    designators: designators.unwrap_or(true),
+                    notes: notes.unwrap_or(true),
+                    parameters: parameters.unwrap_or(true),
+                };
+                let tx =
+                    circuit_commands::find::replace(&self.doc, self.catalog, fields, find, with)
+                        .map_err(refused)?;
+                self.commit(&tx)
+            }
         }
     }
 
@@ -1401,6 +1428,33 @@ mod tests {
         let (_, message) = refused(run(doc.clone(), &wire("p1", "")));
         assert!(message.contains("several"), "{message}");
         assert!(run(doc, &wire("p1", r#", "slot": 2"#)).is_ok());
+    }
+
+    #[test]
+    fn replace_changes_the_chosen_kinds_and_refuses_a_repeated_designator() {
+        let doc = run(
+            fresh(),
+            r#"[
+              { "op": "place", "model": "lamp.generic", "symbol": "lamp", "at": [0, 0] },
+              { "op": "place", "model": "lamp.generic", "symbol": "lamp", "at": [10, 0] },
+              { "op": "add_text", "at": [0, 10], "text": "H1 shows run" },
+              { "op": "replace", "find": "H", "with": "P", "notes": false }
+            ]"#,
+        )
+        .unwrap()
+        .doc;
+
+        let mut names: Vec<&str> = doc.devices.iter().map(|d| d.reference.0.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["P1", "P2"]);
+        assert_eq!(doc.texts[0].text, "H1 shows run");
+
+        let (operation, message) = refused(run(
+            doc,
+            r#"[ { "op": "replace", "find": "2", "with": "1" } ]"#,
+        ));
+        assert_eq!(operation, 1);
+        assert!(message.contains("P1"), "{message}");
     }
 
     #[test]

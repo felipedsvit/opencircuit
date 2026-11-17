@@ -271,9 +271,10 @@ mod tests {
     }
 
     /// Every source file that writes texts of the window.
-    const SOURCES: [&str; 6] = [
+    const SOURCES: [&str; 7] = [
         include_str!("../app.rs"),
         include_str!("../command_palette.rs"),
+        include_str!("../find_replace.rs"),
         include_str!("../palette.rs"),
         include_str!("../inspector.rs"),
         include_str!("../documentation.rs"),
@@ -342,7 +343,7 @@ mod tests {
     }
 
     /// Technical texts that read the same in both languages.
-    const THE_SAME: [&str; 19] = [
+    const THE_SAME: [&str; 21] = [
         "{0} ({1})",
         "{0} terminal",
         "{0} wire",
@@ -351,11 +352,13 @@ mod tests {
         "Ctrl+A",
         "Ctrl+C / Ctrl+V",
         "Ctrl+D",
+        "Ctrl+H",
         "Ctrl+K",
         "Ctrl+Z / Ctrl+Y",
         "Del",
         "Esc",
         "F",
+        "F2",
         "PDF…",
         "R",
         "SVG…",

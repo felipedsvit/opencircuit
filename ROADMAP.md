@@ -396,8 +396,10 @@ Decisions, to be confirmed in #118:
   snapping to wire ends, middles and crossings, coordinates typed at the
   pointer, rulers.
 - [ ] Print preview; export of several projects in one command.
-- [ ] Find and replace (designators, notes, parameters); editing every common
-  field of a selection; editing a label on the canvas.
+- [x] Find and replace (designators, notes, parameters; `replace` in edit
+  files); editing every common field of a selection (catalog data of devices
+  of any model, besides the parameters of one model); editing a label on the
+  canvas (F2) (`apps/desktop/tests/find_replace.rs`).
 - [ ] Wire tools: trim, extend and a parallel copy.
 - [ ] Macros: record the edits of a session as an edit file and play it back.
 - [ ] Customizable shortcuts, themes, a collapsible sidebar, toolbars, dockable
