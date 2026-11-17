@@ -13,6 +13,9 @@
 set -euo pipefail
 
 version="${1:?usage: package.sh VERSION}"
+# The version of the bundle is numbers and dots; a pre-release part (0.0.2-dev)
+# stays in the names of the files only.
+bundle_version="${version%%-*}"
 arm="target/aarch64-apple-darwin/release"
 intel="target/x86_64-apple-darwin/release"
 out="dist"
@@ -29,7 +32,7 @@ done
 app="$work/stage/OpenCircuit.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$work/bin/opencircuit-desktop" "$work/bin/opencircuit" "$app/Contents/MacOS/"
-sed "s/@VERSION@/$version/g" packaging/macos/Info.plist.in > "$app/Contents/Info.plist"
+sed "s/@VERSION@/$bundle_version/g" packaging/macos/Info.plist.in > "$app/Contents/Info.plist"
 
 iconset="$work/OpenCircuit.iconset"
 mkdir -p "$iconset"

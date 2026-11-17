@@ -1,7 +1,8 @@
 name: Release
 
 # A tag `vX.Y.Z` builds the packages on Linux, macOS and Windows and creates
-# a draft release with them. A pull request that changes the packaging builds
+# a draft release with them (a pre-release when the version has a `-`, as in
+# 0.0.2-dev). A pull request that changes the packaging builds
 # the same packages without publishing anything, so the workflow is tested
 # before a tag is pushed. See docs/releasing.md.
 on:
@@ -12,6 +13,7 @@ on:
       - ".github/workflows/release.yml"
       - "packaging/**"
       - "assets/icons/**"
+      - "CHANGELOG.md"
   workflow_dispatch:
 
 permissions:
@@ -47,6 +49,23 @@ jobs:
             echo "::error::the tag $GITHUB_REF_NAME is not v$version, the version of Cargo.toml"
             exit 1
           fi
+
+  notes:
+    name: Release notes
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      # Fails when CHANGELOG.md has no list of changes for this version, so a
+      # release is never tagged without one.
+      - run: packaging/release-notes.sh "$VERSION" | tee notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: notes.md
+          if-no-files-found: error
 
   linux:
     name: Linux (.deb, .rpm, AppImage)
@@ -153,7 +172,7 @@ jobs:
           if-no-files-found: error
 
   windows:
-    name: Windows (.zip)
+    name: Windows (.msi, .zip)
     needs: version
     runs-on: windows-latest
     env:
@@ -178,14 +197,49 @@ jobs:
           Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
           Remove-Item -Recurse -Force "dist/$name"
           Get-ChildItem dist
-      - name: Check the package
+      - name: Installer (.msi)
         shell: pwsh
         run: |
+          # WiX v5, a pinned release; an installer version is a.b.c, so the
+          # pre-release part of 0.0.2-dev is left out of it.
+          dotnet tool install --tool-path "$env:RUNNER_TEMP/wix" wix --version 5.0.2
+          $numeric = ($env:VERSION -split '-')[0]
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          (Get-Content packaging/README.txt -Raw).Replace('@VERSION@', $env:VERSION) | Set-Content build/README.txt
+          & "$env:RUNNER_TEMP/wix/wix.exe" build packaging/windows/opencircuit.wxs -arch x64 `
+            -d "Version=$numeric" -d "Root=$((Get-Location).Path)" `
+            -o "dist/OpenCircuit-$env:VERSION-windows-x86_64.msi"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem dist
+      - name: Check the packages
+        shell: pwsh
+        run: |
+          # The .zip is unpacked and its command line runs on an example.
           Expand-Archive -Path "dist/opencircuit-$env:VERSION-windows-x86_64.zip" -DestinationPath check
           $dir = "check/opencircuit-$env:VERSION-windows-x86_64"
           & "$dir/opencircuit.exe" validate "$dir/examples/direct-starter/starter.ocircuit"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path "$dir/opencircuit-desktop.exe")) { throw "no desktop program" }
+
+          # The .msi is installed, what it promises is there, and it is removed.
+          $msi = (Resolve-Path "dist/OpenCircuit-$env:VERSION-windows-x86_64.msi").Path
+          $install = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/i", "`"$msi`"", "/qn", "/norestart", "/l*v", "install.log"
+          if ($install.ExitCode -ne 0) {
+            Get-Content install.log | Select-Object -Last 120
+            exit $install.ExitCode
+          }
+          $app = Join-Path $env:ProgramFiles "OpenCircuit"
+          foreach ($file in "opencircuit-desktop.exe", "opencircuit.exe", "LICENSE-MIT", "LICENSE-APACHE", "LICENSE-LiberationMono", "README.txt", "examples/direct-starter/starter.ocircuit", "examples/signal-arrows/signal-arrows.ocircuit") {
+            if (-not (Test-Path (Join-Path $app $file))) { throw "the installer left out $file" }
+          }
+          & "$app/opencircuit.exe" validate "$app/examples/direct-starter/starter.ocircuit"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not ([Environment]::GetEnvironmentVariable("Path", "Machine") -like "*OpenCircuit*")) { throw "opencircuit is not on the PATH" }
+          if (-not (Test-Path "Registry::HKEY_CLASSES_ROOT\OpenCircuit.Project")) { throw "no association for .ocircuit files" }
+          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath("CommonPrograms")) "OpenCircuit.lnk"))) { throw "no Start menu entry" }
+          $remove = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/x", "`"$msi`"", "/qn", "/norestart"
+          if ($remove.ExitCode -ne 0) { exit $remove.ExitCode }
+          if (Test-Path (Join-Path $app "opencircuit.exe")) { throw "the installer did not remove the programs" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -196,7 +250,7 @@ jobs:
     name: Draft release
     # Only for a tag; a pull request stops after the packages.
     if: github.ref_type == 'tag'
-    needs: [version, linux, macos, windows]
+    needs: [version, notes, linux, macos, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -211,15 +265,18 @@ jobs:
           merge-multiple: true
       - name: Checksums and notes
         run: |
+          # The notes were made by the notes job; they are not a package.
+          mv dist/notes.md notes.md
           cd dist
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
-          cd ..
-          sed "s/@VERSION@/$VERSION/g" packaging/release-notes.md > notes.md
       - name: Draft release
         run: |
+          # A version with a `-` (0.0.2-dev) is a pre-release.
+          flags=""
+          case "$VERSION" in *-*) flags="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" \
-            --draft --verify-tag \
+            --draft --verify-tag $flags \
             --title "OpenCircuit $VERSION" \
             --notes-file notes.md \
             dist/*
