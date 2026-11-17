@@ -84,6 +84,18 @@ exit code 1, with its position and the reason: `operation 7 (connect): ...`.
 The compiler is not asked to accept the result: `errors` and `warnings` in
 the output say what it finds, and `validate` is the check to run after.
 
+The window writes edit files too: Modify > Record macro records the edits
+that follow, and Stop recording saves them as an edit file that Modify >
+Play macro, `opencircuit edit --apply` and the MCP server play back. Each
+change is written as operations and kept only when running them on the
+project as it was gives exactly the change; one that cannot be (a wire route
+dragged by hand, a layer, a supply) is left out, and the status bar counts
+it. Elements the macro creates are named `s12`, `j13`, `w14`, `t15` after
+their IDs at recording time; the others are named by their IDs and devices
+by their designators, so a macro that refers to elements it did not create
+plays back on the project it was recorded on. The reader of edit files is
+`circuit_commands::script`.
+
 ```json
 {
   "schema_version": 1,

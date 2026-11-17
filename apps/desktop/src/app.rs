@@ -468,6 +468,66 @@ impl DesktopApp {
         }
     }
 
+    /// Start recording a macro of the edits of the project.
+    pub fn start_macro(&mut self) {
+        if let Some(session) = &mut self.session {
+            session.start_recording();
+        }
+    }
+
+    /// How many steps the macro being recorded has, and how many changes it
+    /// left out; `None` when none is being recorded.
+    #[must_use]
+    pub fn macro_steps(&self) -> Option<(usize, usize)> {
+        self.session
+            .as_ref()
+            .and_then(Session::recording)
+            .map(|recorder| (recorder.steps(), recorder.left_out()))
+    }
+
+    /// Stop recording and return the macro as an edit file.
+    pub fn finish_macro(&mut self) -> Option<String> {
+        self.session
+            .as_mut()
+            .and_then(Session::stop_recording)
+            .map(|recorder| recorder.to_edit_file())
+    }
+
+    /// Stop recording and save the macro where the person chooses; a
+    /// browser downloads it.
+    fn save_macro_dialog(&mut self) {
+        let Some(text) = self.finish_macro() else {
+            return;
+        };
+        #[cfg(target_arch = "wasm32")]
+        if let Err(error) = crate::web::download("macro.json", text.as_bytes(), "application/json")
+        {
+            self.error = Some(error);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = dialogs::choose_macro_path()
+            && let Err(error) = crate::files::write_atomic(&path, text)
+        {
+            self.error = Some(error.to_string());
+        }
+    }
+
+    /// Play a macro (an edit file) on the project, as one step one undo
+    /// takes back.
+    pub fn play_macro_text(&mut self, text: &str) {
+        let Some(session) = &mut self.session else {
+            return;
+        };
+        match session.play_macro(text) {
+            Ok(_) => self.error = None,
+            Err(error) => self.error = Some(trf("The macro was not played: {0}", &[&error])),
+        }
+        self.inspector.clear();
+        if let Some(session) = &self.session {
+            self.editor.retain_existing(session.document());
+        }
+    }
+
     /// Open the print preview of the project.
     pub fn open_print_preview(&mut self) {
         if let Some(session) = &self.session {
@@ -2094,6 +2154,40 @@ impl DesktopApp {
                             self.commit(request);
                         }
                     }
+                    let recording = self.macro_steps().is_some();
+                    if !recording
+                        && ui
+                            .add_enabled(has_session, egui::Button::new(tr("Record macro")))
+                            .on_hover_text(tr("Record the next edits as an edit file to play back"))
+                            .clicked()
+                    {
+                        ui.close();
+                        self.start_macro();
+                    }
+                    if recording
+                        && ui
+                            .button(tr("Stop recording and save the macro…"))
+                            .clicked()
+                    {
+                        ui.close();
+                        self.save_macro_dialog();
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Play macro…")))
+                        .clicked()
+                    {
+                        ui.close();
+                        if let Some(path) = dialogs::pick_macro() {
+                            match crate::files::read_text(
+                                &path,
+                                circuit_commands::script::MAX_EDIT_BYTES,
+                            ) {
+                                Ok(text) => self.play_macro_text(&text),
+                                Err(error) => self.error = Some(error.to_string()),
+                            }
+                        }
+                    }
                     if ui
                         .add_enabled(editing, egui::Button::new(tr("Find and replace…")))
                         .on_hover_text("Ctrl+H")
@@ -2439,6 +2533,21 @@ impl DesktopApp {
             if !self.traced.1.is_empty() {
                 ui.separator();
                 ui.label(RichText::new(self.traced.1.as_str()).color(tokens.text_dim));
+            }
+            if let Some((steps, left_out)) = self.macro_steps() {
+                ui.separator();
+                let text = if left_out == 0 {
+                    trf("Recording macro: {0} steps", &[&steps])
+                } else {
+                    trf(
+                        "Recording macro: {0} steps, {1} left out",
+                        &[&steps, &left_out],
+                    )
+                };
+                ui.colored_label(ui.visuals().warn_fg_color, text)
+                    .on_hover_text(tr(
+                        "A change left out (a hand-drawn wire route, a layer, a supply) cannot be written as an operation of an edit file",
+                    ));
             }
             #[cfg(not(target_arch = "wasm32"))]
             if self.open_elsewhere() {

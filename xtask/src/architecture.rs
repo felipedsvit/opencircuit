@@ -50,7 +50,10 @@ const PACKAGE_RULES: &[PackageRule] = &[
     PackageRule {
         name: "circuit-commands",
         workspace: &["circuit-model"],
-        external: &["thiserror"],
+        // `serde` and `serde_json` read the edit files of `script` (M9.2),
+        // shared by the command line, the MCP server and the window, as
+        // `circuit-project` reads project files.
+        external: &["serde", "serde_json", "thiserror"],
         dev: &["proptest"],
         core: true,
     },

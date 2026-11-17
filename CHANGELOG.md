@@ -76,6 +76,13 @@ here when it lands.
   last segment to the next terminal, junction or wire and connects it
   (`extend x,y`); *parallel copy* copies the selected wires alongside,
   connected to nothing (`offset dx,dy`). Each is one undoable step.
+- **Macros** (Modify > Record macro, Stop recording and save the macro, Play
+  macro): the edits of the window are recorded as an edit file that the
+  window, `opencircuit edit --apply` and the MCP server play back; played in
+  the window it is one undoable step. A change that cannot be written as
+  operations is left out and counted in the status bar. The reader of edit
+  files moved from the command line to `circuit_commands::script`, so that
+  the window shares it.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

@@ -1,6 +1,7 @@
-//! The file `opencircuit edit --apply` reads: a list of operations on a
-//! project, in JSON, applied through the same `circuit-commands` operations
-//! the editor uses (EXTENDING.md, "Editing from a script").
+//! Edit files: a list of operations on a project, in JSON, applied through
+//! the same operations the editor uses (EXTENDING.md, "Editing from a
+//! script"). `opencircuit edit --apply`, the MCP server and the macros of
+//! the window read them here.
 //!
 //! The file holds data only: nothing in it is executed. It is read strictly
 //! (unknown fields and operations are refused) with limits on its size and on
@@ -14,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use circuit_commands::sheets::{self, SheetSpec};
-use circuit_commands::{Anchor, CommandError, Edit, SupplyPreset, Transaction, ops};
-use circuit_commands::{designators, documentation, layers, waivers};
+use crate::sheets::{self, SheetSpec};
+use crate::{Anchor, CommandError, Edit, SupplyPreset, Transaction, ops};
+use crate::{designators, documentation, layers, waivers};
 use circuit_model::{
     ComponentCatalog, DeviceId, Endpoint, GridPoint, JunctionId, LayerId, ModelRef, Orientation,
     ParamValue, PinRef, QuarterTurn, Schematic, SheetSize, Subject, SupplyId, SymbolId, SymbolKey,
@@ -34,7 +35,7 @@ const MAX_LIST: usize = 10_000;
 /// Longest name an operation may give an element.
 const MAX_NAME: usize = 64;
 /// The version of the file layout this build reads.
-const SCHEMA_VERSION: u32 = 1;
+pub(crate) const SCHEMA_VERSION: u32 = 1;
 
 /// A field that may be left alone, cleared or set.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -329,6 +330,9 @@ pub struct Applied {
     pub operations: usize,
     /// The named elements, with their IDs.
     pub created: BTreeMap<String, Created>,
+    /// Every edit of the file in one transaction: applied to the project the
+    /// file was applied to, it gives `doc`, and one undo takes it back.
+    pub transaction: Transaction,
 }
 
 /// Why a file could not be applied.
@@ -443,10 +447,12 @@ fn check_lists(operation: &Operation) -> Result<(), String> {
 /// file and [`EditError::Refused`] for the operation that was refused.
 pub fn apply(doc: Schematic, catalog: &ComponentCatalog, text: &str) -> Result<Applied, EditError> {
     let operations = parse(text)?;
+    let start = doc.next_id;
     let mut run = Run {
         doc,
         catalog,
         names: BTreeMap::new(),
+        transaction: Transaction::new("Apply edit file", start),
     };
     let count = operations.len();
     for (index, operation) in operations.iter().enumerate() {
@@ -456,17 +462,45 @@ pub fn apply(doc: Schematic, catalog: &ComponentCatalog, text: &str) -> Result<A
             message,
         })?;
     }
+    let mut transaction = run.transaction;
+    transaction.next_id = run.doc.next_id;
     Ok(Applied {
         doc: run.doc,
         operations: count,
         created: run.names,
+        transaction,
     })
+}
+
+/// Run `operations` on `doc` with the names already given in `names`, for
+/// the recorder of macros: the project after them and every name, or why an
+/// operation failed.
+pub(crate) fn run_values(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    names: &BTreeMap<String, Created>,
+    operations: &[Value],
+) -> Result<(Schematic, BTreeMap<String, Created>), String> {
+    let mut run = Run {
+        doc: doc.clone(),
+        catalog,
+        names: names.clone(),
+        transaction: Transaction::new("Record", doc.next_id),
+    };
+    for value in operations {
+        let operation: Operation =
+            serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        check_lists(&operation)?;
+        run.step(&operation)?;
+    }
+    Ok((run.doc, run.names))
 }
 
 struct Run<'a> {
     doc: Schematic,
     catalog: &'a ComponentCatalog,
     names: BTreeMap<String, Created>,
+    transaction: Transaction,
 }
 
 fn point([x, y]: [i32; 2]) -> GridPoint {
@@ -857,14 +891,13 @@ impl Run<'_> {
                 notes,
                 parameters,
             } => {
-                let fields = circuit_commands::find::Fields {
+                let fields = crate::find::Fields {
                     designators: designators.unwrap_or(true),
                     notes: notes.unwrap_or(true),
                     parameters: parameters.unwrap_or(true),
                 };
-                let tx =
-                    circuit_commands::find::replace(&self.doc, self.catalog, fields, find, with)
-                        .map_err(refused)?;
+                let tx = crate::find::replace(&self.doc, self.catalog, fields, find, with)
+                    .map_err(refused)?;
                 self.commit(&tx)
             }
         }
@@ -900,6 +933,7 @@ impl Run<'_> {
     fn commit(&mut self, tx: &Transaction) -> Result<(), String> {
         let (next, _) = tx.apply_to(&self.doc).map_err(refused)?;
         self.doc = next;
+        self.transaction.edits.extend(tx.edits.iter().cloned());
         Ok(())
     }
 
@@ -1455,6 +1489,22 @@ mod tests {
         ));
         assert_eq!(operation, 1);
         assert!(message.contains("P1"), "{message}");
+    }
+
+    #[test]
+    fn the_one_transaction_of_a_file_gives_the_same_project_and_undoes_in_one_step() {
+        let start = fresh();
+        let applied = run(start.clone(), DOCUMENTED).unwrap();
+
+        let mut doc = start.clone();
+        let mut history = crate::History::new();
+        history
+            .execute(&mut doc, applied.transaction.clone())
+            .unwrap();
+        assert_eq!(doc, applied.doc);
+        history.undo(&mut doc).unwrap();
+        assert_eq!(doc.devices, start.devices);
+        assert_eq!(doc.wires, start.wires);
     }
 
     #[test]

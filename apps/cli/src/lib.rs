@@ -25,7 +25,8 @@
 
 mod args;
 mod commands;
-pub mod edit;
+/// The edit files of `edit --apply`, read by `circuit_commands::script`.
+pub use circuit_commands::script as edit;
 mod fsio;
 mod mcp;
 pub mod scenario;

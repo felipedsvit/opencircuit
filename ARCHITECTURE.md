@@ -23,7 +23,7 @@ second real consumer justifies the boundary.
 | Model | `circuit-model` | IDs, document, catalog, conductors, diagnostics, inputs and snapshot types |
 | Simulation | `circuit-sim` | Topology compilation, static copper nets, discrete solver, logic, timers, thermal latch, runtime, fault policy and change log |
 | Project | `circuit-project` | JSON `.ocircuit`, `schema_version`, strict loading, limits, migrations and canonical round-trip; strict reading of extension libraries (`LIBRARY.md`) |
-| Commands | `circuit-commands` | Invertible edits, atomic transactions checked for integrity and format limits, undo/redo history, and the editing operations |
+| Commands | `circuit-commands` | Invertible edits, atomic transactions checked for integrity and format limits, undo/redo history, the editing operations, and the edit files (`script`, read with `serde_json`) with the macro recorder (`record`) |
 | Editor | `circuit-editor` | Editor logic without a GUI: hit-test, selection, tools (select, place, wire), drag and placement previews; returns transactions, never changes the document |
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | Export | `circuit-export` | Deterministic SVG written directly and PDF written with `pdf-writer` (ADR-0006) from the neutral scene, with a print and a live theme; no I/O |

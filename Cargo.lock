@@ -258,6 +258,8 @@ version = "0.0.2-dev"
 dependencies = [
  "circuit-model",
  "proptest",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 
