@@ -313,14 +313,14 @@ translated command line. New work starts with an issue.
 
 ## M9 — Work safety, productivity and new document views (in progress; version 0.0.2)
 
-Version 0.0.2 closes M9. The scope comes from a triage of the features of
+Tracking issue #118. Version 0.0.2 closes M9. The scope comes from a triage of the features of
 electrical CAD tools against this repository: what already exists was left
 out, and what conflicts with the discrete model, the clean room or the scope
 below is listed at the end of this section. Clean room as for M5 to M8: other
 tools shaped the scope only; no code, strings, artwork or symbol files are
 copied.
 
-Decisions, to be confirmed in the tracking issue:
+Decisions, to be confirmed in #118:
 
 - **PLC:** modules with channels and an I/O mapping, documentation only. A
   PLC program still runs outside OpenCircuit, against the Modbus server; "real
