@@ -294,3 +294,49 @@ fn the_wire_numbering_rule_is_switched_on_and_a_wire_takes_its_number_or_its_own
     assert_eq!(document(&harness).wires[0].number.as_deref(), Some("L1"));
     assert!(harness.query_by_label("Number L1").is_some());
 }
+
+#[test]
+fn the_view_menu_traces_the_net_of_the_selection_and_the_status_bar_counts_it() {
+    let doc = two_buttons();
+    let mut harness = drawing(&doc);
+    // The wire between the buttons is at x = 0, from y = 2 to y = 8.
+    click_grid(&mut harness, 0, 5);
+    assert!(
+        harness
+            .query_by_label_contains("Net of the selection")
+            .is_none()
+    );
+
+    click(&mut harness, "View");
+    click(&mut harness, "Trace the net of the selection");
+
+    assert!(
+        harness
+            .query_by_label("Net of the selection: 2 terminals, 1 wire")
+            .is_some()
+    );
+
+    // Off again with the key, and nothing is traced.
+    harness.key_press(egui::Key::T);
+    harness.run();
+    assert!(
+        harness
+            .query_by_label_contains("Net of the selection")
+            .is_none()
+    );
+}
+
+#[test]
+fn tracing_does_nothing_without_a_selection() {
+    let doc = two_buttons();
+    let mut harness = drawing(&doc);
+
+    harness.key_press(egui::Key::T);
+    harness.run();
+
+    assert!(
+        harness
+            .query_by_label_contains("Net of the selection")
+            .is_none()
+    );
+}

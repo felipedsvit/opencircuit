@@ -39,6 +39,9 @@ const WIRE_NUMBER_MARGIN: i64 = 10;
 pub struct SceneOptions {
     /// Elements to highlight as selected.
     pub selected: BTreeSet<Subject>,
+    /// Elements of a net being traced, outlined in their own style under the
+    /// selection (ADR-0014). Empty: no net is traced.
+    pub traced: BTreeSet<Subject>,
 }
 
 /// The simulation state the scene shows, indexed by ID.
@@ -231,6 +234,17 @@ pub fn build_scene(
                 StyleKey::Fault,
             );
         }
+    }
+
+    for subject in &options.traced {
+        outline(
+            &mut scene,
+            &layout,
+            &wires,
+            &symbols,
+            subject,
+            StyleKey::Traced,
+        );
     }
 
     for subject in &options.selected {

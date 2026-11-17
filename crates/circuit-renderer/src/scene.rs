@@ -211,6 +211,9 @@ pub enum StyleKey {
     Fault,
     /// An element the user selected.
     Selected,
+    /// An element of the net that is being traced (ADR-0014): every terminal,
+    /// junction and wire joined to the selection.
+    Traced,
     /// A designator or another text.
     Label,
     /// The frame of a sheet: border, zone marks and title block.

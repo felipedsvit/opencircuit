@@ -16,6 +16,7 @@ impl Rgb {
     const ACTIVE: Self = Self(30, 160, 70);
     const REVERSE: Self = Self(50, 100, 220);
     const SELECTED: Self = Self(0, 150, 210);
+    const TRACED: Self = Self(230, 140, 0);
     const CONFLICT: Self = Self(200, 0, 200);
 }
 
@@ -85,6 +86,7 @@ impl Theme {
                 | StyleKey::Motor(_) => look(Rgb::BLACK, 20),
                 StyleKey::Tripped | StyleKey::Fault => look(Rgb::FAULT, 25),
                 StyleKey::Selected => look(Rgb::SELECTED, 20),
+                StyleKey::Traced => look(Rgb::TRACED, 20),
                 StyleKey::Frame => look(Rgb::BLACK, 8),
                 StyleKey::Unknown => look(Rgb::GREY, 12),
             },
@@ -104,6 +106,7 @@ impl Theme {
                 StyleKey::Motor(MotorState::Reverse) => look(Rgb::REVERSE, 25),
                 StyleKey::Fault => look(Rgb::FAULT, 30),
                 StyleKey::Selected => look(Rgb::SELECTED, 25),
+                StyleKey::Traced => look(Rgb::TRACED, 25),
                 StyleKey::Frame => look(Rgb::BLACK, 8),
                 StyleKey::Unknown => look(Rgb::CONFLICT, 12),
             },
@@ -152,6 +155,7 @@ mod tests {
             StyleKey::Motor(MotorState::Forward),
             StyleKey::Fault,
             StyleKey::Selected,
+            StyleKey::Traced,
             StyleKey::Label,
             StyleKey::Unknown,
         ];

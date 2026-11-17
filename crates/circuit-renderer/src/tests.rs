@@ -288,12 +288,59 @@ fn fault_subject_and_related_elements_are_outlined() {
 }
 
 #[test]
+fn a_traced_net_is_outlined_in_its_own_style_under_the_selection() {
+    let catalog = ComponentCatalog::builtin();
+    let doc = starter().doc;
+    let wire = doc.wires[0].id;
+    let options = SceneOptions {
+        selected: BTreeSet::from([Subject::Wire(wire)]),
+        traced: BTreeSet::from([Subject::Wire(wire), Subject::Wire(doc.wires[1].id)]),
+    };
+
+    let scene = build_scene(&doc, &catalog, None, &options);
+
+    // The selected wire has both outlines, the traced one only its own, and
+    // the selection is drawn last, over the trace.
+    assert_eq!(
+        styles_of(&scene, &Subject::Wire(wire)),
+        [
+            StyleKey::Wire {
+                conductors: ConductorSet::default()
+            },
+            StyleKey::Traced,
+            StyleKey::Selected
+        ]
+    );
+    assert_eq!(
+        styles_of(&scene, &Subject::Wire(doc.wires[1].id))
+            .iter()
+            .filter(|style| **style == StyleKey::Traced)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn nothing_is_traced_by_default() {
+    let catalog = ComponentCatalog::builtin();
+    let scene = build_scene(&starter().doc, &catalog, None, &SceneOptions::default());
+
+    assert!(
+        scene
+            .items
+            .iter()
+            .all(|item| item.style != StyleKey::Traced)
+    );
+}
+
+#[test]
 fn selected_device_outlines_every_symbol_of_it() {
     let catalog = ComponentCatalog::builtin();
     let starter = starter();
     let device = device_of(&starter.doc, starter.coil);
     let options = SceneOptions {
         selected: BTreeSet::from([Subject::Device(device)]),
+        ..SceneOptions::default()
     };
 
     let scene = build_scene(&starter.doc, &catalog, None, &options);
