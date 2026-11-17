@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="-160 -100 2080 630" width="2080" height="630" stroke-linecap="round" stroke-linejoin="round">
+<rect x="-160" y="-100" width="2080" height="630" fill="#ffffff"/>
+<rect x="-140" y="-80" width="840" height="590" fill="none" stroke="#000000" stroke-width="0.8"/>
+<rect x="-128" y="-68" width="816" height="566" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-87" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="-87" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<line x1="-35" y1="-80" x2="-35" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="-35" y1="498" x2="-35" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="17" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="17" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<line x1="70" y1="-80" x2="70" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="70" y1="498" x2="70" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="122" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="122" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<line x1="175" y1="-80" x2="175" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="175" y1="498" x2="175" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="227" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="227" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<line x1="280" y1="-80" x2="280" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="280" y1="498" x2="280" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="332" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="332" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<line x1="385" y1="-80" x2="385" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="385" y1="498" x2="385" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="437" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="437" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<line x1="490" y1="-80" x2="490" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="490" y1="498" x2="490" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="542" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<text x="542" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<line x1="595" y1="-80" x2="595" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="595" y1="498" x2="595" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="647" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="647" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="-134" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<text x="694" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<line x1="-140" y1="18" x2="-128" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="18" x2="700" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<text x="694" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<line x1="-140" y1="116" x2="-128" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="116" x2="700" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<text x="694" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<line x1="-140" y1="215" x2="-128" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="215" x2="700" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<text x="694" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<line x1="-140" y1="313" x2="-128" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="313" x2="700" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<text x="694" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<line x1="-140" y1="411" x2="-128" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="411" x2="700" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<text x="694" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<rect x="388" y="434" width="300" height="64" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="388" y1="450" x2="688" y2="450" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="388" y1="466" x2="688" y2="466" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="388" y1="482" x2="688" y2="482" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="538" y1="450" x2="538" y2="498" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="392" y="442" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Circuito de comando</text>
+<text x="392" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Partida direta</text>
+<text x="542" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Exemplo</text>
+<text x="392" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Author OpenCircuit</text>
+<text x="542" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Date 2026-11-15</text>
+<text x="392" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Rev A</text>
+<text x="542" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Sheet 1/2</text>
+<rect x="1060" y="-80" width="840" height="590" fill="none" stroke="#000000" stroke-width="0.8"/>
+<rect x="1072" y="-68" width="816" height="566" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1112" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1112" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<line x1="1165" y1="-80" x2="1165" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1165" y1="498" x2="1165" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1217" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1217" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<line x1="1270" y1="-80" x2="1270" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1270" y1="498" x2="1270" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1322" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1322" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<line x1="1375" y1="-80" x2="1375" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1375" y1="498" x2="1375" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1427" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1427" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<line x1="1480" y1="-80" x2="1480" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1480" y1="498" x2="1480" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1532" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1532" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<line x1="1585" y1="-80" x2="1585" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1585" y1="498" x2="1585" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1637" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="1637" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<line x1="1690" y1="-80" x2="1690" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1690" y1="498" x2="1690" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1742" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<text x="1742" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<line x1="1795" y1="-80" x2="1795" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1795" y1="498" x2="1795" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1847" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="1847" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="1066" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<text x="1894" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<line x1="1060" y1="18" x2="1072" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="18" x2="1900" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<text x="1894" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<line x1="1060" y1="116" x2="1072" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="116" x2="1900" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<text x="1894" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<line x1="1060" y1="215" x2="1072" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="215" x2="1900" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<text x="1894" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<line x1="1060" y1="313" x2="1072" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="313" x2="1900" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<text x="1894" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<line x1="1060" y1="411" x2="1072" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="411" x2="1900" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<text x="1894" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<rect x="1588" y="434" width="300" height="64" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1588" y1="450" x2="1888" y2="450" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1588" y1="466" x2="1888" y2="466" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1588" y1="482" x2="1888" y2="482" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1738" y1="450" x2="1738" y2="498" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1592" y="442" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Circuito de força</text>
+<text x="1592" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Partida direta</text>
+<text x="1742" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Exemplo</text>
+<text x="1592" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Author OpenCircuit</text>
+<text x="1742" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Date 2026-11-15</text>
+<text x="1592" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Rev A</text>
+<text x="1742" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Sheet 2/2</text>
+<polyline points="0,0 0,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,60 0,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,120 0,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,140 -40,140 -40,150" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,140 40,140 40,150" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="-40,190 -40,200 0,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="40,190 40,200 0,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,200 0,220" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,260 0,360" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,0 1200,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,60 1200,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,120 1200,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,180 1200,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,0 1240,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,60 1240,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,120 1240,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,180 1240,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,0 1280,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,60 1280,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,120 1280,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,180 1280,200" fill="none" stroke="#000000" stroke-width="1"/>
+<circle cx="0" cy="140" r="3" fill="#000000"/>
+<circle cx="0" cy="200" r="3" fill="#000000"/>
+<line x1="-8" y1="-12" x2="8" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="-12" x2="0" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-8" y1="348" x2="8" y2="348" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="348" x2="0" y2="360" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1192" y1="-12" x2="1208" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="-12" x2="1200" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1232" y1="-12" x2="1248" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="-12" x2="1240" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1272" y1="-12" x2="1288" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="-12" x2="1280" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="20" x2="1200" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="48" x2="1200" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="48" x2="1192" y2="34" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="20" x2="1240" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="48" x2="1240" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="48" x2="1232" y2="34" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="20" x2="1280" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="48" x2="1280" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="48" x2="1272" y2="34" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1196" y1="41" x2="1280" y2="41" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1196" y1="40" x2="1186" y2="40" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1189,35 1186,35 1186,45 1189,45" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="140" x2="1200" y2="152" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="168" x2="1200" y2="180" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="1195" y="152" width="10" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1200,152 1200,157 1203,157 1203,163 1200,163 1200,168" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="140" x2="1240" y2="152" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="168" x2="1240" y2="180" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="1235" y="152" width="10" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1240,152 1240,157 1243,157 1243,163 1240,163 1240,168" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="140" x2="1280" y2="152" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="168" x2="1280" y2="180" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="1275" y="152" width="10" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1280,152 1280,157 1283,157 1283,163 1280,163 1280,168" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="20" x2="0" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="48" x2="0" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="32" x2="6" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="48" x2="6" y2="32" fill="none" stroke="#000000" stroke-width="2"/>
+<line x1="0" y1="80" x2="0" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="108" x2="0" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="92" x2="6" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="108" x2="6" y2="92" fill="none" stroke="#000000" stroke-width="2"/>
+<line x1="-4" y1="100" x2="-14" y2="100" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-14" y1="95" x2="-14" y2="105" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-40" y1="150" x2="-40" y2="162" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-40" y1="178" x2="-40" y2="190" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-40" y1="178" x2="-48" y2="164" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-44" y1="170" x2="-54" y2="170" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-54" y1="165" x2="-54" y2="175" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="220" x2="0" y2="232" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="248" x2="0" y2="260" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="-10" y="232" width="20" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="80" x2="1200" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="108" x2="1200" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="108" x2="1192" y2="94" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="80" x2="1240" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="108" x2="1240" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="108" x2="1232" y2="94" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="80" x2="1280" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="108" x2="1280" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="108" x2="1272" y2="94" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1196" y1="101" x2="1280" y2="101" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="40" y1="150" x2="40" y2="162" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="40" y1="178" x2="40" y2="190" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="40" y1="178" x2="32" y2="164" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1200,200 1200,220 1225,230" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="200" x2="1240" y2="225" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1280,200 1280,220 1255,230" fill="none" stroke="#000000" stroke-width="1.2"/>
+<circle cx="1240" cy="250" r="25" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="1240" y="246" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">M</text>
+<text x="1240" y="260" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3~</text>
+<text x="14" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">P24</text>
+<text x="14" y="350" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">P0</text>
+<text x="1214" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">L1</text>
+<text x="1254" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">L2</text>
+<text x="1294" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">L3</text>
+<text x="1304" y="40" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Q1</text>
+<text x="1203" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1203" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1243" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1243" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1283" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1283" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="1304" y="160" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F1</text>
+<text x="1203" y="140" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1203" y="180" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1243" y="140" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1243" y="180" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1283" y="140" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1283" y="180" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="24" y="40" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F1</text>
+<text x="3" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">95</text>
+<text x="3" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">96</text>
+<text x="24" y="100" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">S2</text>
+<text x="3" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">11</text>
+<text x="3" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">12</text>
+<text x="-16" y="170" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">S1</text>
+<text x="-37" y="150" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">13</text>
+<text x="-37" y="190" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">14</text>
+<text x="24" y="240" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="3" y="220" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A1</text>
+<text x="3" y="260" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A2</text>
+<text x="24" y="252" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">13-14 1/2C</text>
+<text x="24" y="264" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1-6 2/2B</text>
+<text x="1304" y="100" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="1203" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1203" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1243" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1243" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1283" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1283" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="1304" y="112" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1/2D</text>
+<text x="64" y="170" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="43" y="150" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">13</text>
+<text x="43" y="190" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">14</text>
+<text x="64" y="182" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1/2D</text>
+<text x="1284" y="240" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">M1</text>
+<text x="1203" y="200" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">U1</text>
+<text x="1243" y="200" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">V1</text>
+<text x="1283" y="200" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1</text>
+<text x="-20" y="134" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.3</text>
+<text x="20" y="134" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.3</text>
+<text x="-20" y="194" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.4</text>
+<text x="20" y="194" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.4</text>
+<text x="6" y="310" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.5</text>
+</svg>

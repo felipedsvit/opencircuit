@@ -105,6 +105,11 @@ the output say what it finds, and `validate` is the check to run after.
 `examples/edit/starter-sheets.edit.json` builds the two-sheet starter of
 `examples/sheets/` this way; the PDF it gives is byte for byte the committed
 one.
+`examples/edit/documentation.edit.json` is that file with the numbering rule
+and the catalog data of the parts added; it makes the project of
+`examples/documentation/`, whose reports (`bom.csv`, `wires.csv`,
+`terminals.csv`, `xref.csv`, `io.csv`) are what `opencircuit report` gives
+for it.
 
 **Names.** An operation that creates an element may give it a name with
 `"as"` (1 to 64 letters, digits, `_`, `-` or `.`; each name once), which the
@@ -131,6 +136,12 @@ elements with their kind and ID.
 | `delete` | `elements` | deletes elements and the wires that hang on them |
 | `add_sheet` | `number`, `title`, `origin`, `size`, `orientation`, `zones` | a sheet; the next number unless given; `size` is `a4` (default), `a3`, `a2` or `{ "custom": { "width": w, "height": h } }`; `zones` is `[columns, rows]`, `[8, 6]` by default |
 | `remove_sheet` | `number` | removes a sheet; what was drawn on it stays |
+| `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it |
+| `set_wire_number` | `wire` (name or ID), `number` | the number that replaces the generated one on a wire; `null` or no `number` clears it |
+| `numbering` | `prefix`, `start`, `step`, `per_sheet`, `enabled` | the rule that numbers the wires: what is left out keeps its value (an empty prefix, 1, 1 and one counter for a new rule); `"enabled": false` removes it |
+| `waive` | `code`, `subject`, `reason` | accepts a warning or informational diagnostic with a reason; `subject` is a name, `{ "device": "K1" }`, `{ "wire": ... }`, `{ "junction": ... }`, `{ "symbol": ..., "terminal": "p2" }` for a terminal, or `"document"`; an error cannot be waived |
+| `unwaive` | `code`, `subject` | takes a waiver away |
+| `renumber` | `sheet` | gives the designators the next numbers in reading order, on every sheet or on the sheet with this number |
 
 Limits: a file of at most 1 MiB, 10 000 operations, 10 000 entries in a list
 and 1 024 waypoints in a wire. Positions are grid units.

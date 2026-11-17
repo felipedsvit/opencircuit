@@ -16,6 +16,7 @@ use std::fmt;
 
 use circuit_commands::sheets::{self, SheetSpec};
 use circuit_commands::{Anchor, CommandError, Edit, SupplyPreset, Transaction, ops};
+use circuit_commands::{designators, documentation, waivers};
 use circuit_model::{
     ComponentCatalog, DeviceId, Endpoint, GridPoint, JunctionId, ModelRef, Orientation, ParamValue,
     PinRef, QuarterTurn, Schematic, SheetSize, Subject, SupplyId, SymbolId, SymbolKey, TerminalKey,
@@ -157,6 +158,46 @@ enum Operation {
     },
     /// Remove the sheet with this number.
     RemoveSheet { number: u32 },
+    /// Set the catalog data of a device (ADR-0014); a field left out is
+    /// kept and `null` clears it.
+    SetDeviceInfo {
+        device: String,
+        #[serde(default)]
+        manufacturer: Field,
+        #[serde(default)]
+        part_no: Field,
+        #[serde(default)]
+        description: Field,
+        #[serde(default)]
+        location: Field,
+    },
+    /// Set the number that replaces the generated one on a wire; `null`, or
+    /// leaving it out, clears it.
+    SetWireNumber { wire: Value, number: Option<String> },
+    /// Set the rule that numbers the wires. What is left out keeps its value
+    /// (an empty prefix, 1, 1 and a single counter for a new rule);
+    /// `"enabled": false` removes the rule.
+    Numbering {
+        prefix: Option<String>,
+        start: Option<u32>,
+        step: Option<u32>,
+        per_sheet: Option<bool>,
+        enabled: Option<bool>,
+    },
+    /// Waive a warning or informational diagnostic, with a reason. The
+    /// subject is a name, `{ "device": "K1" }`, `{ "wire": ... }`,
+    /// `{ "junction": ... }`, `{ "symbol": ..., "terminal": "p2" }` for a
+    /// terminal, or `"document"`.
+    Waive {
+        code: String,
+        subject: Value,
+        reason: String,
+    },
+    /// Take a waiver away.
+    Unwaive { code: String, subject: Value },
+    /// Renumber the designators in reading order, on every sheet or on the
+    /// sheet with this number.
+    Renumber { sheet: Option<u32> },
 }
 
 impl Operation {
@@ -175,6 +216,12 @@ impl Operation {
             Self::Delete { .. } => "delete",
             Self::AddSheet { .. } => "add_sheet",
             Self::RemoveSheet { .. } => "remove_sheet",
+            Self::SetDeviceInfo { .. } => "set_device_info",
+            Self::SetWireNumber { .. } => "set_wire_number",
+            Self::Numbering { .. } => "numbering",
+            Self::Waive { .. } => "waive",
+            Self::Unwaive { .. } => "unwaive",
+            Self::Renumber { .. } => "renumber",
         }
     }
 }
@@ -589,6 +636,115 @@ impl Run<'_> {
                 let tx = sheets::remove_sheet(&self.doc, id).map_err(refused)?;
                 self.commit(&tx)
             }
+            Operation::SetDeviceInfo {
+                device,
+                manufacturer,
+                part_no,
+                description,
+                location,
+            } => {
+                let device = self.device(device)?;
+                let current = self
+                    .doc
+                    .devices
+                    .iter()
+                    .find(|candidate| candidate.id == device)
+                    .and_then(|found| found.info.clone())
+                    .unwrap_or_default();
+                let info = circuit_model::DeviceInfo {
+                    manufacturer: manufacturer.apply(current.manufacturer.as_ref()),
+                    part_no: part_no.apply(current.part_no.as_ref()),
+                    description: description.apply(current.description.as_ref()),
+                    location: location.apply(current.location.as_ref()),
+                };
+                let tx =
+                    documentation::set_device_info(&self.doc, device, info).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::SetWireNumber { wire, number } => {
+                let wire = WireId(self.named_or_id(wire, "wire")?);
+                let tx = documentation::set_wire_number(&self.doc, wire, number.as_deref())
+                    .map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::Numbering {
+                prefix,
+                start,
+                step,
+                per_sheet,
+                enabled,
+            } => {
+                let rule = if *enabled == Some(false) {
+                    None
+                } else {
+                    let current = self.doc.project.wire_numbering.clone();
+                    let step = match step {
+                        Some(step) => std::num::NonZeroU32::new(*step)
+                            .ok_or("the step of the numbering must be 1 or more")?,
+                        None => current
+                            .as_ref()
+                            .map_or(std::num::NonZeroU32::MIN, |rule| rule.step),
+                    };
+                    Some(circuit_model::WireNumbering {
+                        prefix: prefix
+                            .clone()
+                            .or_else(|| current.as_ref().map(|rule| rule.prefix.clone()))
+                            .unwrap_or_default(),
+                        start: start
+                            .or(current.as_ref().map(|rule| rule.start))
+                            .unwrap_or(1),
+                        step,
+                        per_sheet: per_sheet
+                            .or(current.as_ref().map(|rule| rule.per_sheet))
+                            .unwrap_or(false),
+                    })
+                };
+                let tx = documentation::set_wire_numbering(&self.doc, rule).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::Waive {
+                code,
+                subject,
+                reason,
+            } => {
+                let subject = self.waiver_subject(subject)?;
+                let tx = waivers::waive(&self.doc, code, subject, reason).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::Unwaive { code, subject } => {
+                let subject = self.waiver_subject(subject)?;
+                let tx = waivers::unwaive(&self.doc, code, subject).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::Renumber { sheet } => {
+                let scope = sheet.map_or(designators::Scope::All, designators::Scope::Sheet);
+                let tx = designators::renumber(&self.doc, scope).map_err(refused)?;
+                self.commit(&tx)
+            }
+        }
+    }
+
+    /// The subject of a waiver: `"document"`, a terminal `{ "symbol": ...,
+    /// "terminal": "p2" }`, or an element as for `move` and `delete`.
+    fn waiver_subject(&self, value: &Value) -> Result<Subject, String> {
+        if value.as_str() == Some("document") {
+            return Ok(Subject::Document);
+        }
+        if let Some(object) = value.as_object()
+            && let (Some(symbol), Some(terminal)) = (
+                object.get("symbol"),
+                object.get("terminal").and_then(Value::as_str),
+            )
+        {
+            return Ok(Subject::Pin(PinRef {
+                symbol_id: self.symbol(symbol)?,
+                terminal: TerminalKey(terminal.to_owned()),
+            }));
+        }
+        let mut subjects = self.subjects(std::slice::from_ref(value))?.into_iter();
+        match (subjects.next(), subjects.next()) {
+            (Some(subject), None) => Ok(subject),
+            _ => Err("a waiver is about one element".to_owned()),
         }
     }
 
@@ -857,6 +1013,124 @@ mod tests {
         match result {
             Err(EditError::Invalid(message)) => message,
             other => panic!("expected an invalid file, got {other:?}"),
+        }
+    }
+
+    /// Two pushbuttons whose terminals touch, joined by a named wire, and a
+    /// third one placed first.
+    const DOCUMENTED: &str = r#"[
+      { "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [0, 20],
+        "reference": "S9", "as": "late" },
+      { "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [0, 0],
+        "reference": "S7", "as": "first" },
+      { "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [0, 10],
+        "reference": "S8", "as": "second" },
+      { "op": "connect", "from": { "symbol": "first", "terminal": "p2" },
+        "to": { "symbol": "second", "terminal": "p1" }, "as": "link" }
+    ]"#;
+
+    fn documented(more: &str) -> Result<Applied, EditError> {
+        let operations = format!("{}, {more}]", DOCUMENTED.trim_end_matches(']'));
+        run(fresh(), &operations)
+    }
+
+    #[test]
+    fn the_documentation_operations_set_info_numbers_the_rule_waivers_and_designators() {
+        let applied = documented(
+            r#"
+            { "op": "set_device_info", "device": "S7", "manufacturer": "Acme", "part_no": "3SB3" },
+            { "op": "set_device_info", "device": "S7", "part_no": null, "location": "Panel 1" },
+            { "op": "set_wire_number", "wire": "link", "number": "L1" },
+            { "op": "numbering", "prefix": "W", "start": 100, "step": 5 },
+            { "op": "numbering", "per_sheet": true },
+            { "op": "waive", "code": "OC-STR-018", "reason": "test jig",
+              "subject": { "symbol": "second", "terminal": "p2" } },
+            { "op": "waive", "code": "OC-SEM-005", "reason": "later", "subject": { "device": "S8" } },
+            { "op": "unwaive", "code": "OC-SEM-005", "subject": { "device": "S8" } },
+            { "op": "renumber" }
+            "#,
+        )
+        .expect("the operations apply");
+
+        let doc = applied.doc;
+        let s1 = doc
+            .devices
+            .iter()
+            .find(|d| d.reference.0 == "S1")
+            .expect("renumbered");
+        let info = s1.info.clone().expect("catalog data");
+        // The second operation kept the manufacturer, cleared the part number
+        // and set a location.
+        assert_eq!(info.manufacturer.as_deref(), Some("Acme"));
+        assert_eq!(info.part_no, None);
+        assert_eq!(info.location.as_deref(), Some("Panel 1"));
+        assert_eq!(doc.wires[0].number.as_deref(), Some("L1"));
+        let rule = doc.project.wire_numbering.expect("a rule");
+        assert_eq!(
+            (
+                rule.prefix.as_str(),
+                rule.start,
+                rule.step.get(),
+                rule.per_sheet
+            ),
+            ("W", 100, 5, true)
+        );
+        assert_eq!(doc.waivers.len(), 1);
+        assert_eq!(doc.waivers[0].reason, "test jig");
+        let mut references: Vec<&str> =
+            doc.devices.iter().map(|d| d.reference.0.as_str()).collect();
+        references.sort_unstable();
+        assert_eq!(references, ["S1", "S2", "S3"]);
+    }
+
+    #[test]
+    fn the_numbering_can_be_switched_off_and_a_sheet_can_be_renumbered_alone() {
+        let applied = documented(
+            r#"
+            { "op": "numbering", "prefix": "W" },
+            { "op": "numbering", "enabled": false }
+            "#,
+        )
+        .expect("applies");
+        assert!(applied.doc.project.wire_numbering.is_none());
+
+        let (operation, message) = refused(documented(r#"{ "op": "renumber", "sheet": 4 }"#));
+        assert_eq!(operation, 5);
+        assert!(message.contains("no sheet number 4"), "{message}");
+    }
+
+    #[test]
+    fn what_cannot_be_documented_is_refused_naming_the_operation() {
+        for (more, needle) in [
+            (
+                r#"{ "op": "waive", "code": "OC-STR-013", "reason": "x", "subject": "link" }"#,
+                "cannot be waived",
+            ),
+            (
+                r#"{ "op": "waive", "code": "OC-STR-018", "reason": "", "subject": "link" }"#,
+                "needs a reason",
+            ),
+            (
+                r#"{ "op": "waive", "code": "OC-NOPE-1", "reason": "x", "subject": "link" }"#,
+                "not a diagnostic code",
+            ),
+            (
+                r#"{ "op": "unwaive", "code": "OC-STR-018", "subject": "link" }"#,
+                "does not exist",
+            ),
+            (r#"{ "op": "numbering", "step": 0 }"#, "step"),
+            (
+                r#"{ "op": "set_wire_number", "wire": "nope", "number": "1" }"#,
+                "no element is named",
+            ),
+            (
+                r#"{ "op": "set_device_info", "device": "S99", "part_no": "x" }"#,
+                "no device",
+            ),
+        ] {
+            let (operation, message) = refused(documented(more));
+            assert_eq!(operation, 5, "{more}");
+            assert!(message.contains(needle), "{more}: {message}");
         }
     }
 

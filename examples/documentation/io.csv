@@ -1,0 +1,9 @@
+Table,Address,Words,Name,Meaning
+coil,0,1,Q1,1 = closed
+coil,1,1,F1,1 = tripped
+coil,2,1,S2,1 = pressed
+coil,3,1,S1,1 = pressed
+discrete input,0,1,K1,1 = active
+input register,0,4,tick,highest word first
+input register,4,1,fault latch,1 = latched
+input register,5,1,M1,"0 stopped, 1 forward, 2 reverse"
