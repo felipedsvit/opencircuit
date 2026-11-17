@@ -1499,3 +1499,15 @@ fn a_symbolic_device_between_the_poles_is_not_a_short_circuit() {
     assert!(!outcome.faulted);
     assert!(sim.snapshot().is_some_and(|snapshot| !snapshot.faulted));
 }
+
+#[test]
+fn compile_reports_a_drawing_that_looks_connected_and_does_not_block_on_it() {
+    // The rig lays every part out in one row, so the drawing is full of
+    // wires on top of each other and terminals on wires.
+    let output = compile(&direct_online_circuit(), &ComponentCatalog::builtin());
+
+    let found = codes(&output);
+    assert!(found.contains(&DiagnosticCode::LooseConnection));
+    assert!(found.contains(&DiagnosticCode::OverlappingWires));
+    assert!(output.circuit.is_some());
+}

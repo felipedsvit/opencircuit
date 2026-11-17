@@ -1617,3 +1617,49 @@ fn report_to_a_pdf_sets_every_table_on_its_own_pages() {
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert_eq!(fs::read(&again).expect("written"), bytes);
 }
+
+/// Two pushbuttons whose terminals touch at (0, 2): drawn as one line, and
+/// not connected unless a wire says so.
+fn touching_buttons(wired: bool) -> String {
+    let connect = if wired {
+        r#",{ "op": "connect", "from": { "symbol": "first", "terminal": "p2" },
+              "to": { "symbol": "second", "terminal": "p1" } }"#
+    } else {
+        ""
+    };
+    format!(
+        r#"{{ "schema_version": 1, "operations": [
+            {{ "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [0, 0],
+               "reference": "S1", "as": "first" }},
+            {{ "op": "place", "model": "pushbutton_no", "symbol": "contact", "at": [0, 4],
+               "reference": "S2", "as": "second" }}{connect}
+        ] }}"#
+    )
+}
+
+#[test]
+fn terminals_that_touch_without_a_wire_are_a_warning_and_a_wire_removes_it() {
+    let directory = scratch("loose-connection");
+    let project = directory.join("loose.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+
+    for (wired, warned) in [(false, true), (true, false)] {
+        let edit = directory.join("edit.json");
+        fs::write(&edit, touching_buttons(wired)).expect("write");
+        assert_eq!(code(&opencircuit(&["new", path, "--force"])), 0);
+        let applied = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+        assert_eq!(
+            code(&applied),
+            0,
+            "{}{}",
+            stdout(&applied),
+            stderr(&applied)
+        );
+
+        let validate = opencircuit(&["validate", path, "--deny-warnings"]);
+        let text = stdout(&validate);
+        assert_eq!(text.contains("OC-STR-018"), warned, "{text}");
+        assert_eq!(code(&validate), i32::from(warned), "{text}");
+    }
+}

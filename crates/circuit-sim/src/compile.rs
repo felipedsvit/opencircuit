@@ -17,7 +17,8 @@ use circuit_model::{
     ComponentCatalog, ComponentModel, Conductor, Connection, Device, DeviceClass, DeviceId,
     Diagnostic, DiagnosticCode, Endpoint, JunctionId, LayoutIndex, PhaseSequence, PinRef,
     Schematic, Subject, SupplyId, SupplyKind, SupplyProfile, SymbolDefinition, SymbolId,
-    SymbolInstance, SymbolKey, SymbolKind, TimerMode, has_errors, is_orthogonal, sort_diagnostics,
+    SymbolInstance, SymbolKey, SymbolKind, TimerMode, has_errors, is_orthogonal, loose_geometry,
+    sort_diagnostics,
 };
 
 use crate::compiled::{
@@ -59,6 +60,9 @@ pub fn compile(schematic: &Schematic, catalog: &ComponentCatalog) -> CompileOutp
     let resolved = resolve(schematic, catalog, &mut diagnostics);
     report_non_orthogonal_wires(schematic, catalog, &mut diagnostics);
     report_wires_across_sheets(schematic, catalog, &mut diagnostics);
+    // Terminals and wires that look connected and are not: a warning of the
+    // drawing, never an electrical fact (ADR-0014).
+    diagnostics.extend(loose_geometry(schematic, catalog));
 
     let circuit = if has_errors(&diagnostics) {
         None

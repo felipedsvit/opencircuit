@@ -142,6 +142,13 @@ diagnostic_codes! {
     InvalidSheet = "OC-STR-016", Structural, Error, latches = false;
     /// A wire that crosses the edge of a sheet: the printed sheets cut it.
     WireCrossesSheet = "OC-STR-017", Structural, Warning, latches = false;
+    /// A terminal or a junction lies on another terminal, on another junction
+    /// or on the middle of a wire that is not in its net: it looks connected
+    /// and is not (ADR-0014).
+    LooseConnection = "OC-STR-018", Structural, Warning, latches = false;
+    /// Two wires of different nets run over the same stretch of a line, so
+    /// they look like one (ADR-0014).
+    OverlappingWires = "OC-STR-019", Structural, Warning, latches = false;
     /// The same reference designator is used by distinct devices.
     DuplicateReference = "OC-SEM-001", Semantic, Error, latches = false;
     /// A reference designator that does not match the allowed pattern.
@@ -411,6 +418,8 @@ mod tests {
         ("OC-STR-015", "DuplicateSheetNumber", "error", false),
         ("OC-STR-016", "InvalidSheet", "error", false),
         ("OC-STR-017", "WireCrossesSheet", "warning", false),
+        ("OC-STR-018", "LooseConnection", "warning", false),
+        ("OC-STR-019", "OverlappingWires", "warning", false),
         ("OC-SEM-001", "DuplicateReference", "error", false),
         ("OC-SEM-002", "InvalidReference", "error", false),
         ("OC-SEM-003", "MissingRequiredTerminal", "error", false),

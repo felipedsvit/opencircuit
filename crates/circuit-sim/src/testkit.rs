@@ -181,7 +181,18 @@ pub(crate) fn load(rated_voltage_mv: i64, connection: &str) -> Vec<(&'static str
 }
 
 pub(crate) fn compile_doc(doc: &Schematic) -> CompileOutput {
-    compile(doc, &ComponentCatalog::builtin())
+    let mut output = compile(doc, &ComponentCatalog::builtin());
+    // The rig puts every part in one row and wires them as the circuit
+    // needs, not as a drawing would: its geometry is meaningless, and the
+    // two warnings about how a drawing looks (ADR-0014) are tested in
+    // `circuit-model`.
+    output.diagnostics.retain(|diagnostic| {
+        !matches!(
+            diagnostic.code(),
+            DiagnosticCode::LooseConnection | DiagnosticCode::OverlappingWires
+        )
+    });
+    output
 }
 
 /// Compile a document that is expected to be free of errors.
