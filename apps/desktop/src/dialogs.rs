@@ -32,18 +32,12 @@ pub fn pick_project() -> Option<PathBuf> {
 
 /// Ask for a macro (an edit file, `.json`) to play. `None` when the user
 /// cancels or no file dialog is available.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn pick_macro() -> Option<PathBuf> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        rfd::FileDialog::new()
-            .add_filter(tr("OpenCircuit macro (edit file)"), &["json"])
-            .pick_file()
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        None
-    }
+    rfd::FileDialog::new()
+        .add_filter(tr("OpenCircuit macro (edit file)"), &["json"])
+        .pick_file()
 }
 
 /// Ask where to save a macro. A browser downloads instead.
