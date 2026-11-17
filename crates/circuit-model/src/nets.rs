@@ -86,9 +86,10 @@ impl Sets {
     fn union(&mut self, a: u32, b: u32) {
         let (a, b) = (self.find(a), self.find(b));
         let (keep, merge) = if a < b { (a, b) } else { (b, a) };
-        if keep != merge
-            && let Some(slot) = self.parent.get_mut(merge as usize)
-        {
+        if keep == merge {
+            return;
+        }
+        if let Some(slot) = self.parent.get_mut(merge as usize) {
             *slot = keep;
         }
     }

@@ -327,9 +327,7 @@ fn overlapping_wires(
         // The stretch that reaches furthest so far.
         let mut reach: Option<Stretch> = None;
         for stretch in sorted {
-            if let Some(far) = reach
-                && stretch.from < far.to
-                && stretch.wire != far.wire
+            if let Some(far) = reach.filter(|far| stretch.from < far.to && stretch.wire != far.wire)
             {
                 let pair = (stretch.wire.min(far.wire), stretch.wire.max(far.wire));
                 if seen.insert(pair) {

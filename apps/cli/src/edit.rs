@@ -730,12 +730,13 @@ impl Run<'_> {
         if value.as_str() == Some("document") {
             return Ok(Subject::Document);
         }
-        if let Some(object) = value.as_object()
-            && let (Some(symbol), Some(terminal)) = (
-                object.get("symbol"),
-                object.get("terminal").and_then(Value::as_str),
-            )
-        {
+        let terminal_of = value.as_object().and_then(|object| {
+            Some((
+                object.get("symbol")?,
+                object.get("terminal").and_then(Value::as_str)?,
+            ))
+        });
+        if let Some((symbol, terminal)) = terminal_of {
             return Ok(Subject::Pin(PinRef {
                 symbol_id: self.symbol(symbol)?,
                 terminal: TerminalKey(terminal.to_owned()),
