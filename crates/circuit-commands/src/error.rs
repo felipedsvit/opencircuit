@@ -79,4 +79,8 @@ pub enum CommandError {
     /// over another sheet.
     #[error("invalid sheet: {0}")]
     InvalidSheet(String),
+    /// A waiver that could not work: the code is not one, it is an error, or
+    /// the reason is missing (ADR-0014).
+    #[error("cannot waive: {0}")]
+    CannotWaive(String),
 }

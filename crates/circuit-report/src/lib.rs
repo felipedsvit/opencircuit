@@ -37,7 +37,8 @@ use std::collections::BTreeMap;
 use circuit_io::IoMap;
 use circuit_model::{
     ComponentCatalog, Device, DeviceClass, DeviceId, Diagnostic, PinRef, Schematic, StaticNets,
-    SymbolId, SymbolInstance, SymbolKind, Table, WireNumbers, sheet_at, terminal_label,
+    SymbolId, SymbolInstance, SymbolKind, Table, WaiverIndex, WireNumbers, sheet_at,
+    terminal_label,
 };
 
 /// The reports, by the name the command line uses.
@@ -467,12 +468,16 @@ pub fn io(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
     table
 }
 
-/// The diagnostics, as they are given, one row for each.
+/// The diagnostics, as they are given, one row for each, with whether the
+/// project waives it and why.
 #[must_use]
-pub fn problems(diagnostics: &[Diagnostic]) -> Table {
+pub fn problems(doc: &Schematic, diagnostics: &[Diagnostic]) -> Table {
+    let waivers = WaiverIndex::new(doc);
     let mut table = Table::new(
         "Problems",
-        &["Severity", "Code", "Subject", "Message", "Related"],
+        &[
+            "Severity", "Code", "Subject", "Message", "Related", "Waived", "Reason",
+        ],
     );
     for diagnostic in diagnostics {
         let related: Vec<String> = diagnostic
@@ -480,12 +485,15 @@ pub fn problems(diagnostics: &[Diagnostic]) -> Table {
             .iter()
             .map(ToString::to_string)
             .collect();
+        let waiver = waivers.of(diagnostic);
         table.push(vec![
             diagnostic.severity().as_str().to_owned(),
             diagnostic.code().as_str().to_owned(),
             diagnostic.subject().to_string(),
             diagnostic.message().to_owned(),
             related.join("; "),
+            if waiver.is_some() { "yes" } else { "" }.to_owned(),
+            waiver.map(|w| w.reason.clone()).unwrap_or_default(),
         ]);
     }
     table

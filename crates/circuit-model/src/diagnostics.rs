@@ -149,6 +149,10 @@ diagnostic_codes! {
     /// Two wires of different nets run over the same stretch of a line, so
     /// they look like one (ADR-0014).
     OverlappingWires = "OC-STR-019", Structural, Warning, latches = false;
+    /// A waiver that names something that is not a diagnostic code, a code
+    /// that cannot be waived (an error, or this one), a subject that is not in
+    /// the document, or that repeats another waiver (ADR-0014).
+    InvalidWaiver = "OC-STR-020", Structural, Warning, latches = false;
     /// The same reference designator is used by distinct devices.
     DuplicateReference = "OC-SEM-001", Semantic, Error, latches = false;
     /// A reference designator that does not match the allowed pattern.
@@ -420,6 +424,7 @@ mod tests {
         ("OC-STR-017", "WireCrossesSheet", "warning", false),
         ("OC-STR-018", "LooseConnection", "warning", false),
         ("OC-STR-019", "OverlappingWires", "warning", false),
+        ("OC-STR-020", "InvalidWaiver", "warning", false),
         ("OC-SEM-001", "DuplicateReference", "error", false),
         ("OC-SEM-002", "InvalidReference", "error", false),
         ("OC-SEM-003", "MissingRequiredTerminal", "error", false),

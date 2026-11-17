@@ -155,7 +155,7 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 
 | Command | Fields after the common ones |
 | --- | --- |
-| `validate` | `error` (why the file did not load, or `null`), `errors`, `warnings`, `diagnostics` |
+| `validate` | `error` (why the file did not load, or `null`), `errors`, `warnings` (those the project does not waive), `waived` (how many it does), `diagnostics`: each with `waived`, `null` or `{ "reason": ... }` |
 | `simulate` | `tick` (the last solved tick), `faulted`, `diagnostics`, `trace` (the text of the trace, `null` when `--trace` wrote it to a file), `snapshot` (the last solved tick, as `--snapshot-json` writes it) |
 | `test` | `total`, `failed`, `scenarios`: a list of `path`, `status` (`pass`, `updated` or `fail`) and `reasons` |
 | `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
@@ -165,7 +165,10 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 | `serve --print-map` | `map`: a list of `table` (`coil`, `discrete_input` or `input_register`), `address`, `words`, `name`, `meaning`; the same lines as the text map |
 
 `diagnostics` are the structured diagnostics of `FORMAT.md` (`code`,
-severity, `subject`, `related`, `message`).
+severity, `subject`, `related`, `message`). A project can waive a warning or an
+informational diagnostic with a reason (`waivers` in `FORMAT.md`, ADR-0014):
+`validate` still lists it, marks it, leaves it out of `warnings` and does not
+fail `--deny-warnings` for it. An error is never waived.
 
 ## Project files
 

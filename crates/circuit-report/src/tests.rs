@@ -304,25 +304,50 @@ fn the_io_report_is_the_modbus_map() {
 }
 
 #[test]
-fn the_problems_report_has_a_row_for_each_diagnostic() {
-    let diagnostics = [Diagnostic::new(
-        DiagnosticCode::JunctionDangling,
-        Subject::Wire(WireId(3)),
-        "a junction with one wire",
-    )
-    .with_related(vec![Subject::Wire(WireId(4))])];
+fn the_problems_report_has_a_row_for_each_diagnostic_and_marks_the_waived_ones() {
+    let finding = |code, wire| {
+        Diagnostic::new(
+            code,
+            Subject::Wire(WireId(wire)),
+            "a junction with one wire",
+        )
+        .with_related(vec![Subject::Wire(WireId(wire + 1))])
+    };
+    let diagnostics = [
+        finding(DiagnosticCode::JunctionDangling, 3),
+        finding(DiagnosticCode::LooseConnection, 7),
+    ];
+    let mut doc = project();
+    doc.waivers.push(circuit_model::Waiver {
+        code: "OC-STR-018".to_owned(),
+        subject: Subject::Wire(WireId(7)),
+        reason: "test point".to_owned(),
+    });
 
-    let table = problems(&diagnostics);
+    let table = problems(&doc, &diagnostics);
 
     assert_eq!(
         table.rows,
-        [[
-            "warning",
-            "OC-STR-008",
-            "wire 3",
-            "a junction with one wire",
-            "wire 4"
-        ]]
+        [
+            [
+                "warning",
+                "OC-STR-008",
+                "wire 3",
+                "a junction with one wire",
+                "wire 4",
+                "",
+                ""
+            ],
+            [
+                "warning",
+                "OC-STR-018",
+                "wire 7",
+                "a junction with one wire",
+                "wire 8",
+                "yes",
+                "test point"
+            ],
+        ]
     );
 }
 

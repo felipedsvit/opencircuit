@@ -9,7 +9,10 @@ use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
 
-use crate::diagnostics::Subject;
+use std::collections::BTreeMap;
+
+use crate::diagnostics::{Diagnostic, DiagnosticCode, Severity, Subject};
+use crate::schematic::Schematic;
 
 /// Longest prefix of a wire number, in bytes.
 pub const MAX_WIRE_NUMBER_PREFIX_BYTES: usize = 16;
@@ -90,6 +93,51 @@ impl Waiver {
     }
 }
 
+/// The waivers of a document, to ask whether a diagnostic is waived.
+///
+/// Only a warning or an informational diagnostic can be waived: an error
+/// never is, and neither is [`DiagnosticCode::InvalidWaiver`], which is how a
+/// bad waiver is reported.
+#[derive(Clone, Debug, Default)]
+pub struct WaiverIndex<'a> {
+    by_key: BTreeMap<(&'a str, &'a Subject), &'a Waiver>,
+}
+
+impl<'a> WaiverIndex<'a> {
+    /// Index the waivers of a document. When a code and a subject have more
+    /// than one waiver (a structural warning), the first in the list wins.
+    #[must_use]
+    pub fn new(doc: &'a Schematic) -> Self {
+        let mut by_key = BTreeMap::new();
+        for waiver in &doc.waivers {
+            by_key
+                .entry((waiver.code.as_str(), &waiver.subject))
+                .or_insert(waiver);
+        }
+        Self { by_key }
+    }
+
+    /// The waiver that covers this diagnostic, if there is one and the
+    /// diagnostic may be waived.
+    #[must_use]
+    pub fn of(&self, diagnostic: &Diagnostic) -> Option<&'a Waiver> {
+        if diagnostic.severity() == Severity::Error
+            || diagnostic.code() == DiagnosticCode::InvalidWaiver
+        {
+            return None;
+        }
+        self.by_key
+            .get(&(diagnostic.code().as_str(), diagnostic.subject()))
+            .copied()
+    }
+
+    /// Whether the document has no waiver.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.by_key.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,6 +150,77 @@ mod tests {
 
         info.location = Some("Panel 1".to_owned());
         assert!(!info.is_empty());
+    }
+
+    fn finding(code: DiagnosticCode, subject: Subject) -> Diagnostic {
+        Diagnostic::new(code, subject, "test")
+    }
+
+    fn doc_with(code: &str, subject: Subject) -> Schematic {
+        let mut doc = Schematic::new("waivers");
+        doc.waivers.push(Waiver {
+            code: code.to_owned(),
+            subject,
+            reason: "checked".to_owned(),
+        });
+        doc
+    }
+
+    #[test]
+    fn a_waiver_covers_the_diagnostic_of_its_code_and_subject_and_no_other() {
+        let doc = doc_with("OC-STR-018", Subject::Wire(WireId(5)));
+        let index = WaiverIndex::new(&doc);
+
+        let covered = finding(DiagnosticCode::LooseConnection, Subject::Wire(WireId(5)));
+        assert_eq!(
+            index.of(&covered).map(|w| w.reason.as_str()),
+            Some("checked")
+        );
+        assert!(
+            index
+                .of(&finding(
+                    DiagnosticCode::LooseConnection,
+                    Subject::Wire(WireId(6))
+                ))
+                .is_none()
+        );
+        assert!(
+            index
+                .of(&finding(
+                    DiagnosticCode::OverlappingWires,
+                    Subject::Wire(WireId(5))
+                ))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn an_error_and_an_invalid_waiver_are_never_waived() {
+        let doc = doc_with("OC-STR-013", Subject::Wire(WireId(5)));
+        let index = WaiverIndex::new(&doc);
+        assert!(
+            index
+                .of(&finding(
+                    DiagnosticCode::SelfLoopWire,
+                    Subject::Wire(WireId(5))
+                ))
+                .is_none()
+        );
+
+        let doc = doc_with("OC-STR-020", Subject::Wire(WireId(5)));
+        assert!(
+            WaiverIndex::new(&doc)
+                .of(&finding(
+                    DiagnosticCode::InvalidWaiver,
+                    Subject::Wire(WireId(5))
+                ))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_document_with_no_waiver_has_an_empty_index() {
+        assert!(WaiverIndex::new(&Schematic::new("none")).is_empty());
     }
 
     #[test]

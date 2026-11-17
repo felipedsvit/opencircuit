@@ -4,7 +4,9 @@
 use std::io::{self, Write};
 use std::path::Path;
 
-use circuit_model::{ComponentCatalog, Diagnostic, InputAction, Schematic, Severity, SimSnapshot};
+use circuit_model::{
+    ComponentCatalog, Diagnostic, InputAction, Schematic, Severity, SimSnapshot, WaiverIndex,
+};
 use circuit_project::MAX_PROJECT_BYTES;
 use circuit_sim::{
     CompiledCircuit, DelayConfig, FaultPolicy, SimConfig, SimulationError, Simulator, TraceEvent,
@@ -625,7 +627,7 @@ fn report(
                 circuit_report::Kind::Xref => circuit_report::xref(&doc, catalog),
                 circuit_report::Kind::Io => circuit_report::io(&doc, catalog),
                 circuit_report::Kind::Problems => {
-                    circuit_report::problems(&compile(&doc, catalog).diagnostics)
+                    circuit_report::problems(&doc, &compile(&doc, catalog).diagnostics)
                 }
             };
             (kind, table)
@@ -716,8 +718,24 @@ struct ValidationReport<'a> {
     /// Why the project could not be loaded at all.
     error: Option<&'a str>,
     errors: usize,
+    /// Warnings that the project does not waive.
     warnings: usize,
-    diagnostics: &'a [Diagnostic],
+    /// Diagnostics the project waives (ADR-0014).
+    waived: usize,
+    diagnostics: Vec<ReportedDiagnostic<'a>>,
+}
+
+/// A diagnostic and, when the project waives it, why.
+#[derive(Serialize)]
+struct ReportedDiagnostic<'a> {
+    #[serde(flatten)]
+    diagnostic: &'a Diagnostic,
+    waived: Option<WaivedBy<'a>>,
+}
+
+#[derive(Serialize)]
+struct WaivedBy<'a> {
+    reason: &'a str,
 }
 
 fn count(diagnostics: &[Diagnostic], severity: Severity) -> usize {
@@ -735,12 +753,26 @@ fn validate(
     out: &mut dyn Write,
 ) -> Result<u8, CliError> {
     let text = read_text(project, MAX_PROJECT_BYTES)?;
-    let (diagnostics, load_error) = match circuit_project::from_str(&text) {
-        Ok(doc) => (compile(&doc, catalog).diagnostics, None),
-        Err(error) => (Vec::new(), Some(error.to_string())),
+    let (doc, diagnostics, load_error) = match circuit_project::from_str(&text) {
+        Ok(doc) => {
+            let diagnostics = compile(&doc, catalog).diagnostics;
+            (Some(doc), diagnostics, None)
+        }
+        Err(error) => (None, Vec::new(), Some(error.to_string())),
     };
+    let waivers = doc.as_ref().map(WaiverIndex::new);
+    let waiver_of = |diagnostic: &Diagnostic| waivers.as_ref().and_then(|w| w.of(diagnostic));
     let errors = count(&diagnostics, Severity::Error);
-    let warnings = count(&diagnostics, Severity::Warning);
+    let waived = diagnostics
+        .iter()
+        .filter(|diagnostic| waiver_of(diagnostic).is_some())
+        .count();
+    let warnings = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.severity() == Severity::Warning && waiver_of(diagnostic).is_none()
+        })
+        .count();
     let ok = load_error.is_none() && errors == 0 && !(deny_warnings && warnings > 0);
 
     match format {
@@ -749,10 +781,24 @@ fn validate(
                 writeln!(out, "error: {error}")?;
             }
             for diagnostic in &diagnostics {
-                writeln!(out, "{diagnostic}")?;
+                match waiver_of(diagnostic) {
+                    Some(waiver) => writeln!(
+                        out,
+                        "waived[{}] {}: {} (reason: {})",
+                        diagnostic.code(),
+                        diagnostic.subject(),
+                        diagnostic.message(),
+                        waiver.reason
+                    )?,
+                    None => writeln!(out, "{diagnostic}")?,
+                }
             }
             let verdict = if ok { "ok" } else { "failed" };
-            writeln!(out, "{verdict}: {errors} error(s), {warnings} warning(s)")?;
+            write!(out, "{verdict}: {errors} error(s), {warnings} warning(s)")?;
+            if waived > 0 {
+                write!(out, ", {waived} waived")?;
+            }
+            writeln!(out)?;
         }
         OutputFormat::Json => {
             let report = ValidationReport {
@@ -762,7 +808,16 @@ fn validate(
                 error: load_error.as_deref(),
                 errors,
                 warnings,
-                diagnostics: &diagnostics,
+                waived,
+                diagnostics: diagnostics
+                    .iter()
+                    .map(|diagnostic| ReportedDiagnostic {
+                        diagnostic,
+                        waived: waiver_of(diagnostic).map(|waiver| WaivedBy {
+                            reason: &waiver.reason,
+                        }),
+                    })
+                    .collect(),
             };
             let text = serde_json::to_string_pretty(&report).map_err(io::Error::from)?;
             writeln!(out, "{text}")?;

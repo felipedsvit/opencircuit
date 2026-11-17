@@ -1155,6 +1155,7 @@ Regras:
 | OC-STR-017 | `WireCrossesSheet` | Warning | não | Fio que atravessa a borda de uma folha; a impressão o cortaria |
 | OC-STR-018 | `LooseConnection` | Warning | não | Terminal ou junção sobre outro terminal, outra junção ou o meio de um fio que não é da sua net: parece ligado e não está (ADR-0014) |
 | OC-STR-019 | `OverlappingWires` | Warning | não | Dois fios de nets diferentes sobre o mesmo trecho de uma reta: parecem um só (ADR-0014) |
+| OC-STR-020 | `InvalidWaiver` | Warning | não | Dispensa que nomeia algo que não é um código, um código que não pode ser dispensado (erro, ou este), um sujeito que não está no documento, ou que repete outra (ADR-0014) |
 | OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
 | OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
 | OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |
