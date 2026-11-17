@@ -423,6 +423,11 @@ mod tests {
                     .into_iter()
                     .map(circuit_commands::SupplyPreset::label),
             )
+            .chain(
+                crate::templates::TEMPLATES
+                    .iter()
+                    .map(|template| template.name),
+            )
             .collect();
         for key in &in_tables {
             assert!(

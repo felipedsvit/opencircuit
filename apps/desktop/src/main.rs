@@ -35,6 +35,7 @@ mod native {
 
     use eframe::egui;
     use opencircuit_desktop::project_lock::ProjectLocks;
+    use opencircuit_desktop::recent::RecentProjects;
     use opencircuit_desktop::recovery::{DEFAULT_INTERVAL_SECONDS, RecoveryStore};
     use opencircuit_desktop::versions::VersionStore;
     use opencircuit_desktop::{DesktopApp, Language};
@@ -88,6 +89,9 @@ mod native {
                 }
                 if let Some(versions) = VersionStore::in_user_data() {
                     app.enable_version_history(versions);
+                }
+                if let Some(recent) = RecentProjects::in_user_data() {
+                    app.enable_recent_projects(recent);
                 }
                 Ok(Box::new(app))
             }),

@@ -48,6 +48,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Bottom", "Base"),
     ("Cancel", "Cancelar"),
     ("Catalog data", "Dados de catálogo"),
+    ("Clear the list", "Limpar a lista"),
     (
         "Click a pin to start, empty space to bend, a pin or wire to finish.",
         "Clique em um pino para começar, no espaço vazio para dobrar, em um pino ou fio para terminar.",
@@ -85,6 +86,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Delete symbol", "Excluir símbolo"),
     ("Description", "Descrição"),
     ("Diagnostics", "Diagnósticos"),
+    ("Direct-online starter", "Partida direta"),
     ("Discard", "Descartar"),
     ("Discard changes", "Descartar alterações"),
     ("Distribute", "Distribuir"),
@@ -153,6 +155,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Rede da seleção: {0}, {1}",
     ),
     ("New", "Novo"),
+    ("New from template", "Novo a partir de modelo"),
     ("New layer", "Nova camada"),
     ("New project", "Novo projeto"),
     (
@@ -185,6 +188,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Open as new project", "Abrir como projeto novo"),
     ("Open in another window", "Aberto em outra janela"),
     ("Open project…", "Abrir projeto…"),
+    ("Open recent", "Abrir recente"),
     (
         "OpenCircuit ended without saving these projects. A copy of each was kept.",
         "O OpenCircuit fechou sem salvar estes projetos. Uma cópia de cada um foi guardada.",
@@ -243,6 +247,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Restart simulation", "Reiniciar simulação"),
     ("Restore", "Restaurar"),
     ("Restore {0} {1}", "Restaurar {0} {1}"),
+    (
+        "Reversing starter with interlocking",
+        "Partida com reversão e intertravamento",
+    ),
     ("Revision", "Revisão"),
     ("Right", "Direita"),
     ("Rotate all", "Girar todos"),
@@ -253,6 +261,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("SVG drawing", "Desenho SVG"),
     ("SVG…", "SVG…"),
     ("Save", "Salvar"),
+    ("Save a copy…", "Salvar uma cópia…"),
     ("Save and continue", "Salvar e continuar"),
     ("Save as…", "Salvar como…"),
     ("Save here", "Salvar aqui"),
@@ -298,7 +307,12 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("Space", "Espaço"),
     ("Speed", "Velocidade"),
+    ("Star-delta starter", "Partida estrela-triângulo"),
     ("Start simulation", "Iniciar simulação"),
+    (
+        "Starter on two sheets with title block",
+        "Partida em duas folhas com carimbo",
+    ),
     ("Step", "Passo"),
     ("Supplies", "Alimentações"),
     ("Supplies and sources", "Alimentação e fontes"),
@@ -347,6 +361,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     (
         "Write the problems as a CSV file",
         "Gravar os problemas em um arquivo CSV",
+    ),
+    (
+        "Write the project to another file and keep working on this one",
+        "Gravar o projeto em outro arquivo e continuar trabalhando neste",
     ),
     ("Zoom extents", "Ajustar zoom ao desenho"),
     ("Zoom in", "Aumentar o zoom"),
@@ -402,6 +420,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("{0} differences", "{0} diferenças"),
     ("{0} elements selected", "{0} elementos selecionados"),
     ("{0} elements selected.", "{0} elementos selecionados."),
+    (
+        "{0} is no longer there; it was taken off the list.",
+        "{0} não existe mais; foi retirado da lista.",
+    ),
     ("{0} terminal", "{0} terminal"),
     ("{0} terminals", "{0} terminais"),
     ("{0} wire", "{0} fio"),

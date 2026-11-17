@@ -385,8 +385,8 @@ Decisions, to be confirmed in #118:
 
 ### M9.2 — Productivity (no schema change)
 
-- [ ] Recent projects, project templates (File > New from template) and a
-  saved copy of a project.
+- [x] Recent projects, project templates (File > New from template) and a
+  saved copy of a project (`apps/desktop/tests/files_m9.rs`).
 - [ ] Command palette (Ctrl+K) and search over the whole project.
 - [x] Reports: `devices` (one row per device) and renumbering of sheets
   (`renumber_sheets` in edit files, `sheets renumber` on the command line of

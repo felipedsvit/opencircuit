@@ -37,6 +37,11 @@ here when it lands.
   a project, one row per element added, removed or changed with the fields
   that differ, as text, JSON or CSV. It exits with 1 when they differ. A project
   saved by an older build compares as the same document after its migration.
+- **File menu:** New from template (four starters built from the examples),
+  Open recent (the last ten projects opened or saved, kept in the user's data
+  folder; a file that is gone is taken off the list) and Save a copy (writes
+  the project to another file and keeps working on this one, unsaved changes
+  included).
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

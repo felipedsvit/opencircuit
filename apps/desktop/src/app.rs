@@ -58,6 +58,9 @@ enum Pending {
     OpenDialog,
     /// Close the window.
     Close,
+    /// Start a new project from the template at this place of
+    /// [`crate::templates::TEMPLATES`].
+    Template(usize),
     /// Open a saved version as a new, unsaved project.
     #[cfg(not(target_arch = "wasm32"))]
     Restore(crate::versions::Version),
@@ -233,6 +236,9 @@ pub struct DesktopApp {
     /// elements differ from the project as it was when the window opened.
     #[cfg(not(target_arch = "wasm32"))]
     history: Option<Vec<(crate::versions::Version, usize)>>,
+    /// The projects opened or saved last; off unless `main` turns it on.
+    #[cfg(not(target_arch = "wasm32"))]
+    recent: Option<crate::recent::RecentProjects>,
 }
 
 impl DesktopApp {
@@ -289,6 +295,95 @@ impl DesktopApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enable_version_history(&mut self, store: crate::versions::VersionStore) {
         self.versions = Some(store);
+    }
+
+    /// Keep the list of the projects opened or saved last in `recent`, and
+    /// show it in File > Open recent.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_recent_projects(&mut self, recent: crate::recent::RecentProjects) {
+        self.recent = Some(recent);
+    }
+
+    /// The projects in File > Open recent, newest first; empty when the list
+    /// is off.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn recent_projects(&self) -> Vec<PathBuf> {
+        self.recent
+            .as_ref()
+            .map(crate::recent::RecentProjects::list)
+            .unwrap_or_default()
+    }
+
+    /// Put the file of the project first in the list of recent projects.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_recent(&mut self) {
+        let (Some(recent), Some(path)) =
+            (&self.recent, self.session.as_ref().and_then(Session::path))
+        else {
+            return;
+        };
+        // Best effort: a list that cannot be written only loses an entry.
+        let _ = recent.record(path);
+    }
+
+    /// Start a new project from a template, asking first when the open
+    /// project has unsaved changes.
+    pub fn new_from_template(&mut self, index: usize) {
+        self.guard(Pending::Template(index));
+    }
+
+    /// Write the project to `path` without making it its file: the project
+    /// keeps its file and its unsaved changes. Returns whether it was
+    /// written.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn save_copy_to(&mut self, path: &Path) -> bool {
+        let Some(session) = &self.session else {
+            return false;
+        };
+        match session
+            .text()
+            .map_err(|error| error.to_string())
+            .and_then(|text| {
+                crate::files::write_atomic(path, text).map_err(|error| error.to_string())
+            }) {
+            Ok(()) => {
+                self.error = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
+
+    /// Choose where to write a copy of the project; a browser downloads it.
+    fn save_copy_dialog(&mut self) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let name = format!("{} (copy)", session.document().project.name);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let downloaded = session
+                .text()
+                .map_err(|error| error.to_string())
+                .and_then(|text| {
+                    crate::web::download(
+                        &format!("{name}.{}", dialogs::PROJECT_EXTENSION),
+                        text.as_bytes(),
+                        "application/json",
+                    )
+                });
+            if let Err(error) = downloaded {
+                self.error = Some(error);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = dialogs::choose_save_path(&name) {
+            self.save_copy_to(&path);
+        }
     }
 
     /// Open the version history window of the project, newest first.
@@ -369,7 +464,11 @@ impl DesktopApp {
     pub fn open_path(&mut self, path: &Path) {
         self.path_input = path.display().to_string();
         match Session::open(path) {
-            Ok(session) => self.replace(session),
+            Ok(session) => {
+                self.replace(session);
+                #[cfg(not(target_arch = "wasm32"))]
+                self.record_recent();
+            }
             Err(error) => self.error = Some(error.to_string()),
         }
     }
@@ -501,7 +600,10 @@ impl DesktopApp {
             Ok(()) => {
                 self.error = None;
                 #[cfg(not(target_arch = "wasm32"))]
-                self.record_version();
+                {
+                    self.record_version();
+                    self.record_recent();
+                }
                 true
             }
             Err(error) => {
@@ -630,6 +732,18 @@ impl DesktopApp {
                 self.set_mode(Mode::Edit);
             }
             Pending::Open(path) => self.open_path(&path),
+            Pending::Template(index) => {
+                let Some(template) = crate::templates::TEMPLATES.get(index) else {
+                    return;
+                };
+                match Session::load(template.text, None) {
+                    Ok(session) => {
+                        self.replace(session);
+                        self.path_input.clear();
+                    }
+                    Err(error) => self.error = Some(error.to_string()),
+                }
+            }
             Pending::OpenDialog => {
                 if let Some(path) = dialogs::pick_project() {
                     self.open_path(&path);
@@ -682,6 +796,48 @@ impl DesktopApp {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+    }
+
+    /// File > Open recent: the projects opened or saved last, and a way to
+    /// empty the list.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recent_menu(&mut self, ui: &mut Ui) {
+        let projects = self.recent_projects();
+        ui.add_enabled_ui(!projects.is_empty(), |ui| {
+            ui.menu_button(tr("Open recent"), |ui| {
+                for path in &projects {
+                    let name = path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |name| name.to_string_lossy().into_owned(),
+                    );
+                    if ui
+                        .button(name)
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                    {
+                        ui.close();
+                        if !path.is_file() {
+                            if let Some(recent) = &self.recent {
+                                let _ = recent.forget(path);
+                            }
+                            self.error = Some(trf(
+                                "{0} is no longer there; it was taken off the list.",
+                                &[&path.display()],
+                            ));
+                        } else {
+                            self.request_open(path.clone());
+                        }
+                    }
+                }
+                ui.separator();
+                if ui.button(tr("Clear the list")).clicked() {
+                    ui.close();
+                    if let Some(recent) = &self.recent {
+                        let _ = recent.clear();
+                    }
+                }
+            });
+        });
     }
 
     /// The version history of the project, while it is open.
@@ -1415,6 +1571,18 @@ impl DesktopApp {
                         ui.close();
                         self.guard(Pending::OpenDialog);
                     }
+                    ui.menu_button(tr("New from template"), |ui| {
+                        for (index, template) in crate::templates::TEMPLATES.iter().enumerate() {
+                            if ui.button(tr(template.name)).clicked() {
+                                ui.close();
+                                self.new_from_template(index);
+                            }
+                        }
+                    });
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if self.recent.is_some() {
+                        self.recent_menu(ui);
+                    }
                     ui.separator();
                     if ui
                         .add_enabled(has_session, egui::Button::new(tr("Save project")))
@@ -1429,6 +1597,16 @@ impl DesktopApp {
                     {
                         ui.close();
                         self.save_as_dialog();
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new(tr("Save a copy…")))
+                        .on_hover_text(tr(
+                            "Write the project to another file and keep working on this one",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.save_copy_dialog();
                     }
                     #[cfg(not(target_arch = "wasm32"))]
                     if self.versions.is_some() {
