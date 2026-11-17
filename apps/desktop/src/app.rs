@@ -265,6 +265,8 @@ pub struct DesktopApp {
     /// a relative point starts from, where the field is on screen, and
     /// whether the field still has to take the keyboard.
     point_entry: Option<(String, GridPoint, egui::Pos2, bool)>,
+    /// The print preview (File > Print preview).
+    print_preview: crate::print_preview::PrintPreview,
 }
 
 impl DesktopApp {
@@ -462,6 +464,22 @@ impl DesktopApp {
                 self.click_at(point);
             }
         }
+    }
+
+    /// Open the print preview of the project.
+    pub fn open_print_preview(&mut self) {
+        if let Some(session) = &self.session {
+            self.print_preview.open(session);
+        }
+    }
+
+    /// The pages of the print preview and the page shown, from 0, while it
+    /// is open.
+    #[must_use]
+    pub fn print_preview_page(&self) -> Option<(usize, usize)> {
+        self.print_preview
+            .pages()
+            .map(|pages| (self.print_preview.page(), pages))
     }
 
     /// Open the find and replace window, as Ctrl+H does in edit mode.
@@ -1589,6 +1607,11 @@ impl DesktopApp {
         }
         self.confirm_dialog(ui);
         self.command_palette(ui);
+        if self.print_preview.show(ui, self.session.as_ref())
+            == Some(crate::print_preview::Action::ExportPdf)
+        {
+            self.export_dialog("pdf");
+        }
         if let Some(session) = &self.session
             && let Some(request) = self
                 .find_replace
@@ -1995,6 +2018,13 @@ impl DesktopApp {
                     if ui.button(tr("Load library…")).clicked() {
                         ui.close();
                         self.library_dialog();
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new(tr("Print preview…")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.open_print_preview();
                     }
                     ui.add_enabled_ui(has_session, |ui| {
                         ui.menu_button(tr("Export drawing"), |ui| {

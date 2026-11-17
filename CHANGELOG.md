@@ -65,6 +65,11 @@ here when it lands.
   View options, off unless turned on: snap the wire tool to the ends, bends,
   middles and crossings of wires (`circuit_editor::snap_with`), outline the
   element under the pointer, and rulers along the drawing.
+- **Print preview** (File > Print preview): the pages of the PDF, at rest and
+  on white, one at a time, with Export as PDF.
+- **Export of several projects**: `opencircuit export a.ocircuit b.ocircuit
+  --output-dir out --to pdf` writes `out/a.pdf` and `out/b.pdf`; one that fails
+  is reported and the others are written (exit code 1).
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

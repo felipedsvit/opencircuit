@@ -249,10 +249,21 @@ OPC UA and MQTT were evaluated and are not implemented
 ## Export
 
 `opencircuit export <project> --output <file.svg | file.pdf>` draws the
-sheet, and the desktop application has the same in its Export menu. Output is
+sheet, and the desktop application has the same in its Export menu, with File
+> Print preview showing the pages of the PDF first. Output is
 deterministic: the same project gives the same bytes on every platform,
 which is what the committed drawings under `examples/` are checked against.
 Library artwork is drawn when its library is loaded.
+
+Several projects go into one folder with `opencircuit export <project>...
+--output-dir <dir> --to svg|pdf`: each is written as `<dir>/<file name>.<svg|pdf>`
+(`a.scenario.json` gives `a.scenario.pdf`), with the same `--theme` and
+`--sheet` for all. A project that cannot be drawn is reported and the others
+are still written, with exit code 1; two projects that would write the same
+file are refused before anything is written. With `--format json` the
+document has `kind` and `files`, one entry per project with `project`, `ok`,
+and `file` and `pages`, or `error`. `--output` and `--output-dir` do not
+mix, and `--to` goes only with `--output-dir`.
 
 A project with sheets (ADR-0011, `FORMAT.md`) draws the frame, the zone
 marks and the title block of each sheet. Its PDF has one page per sheet, in

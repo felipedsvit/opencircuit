@@ -271,8 +271,9 @@ mod tests {
     }
 
     /// Every source file that writes texts of the window.
-    const SOURCES: [&str; 7] = [
+    const SOURCES: [&str; 8] = [
         include_str!("../app.rs"),
+        include_str!("../print_preview.rs"),
         include_str!("../command_palette.rs"),
         include_str!("../find_replace.rs"),
         include_str!("../palette.rs"),

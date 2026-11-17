@@ -382,6 +382,14 @@ impl Session {
         )
     }
 
+    /// The pages a PDF of the drawing at rest has: one per sheet, in the
+    /// order of their numbers, or the whole drawing when there is no sheet.
+    #[must_use]
+    pub fn print_pages(&self) -> Vec<Scene> {
+        let (scene, pages, _) = self.export_scene(false);
+        if pages.is_empty() { vec![scene] } else { pages }
+    }
+
     /// The drawing as SVG text, with the same exporter as the command line:
     /// the whole canvas, frames included.
     #[must_use]

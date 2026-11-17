@@ -397,7 +397,9 @@ Decisions, to be confirmed in #118:
   (`circuit_editor::snap_with`), coordinates typed at the pointer (G), rulers;
   the three view options are off in a fresh window
   (`apps/desktop/tests/navigation.rs`).
-- [ ] Print preview; export of several projects in one command.
+- [x] Print preview (File > Print preview, `apps/desktop/tests/print_preview.rs`);
+  export of several projects in one command (`opencircuit export ...
+  --output-dir <dir> --to svg|pdf`, `apps/cli/tests/export_many.rs`).
 - [x] Find and replace (designators, notes, parameters; `replace` in edit
   files); editing every common field of a selection (catalog data of devices
   of any model, besides the parameters of one model); editing a label on the

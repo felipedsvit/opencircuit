@@ -50,6 +50,16 @@ pub(crate) enum Command {
         library: Option<PathBuf>,
         report: OutputFormat,
     },
+    /// `export` of several projects into a folder (`--output-dir`).
+    ExportMany {
+        projects: Vec<PathBuf>,
+        dir: PathBuf,
+        format: ExportFormat,
+        theme: Theme,
+        sheet: SheetChoice,
+        library: Option<PathBuf>,
+        report: OutputFormat,
+    },
     New {
         file: PathBuf,
         name: Option<String>,
@@ -124,6 +134,16 @@ pub(crate) const DEFAULT_LISTEN: &str = "127.0.0.1:5020";
 pub(crate) enum ExportFormat {
     Svg,
     Pdf,
+}
+
+impl ExportFormat {
+    /// The extension of a file of this format, which `--to` also takes.
+    pub(crate) const fn extension(self) -> &'static str {
+        match self {
+            Self::Svg => "svg",
+            Self::Pdf => "pdf",
+        }
+    }
 }
 
 /// Which sheets `export` writes.
@@ -296,27 +316,60 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
         "export" => {
             let words = Words::split(
                 rest,
-                &["--output", "--theme", "--sheet", "--format", "--library"],
+                &[
+                    "--output",
+                    "--output-dir",
+                    "--to",
+                    "--theme",
+                    "--sheet",
+                    "--format",
+                    "--library",
+                ],
                 &[],
             )?;
-            let output = words
-                .value("--output")
-                .map(PathBuf::from)
-                .ok_or("`export` needs `--output <file>`")?;
-            let format = match output
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .map(str::to_ascii_lowercase)
-                .as_deref()
-            {
-                Some("svg") => ExportFormat::Svg,
-                Some("pdf") => ExportFormat::Pdf,
-                _ => {
+            let dir = words.value("--output-dir").map(PathBuf::from);
+            let output = match (&dir, words.value("--output")) {
+                (Some(_), Some(_)) => {
+                    return Err(
+                        "give `--output <file>` or `--output-dir <dir>`, not both".to_owned()
+                    );
+                }
+                (Some(_), None) => None,
+                (None, Some(output)) => Some(PathBuf::from(output)),
+                (None, None) => {
+                    return Err(
+                        "`export` needs `--output <file>`, or `--output-dir <dir>` with `--to svg|pdf`"
+                            .to_owned(),
+                    );
+                }
+            };
+            if dir.is_none() && words.value("--to").is_some() {
+                return Err("`--to` goes with `--output-dir`; `--output` takes the format from its extension".to_owned());
+            }
+            let format = match (&output, words.value("--to")) {
+                (Some(output), _) => match output
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .map(str::to_ascii_lowercase)
+                    .as_deref()
+                {
+                    Some("svg") => ExportFormat::Svg,
+                    Some("pdf") => ExportFormat::Pdf,
+                    _ => {
+                        return Err(format!(
+                            "cannot tell the format of `{}`; the output must end in `.svg` or `.pdf`",
+                            output.display()
+                        ));
+                    }
+                },
+                (None, Some("svg")) => ExportFormat::Svg,
+                (None, Some("pdf")) => ExportFormat::Pdf,
+                (None, Some(other)) => {
                     return Err(format!(
-                        "cannot tell the format of `{}`; the output must end in `.svg` or `.pdf`",
-                        output.display()
+                        "unknown format `{other}`; use `--to svg` or `--to pdf`"
                     ));
                 }
+                (None, None) => return Err("`--output-dir` needs `--to svg|pdf`".to_owned()),
             };
             let theme = match words.value("--theme") {
                 None | Some("print") => Theme::Print,
@@ -343,15 +396,34 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                         .to_owned(),
                 );
             }
-            Ok(Command::Export {
-                project: words.single_positional("project file")?,
-                output,
-                format,
-                theme,
-                sheet,
-                library: words.value("--library").map(PathBuf::from),
-                report: report_format(&words)?,
-            })
+            let library = words.value("--library").map(PathBuf::from);
+            let report = report_format(&words)?;
+            match (output, dir) {
+                (Some(output), _) => Ok(Command::Export {
+                    project: words.single_positional("project file")?,
+                    output,
+                    format,
+                    theme,
+                    sheet,
+                    library,
+                    report,
+                }),
+                (None, Some(dir)) => {
+                    if words.positional.is_empty() {
+                        return Err("missing project file".to_owned());
+                    }
+                    Ok(Command::ExportMany {
+                        projects: words.positional.iter().map(PathBuf::from).collect(),
+                        dir,
+                        format,
+                        theme,
+                        sheet,
+                        library,
+                        report,
+                    })
+                }
+                (None, None) => Err("`export` needs `--output <file>`".to_owned()),
+            }
         }
         "new" => {
             let words = Words::split(rest, &["--name", "--format"], &["--force"])?;

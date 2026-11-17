@@ -63,6 +63,9 @@ usage:
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
                      [--theme print|live] [--sheet <number>|all]
                      [--format text|json] [--library <file.oclib|dir>]
+  opencircuit export <project.ocircuit>... --output-dir <dir> --to svg|pdf
+                     [--theme print|live] [--sheet <number>|all]
+                     [--format text|json] [--library <file.oclib|dir>]
   opencircuit report <project.ocircuit> --kind bom|wires|terminals|strips|xref|io|problems|devices|all
                      [--format text|json|csv] [--output <file.csv|json|txt|pdf>]
                      [--library <file.oclib|dir>]

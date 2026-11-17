@@ -31,6 +31,7 @@ mod i18n;
 mod icons;
 mod inspector;
 mod palette;
+mod print_preview;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod project_lock;
 #[cfg(not(target_arch = "wasm32"))]
