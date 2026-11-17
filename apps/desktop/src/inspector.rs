@@ -89,28 +89,64 @@ pub fn show(
     state: &mut InspectorState,
 ) -> Option<Request> {
     let mut request = None;
-    ui.strong("Inspector");
+    ui.label(selection_summary(session, selection));
+    egui::CollapsingHeader::new("Properties")
+        .default_open(true)
+        .show(ui, |ui| {
+            let mut selected = selection.iter();
+            match (selected.next(), selected.next()) {
+                (Some(Subject::Symbol(id)), None) => {
+                    request = device_section(ui, session, *id, state);
+                }
+                (None, _) => {
+                    ui.label("Select a symbol to edit its device.");
+                }
+                _ => {
+                    request = selection_section(ui, session, selection, state);
+                }
+            }
+        });
+    egui::CollapsingHeader::new("Supplies")
+        .default_open(true)
+        .show(ui, |ui| {
+            if let Some(change) = supplies_section(ui, session, state) {
+                request = Some(change);
+            }
+        });
+    egui::CollapsingHeader::new("Sheets and title block")
+        .default_open(true)
+        .show(ui, |ui| {
+            if let Some(change) = sheets_section(ui, session, state) {
+                request = Some(change);
+            }
+        });
+    request
+}
+
+/// One line about the selection: nothing, one symbol of a part, or how many.
+fn selection_summary(session: &Session, selection: &BTreeSet<Subject>) -> String {
     let mut selected = selection.iter();
     match (selected.next(), selected.next()) {
+        (None, _) => "Nothing selected".to_owned(),
         (Some(Subject::Symbol(id)), None) => {
-            request = device_section(ui, session, *id, state);
+            let layout = LayoutIndex::new(session.document(), session.catalog());
+            layout
+                .symbol(*id)
+                .and_then(|symbol| layout.device(symbol.device_id))
+                .map_or_else(
+                    || "1 symbol selected".to_owned(),
+                    |device| {
+                        let title = session
+                            .catalog()
+                            .model(&device.model)
+                            .map_or(device.model.id.as_str(), |model| model.title());
+                        format!("{} · {title}", device.reference.0)
+                    },
+                )
         }
-        (None, _) => {
-            ui.label("Select a symbol to edit its device.");
-        }
-        _ => {
-            request = selection_section(ui, session, selection, state);
-        }
+        (Some(_), None) => "1 element selected".to_owned(),
+        _ => format!("{} elements selected", selection.len()),
     }
-    ui.separator();
-    if let Some(change) = supplies_section(ui, session, state) {
-        request = Some(change);
-    }
-    ui.separator();
-    if let Some(change) = sheets_section(ui, session, state) {
-        request = Some(change);
-    }
-    request
 }
 
 fn device_section(
@@ -462,8 +498,6 @@ fn param_row(
 fn sheets_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) -> Option<Request> {
     let doc = session.document();
     let mut request = None;
-    ui.strong("Sheets and title block");
-
     let project = &doc.project;
     let fields = [
         ("name", "Project", project.name.as_str()),
@@ -582,7 +616,6 @@ fn supplies_section(ui: &mut Ui, session: &Session, state: &mut InspectorState) 
     let doc = session.document();
     let catalog = session.catalog();
     let mut request = None;
-    ui.strong("Supplies");
     for supply in &doc.supplies {
         ui.label(format!(
             "Supply {} · {}",
