@@ -1663,3 +1663,77 @@ fn terminals_that_touch_without_a_wire_are_a_warning_and_a_wire_removes_it() {
         assert_eq!(code(&validate), i32::from(warned), "{text}");
     }
 }
+
+/// Add a waiver to a project file, as a person editing the JSON would.
+fn add_waiver(project: &Path, code: &str, subject: &serde_json::Value, reason: &str) {
+    let text = fs::read_to_string(project).expect("read");
+    let mut doc: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let waivers = doc["waivers"].take();
+    let mut list = waivers.as_array().cloned().unwrap_or_default();
+    list.push(serde_json::json!({ "code": code, "subject": subject, "reason": reason }));
+    doc["waivers"] = serde_json::Value::Array(list);
+    fs::write(project, serde_json::to_string_pretty(&doc).expect("JSON")).expect("write");
+}
+
+#[test]
+fn a_waived_warning_is_marked_with_its_reason_and_no_longer_fails_deny_warnings() {
+    let directory = scratch("waived");
+    let project = directory.join("waived.ocircuit");
+    let path = project.to_str().expect("utf-8 path");
+    assert_eq!(code(&opencircuit(&["new", path])), 0);
+    let edit = directory.join("edit.json");
+    fs::write(&edit, touching_buttons(false)).expect("write");
+    let applied = opencircuit(&["edit", path, "--apply", edit.to_str().expect("utf-8 path")]);
+    assert_eq!(
+        code(&applied),
+        0,
+        "{}{}",
+        stdout(&applied),
+        stderr(&applied)
+    );
+
+    let before = opencircuit(&["validate", path, "--deny-warnings", "--format", "json"]);
+    assert_eq!(code(&before), 1);
+    let before = json(&before);
+    let finding = before["diagnostics"][0].clone();
+    assert_eq!(finding["code"], "OC-STR-018");
+    assert_eq!(finding["waived"], serde_json::Value::Null);
+    assert_eq!(before["waived"], 0);
+
+    add_waiver(
+        &project,
+        "OC-STR-018",
+        &finding["subject"],
+        "intended: test jig",
+    );
+
+    let text = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&text), 0, "{}", stdout(&text));
+    let shown = stdout(&text);
+    assert!(shown.contains("waived[OC-STR-018]"), "{shown}");
+    assert!(shown.contains("(reason: intended: test jig)"), "{shown}");
+    assert!(
+        shown.ends_with("ok: 0 error(s), 0 warning(s), 1 waived\n"),
+        "{shown}"
+    );
+
+    let after = json(&opencircuit(&["validate", path, "--format", "json"]));
+    assert_eq!(
+        (after["warnings"].clone(), after["waived"].clone()),
+        (0.into(), 1.into())
+    );
+    assert_eq!(
+        after["diagnostics"][0]["waived"]["reason"],
+        "intended: test jig"
+    );
+
+    // A waiver of an error does nothing and is itself reported.
+    add_waiver(&project, "OC-STR-013", &finding["subject"], "no");
+    let report = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&report), 1);
+    assert!(
+        stdout(&report).contains("OC-STR-020"),
+        "{}",
+        stdout(&report)
+    );
+}

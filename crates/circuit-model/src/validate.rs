@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::diagnostics::{Diagnostic, DiagnosticCode, Subject, sort_diagnostics};
+use crate::diagnostics::{Diagnostic, DiagnosticCode, Severity, Subject, sort_diagnostics};
 use crate::geometry::GridRect;
 use crate::ids::WireId;
 use crate::ids::{DeviceId, JunctionId, MAX_ENTITY_ID, SheetId, SymbolId};
@@ -25,6 +25,7 @@ pub(crate) fn validate(doc: &Schematic) -> Vec<Diagnostic> {
     check_supply_profiles(doc, &mut out);
     check_sheets(doc, &mut out);
     check_wire_numbers(doc, &mut out);
+    check_waivers(doc, &mut out);
 
     sort_diagnostics(&mut out);
     out
@@ -362,6 +363,41 @@ fn check_sheets(doc: &Schematic, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Waivers that cannot work (ADR-0014): a code that is not one, an error or
+/// `OC-STR-020` itself, a subject that is not in the document, or a repeat.
+fn check_waivers(doc: &Schematic, out: &mut Vec<Diagnostic>) {
+    if doc.waivers.is_empty() {
+        return;
+    }
+    let known: BTreeSet<Subject> = entities(doc).map(|(_, subject)| subject).collect();
+    let exists = |subject: &Subject| match subject {
+        Subject::Document => true,
+        Subject::Pin(pin) => known.contains(&Subject::Symbol(pin.symbol_id)),
+        other => known.contains(other),
+    };
+    let mut seen: BTreeSet<(&str, &Subject)> = BTreeSet::new();
+    for waiver in &doc.waivers {
+        let problem = match DiagnosticCode::parse(&waiver.code) {
+            None => "is not a diagnostic code",
+            Some(DiagnosticCode::InvalidWaiver) => "cannot be waived",
+            Some(code) if code.default_severity() == Severity::Error => {
+                "is an error, and an error cannot be waived"
+            }
+            Some(_) if !exists(&waiver.subject) => "is about something that is not in the document",
+            Some(_) if !seen.insert((waiver.code.as_str(), &waiver.subject)) => "is given twice",
+            Some(_) => continue,
+        };
+        out.push(Diagnostic::new(
+            DiagnosticCode::InvalidWaiver,
+            waiver.subject.clone(),
+            format!(
+                "the waiver of `{}` for {} {problem}",
+                waiver.code, waiver.subject
+            ),
+        ));
+    }
+}
+
 /// Two wires of one net that carry different numbers (ADR-0014). The nets
 /// are found from the wire endpoints alone, which is all a net with two wires
 /// needs, so the check needs no catalog. The subject is the numbered wire with
@@ -604,6 +640,59 @@ mod tests {
         doc.wires.reverse();
 
         assert_eq!(doc.validate(), expected);
+    }
+
+    fn waived(code: &str, subject: Subject) -> crate::documentation::Waiver {
+        crate::documentation::Waiver {
+            code: code.to_owned(),
+            subject,
+            reason: "because".to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_waiver_that_works_is_not_reported() {
+        let mut doc = valid();
+        doc.waivers = vec![waived("OC-STR-018", Subject::Wire(WireId(5)))];
+
+        assert_eq!(codes(&doc), []);
+    }
+
+    #[test]
+    fn a_waiver_that_cannot_work_is_a_warning_that_says_why() {
+        let mut doc = valid();
+        doc.waivers = vec![
+            waived("OC-NOPE-1", Subject::Wire(WireId(5))),
+            waived("OC-STR-013", Subject::Wire(WireId(5))),
+            waived("OC-STR-020", Subject::Wire(WireId(5))),
+            waived("OC-STR-018", Subject::Wire(WireId(99))),
+            waived("OC-STR-018", Subject::Wire(WireId(5))),
+            waived("OC-STR-018", Subject::Wire(WireId(5))),
+        ];
+
+        let messages: Vec<String> = doc
+            .validate()
+            .into_iter()
+            .map(|d| {
+                assert_eq!(d.code(), DiagnosticCode::InvalidWaiver);
+                d.message().to_owned()
+            })
+            .collect();
+
+        assert_eq!(messages.len(), 5);
+        assert!(messages.iter().any(|m| m.contains("not a diagnostic code")));
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("an error cannot be waived"))
+        );
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains("OC-STR-020") && m.contains("cannot be waived"))
+        );
+        assert!(messages.iter().any(|m| m.contains("not in the document")));
+        assert!(messages.iter().any(|m| m.contains("given twice")));
     }
 
     #[test]

@@ -131,6 +131,12 @@ without moving the others; if two wires of one net carry different overrides,
 the one on the wire with the smaller ID wins and the document has the warning
 `OC-SEM-012`. A project without `wire_numbering` draws no wire number.
 
+A waiver hides nothing from the compiler: the diagnostic is still produced and
+the command line, the window and the reports mark it as waived. Only a warning
+or an informational diagnostic can be waived. A waiver whose code is not a
+diagnostic code, is an error or is `OC-STR-020`, whose subject is not in the
+document, or that repeats another is itself the warning `OC-STR-020`.
+
 A subject is the tagged form the command line prints: `"document"`,
 `{ "supply": 1 }`, `{ "device": 2 }`, `{ "symbol": 3 }`, `{ "wire": 5 }`,
 `{ "junction": 4 }`, `{ "sheet": 7 }` or
