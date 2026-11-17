@@ -196,6 +196,67 @@ wire (schema version 3), layers, a text and annotation entity (ladder and
 GRAFCET as diagrams), clicking for the points of a command, an ORTHO switch
 (wires are always orthogonal), tabs for several documents, localisation.
 
+## M7 — Electrical documentation and productivity (done)
+
+Tracking issue #85. Clean room: the workflows of other electrical CAD tools
+shaped the scope only; no code, strings, artwork or symbols were copied. The
+window changed only by addition (the `Conservative interface` rule of
+`AGENTS.md`). Schema version 3 and ADR-0014.
+
+Derived from the document, never stored:
+
+- [x] Static nets in `circuit-model` (`StaticNets`), kept in step with the
+  compiler by a test.
+- [x] Wire numbers from a rule of the project (prefix, start, step, restart
+  on each sheet), an override on a wire, `OC-SEM-012` for conflicting
+  overrides, and the number drawn on the wire.
+- [x] Reports: `Table` and the crate `circuit-report` (bill of materials,
+  wires, terminals, cross-reference exceptions, I/O map, problems);
+  `opencircuit report` writes text, JSON, CSV and, in the embedded font, PDF.
+- [x] `renumber`: designators in reading order, one undo, from the Modify
+  menu, the command line and the edit file.
+- [x] Drawings that look connected and are not: `OC-STR-018` (a terminal or
+  junction on another terminal, junction or wire) and `OC-STR-019` (wires of
+  different nets over one line).
+
+Stored (schema version 3, all optional):
+
+- [x] `Wire.number`, `Device.info` (manufacturer, part number, description,
+  location), `project.wire_numbering` and `waivers`; migration from version 2.
+- [x] Waivers: a warning accepted with a reason (`OC-STR-020` for a waiver
+  that cannot work); `validate` marks them and `--deny-warnings` ignores them.
+
+Window (additions to the existing panels and menus):
+
+- [x] Inspector sections: Connections, Cross-references, Catalog data, Wire
+  number and Project tree, and the numbering rule in the sheets section.
+- [x] Trace the net of the selection (View menu, key T).
+- [x] A strip of the parts chosen most recently, and a two-terminal part
+  clicked on a wire goes in series with it.
+- [x] The problems list: Connect, Ignore with a reason, Waived and Restore,
+  Save list.
+
+Command line: `report`, and the edit-file operations `set_device_info`,
+`set_wire_number`, `numbering`, `waive`, `unwaive` and `renumber`.
+
+**Exit criterion:** a project made only through the command line, on two
+sheets, with a numbering rule and the catalog data of its parts, validates,
+reports its bill of materials, wires, terminals, cross-reference exceptions
+and I/O map as the committed CSV files, writes them as a PDF, renumbers
+without duplicates, and has a warning waived with a reason that no longer
+fails `--deny-warnings`. The exit test is
+`m7_exit_a_project_documented_through_the_command_line_reports_numbers_and_exports`
+in `apps/cli/tests/cli.rs`; the window is covered by
+`apps/desktop/tests/project.rs`; the formats and limits are in `FORMAT.md` and
+`EXTENDING.md`.
+
+Considered and not done in M7: off-page signal arrows (they would supersede
+ADR-0011), ladder diagrams and a text and annotation entity, terminal strips
+and PLC modules, a library tab of ready-made circuits with parameters, an MCP
+server (the edit file and the JSON output are still the interface it would sit
+on), manufacturer catalog import, and a static wire colour. New work starts
+with an issue.
+
 ## Out of scope for the MVP
 
 Analog simulation, rigorous voltage/current/impedance calculation, transients,

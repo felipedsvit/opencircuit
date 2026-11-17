@@ -27,14 +27,19 @@ with one page per sheet, cross-references between coils and contacts, and
 script. M6 is implemented: a window with menus, a status bar, a palette in
 eight tabs with symbol drawings, a command line, selection by window or
 crossing, the standard parts library `std`, and symbol-only devices for what
-the simulation does not model. How to extend OpenCircuit, and the safety limits of each interface,
+the simulation does not model. M7 is implemented: wire numbers, reports
+(bill of materials, wires, terminals, cross-reference exceptions, I/O map and
+problems, as text, JSON, CSV and PDF), renumbering, warnings about drawings
+that look connected and are not, warnings accepted with a reason, and in the
+window a project tree, the connections and catalog data of a part, a net
+trace, recent parts and parts placed on a wire. How to extend OpenCircuit, and the safety limits of each interface,
 are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
 
 ```text
 apps/
-  cli/                 `opencircuit`: validate, simulate, test, export, serve
+  cli/                 `opencircuit`: validate, simulate, test, new, edit, export, report, serve
   desktop/             `opencircuit-desktop`: egui editor and viewer (draw, run, export)
 crates/
   circuit-model/       IDs, document, catalog and geometry, diagnostics, inputs, snapshot
@@ -45,6 +50,7 @@ crates/
   circuit-editor/      selection, tools and hit-test, no GUI
   circuit-export/      deterministic SVG and PDF from the neutral scene
   circuit-io/          Modbus TCP codec and I/O map, no sockets
+  circuit-report/      reports of a project as tables: bill of materials, wires, terminals, ...
 xtask/                 architecture checks and example generation
 examples/              reference projects with scenarios and golden traces
 tests/fixtures/        projects that must be rejected, with their scenarios
@@ -58,7 +64,8 @@ circuit-model <- circuit-sim
 circuit-model <- circuit-project
 circuit-model <- circuit-renderer <- circuit-export
 circuit-model <- circuit-commands <- circuit-editor
-circuit-model <- circuit-io
+circuit-model <- circuit-io <- circuit-report
+circuit-model <- circuit-report
 the renderer consumes SimSnapshot, never simulator internals
 apps/* may depend on GUI crates; circuit-* crates may not
 ```

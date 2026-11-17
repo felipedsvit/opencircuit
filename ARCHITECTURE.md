@@ -28,6 +28,7 @@ second real consumer justifies the boundary.
 | Renderer | `circuit-renderer` | Neutral scene: drawing primitives in integer logical coordinates with semantic styles, built from a document and an optional `SimSnapshot` |
 | Export | `circuit-export` | Deterministic SVG written directly and PDF written with `pdf-writer` (ADR-0006) from the neutral scene, with a print and a live theme; no I/O |
 | I/O | `circuit-io` | Modbus TCP codec and the I/O map of a project (ADR-0009); no socket, no thread, no clock |
+| Reports | `circuit-report` | The reports of a project derived as tables (ADR-0014): bill of materials, wires, terminals, cross-reference exceptions, I/O map and problems; no I/O |
 | CLI | `apps/cli` (package `opencircuit-cli`, binary `opencircuit`) | Headless validation, simulation, golden execution, export, project creation and scripted editing (`new`, `edit`, through `circuit-commands`) and the Modbus TCP server (`serve`, the only place with a socket and a real-time loop) |
 | Desktop | `apps/desktop` (package and binary `opencircuit-desktop`) | egui/eframe window that creates, opens, draws, edits (palette, inspector, undo/redo through `circuit-commands` and `circuit-editor`), saves atomically and runs a project with operator controls; the only package with a GUI dependency |
 | Tooling | `xtask` | Architecture checks, generation of the example projects and benchmarks |
@@ -46,7 +47,7 @@ runtime  -> bitset, compiled, fingerprint, logic, solve, trace
 The crates arrived in this order: M1 has `circuit-model`, `circuit-sim`,
 `circuit-project`, `apps/cli` and `xtask`; M2 added `circuit-renderer`,
 `apps/desktop`, `circuit-commands` and `circuit-editor`; M3 added
-`circuit-export`; M4 added `circuit-io`. A new crate is not a workspace member
+`circuit-export`; M4 added `circuit-io`; M7 added `circuit-report`. A new crate is not a workspace member
 before it has a real `src/lib.rs` and a consumer.
 
 ## Dependency rules
@@ -60,9 +61,10 @@ circuit-commands    -> circuit-model
 circuit-editor      -> circuit-model, circuit-commands
 circuit-export      -> circuit-model, circuit-renderer
 circuit-io          -> circuit-model
-apps/cli            -> circuit-model, circuit-sim, circuit-project, circuit-renderer, circuit-export, circuit-io
-xtask               -> circuit-model, circuit-project, circuit-sim, circuit-renderer, circuit-commands, circuit-export
-apps/desktop        -> model, sim, project, renderer, editor, commands, export
+circuit-report      -> circuit-model, circuit-io
+apps/cli            -> circuit-model, circuit-sim, circuit-project, circuit-renderer, circuit-export, circuit-io, circuit-report
+xtask               -> circuit-model, circuit-project, circuit-sim, circuit-renderer, circuit-commands, circuit-export, circuit-report
+apps/desktop        -> model, sim, project, renderer, editor, commands, export, report
 ```
 
 Rules:
@@ -167,3 +169,19 @@ drawings from `circuit_renderer::symbol_preview`, and a command line whose
 meaning is `circuit_commands::commandline`: the window holds no logic of its
 own, it shows requests that the core computes. The editor selects by window
 or by crossing (`Preview::crossing`).
+
+M7 is implemented (ADR-0014, schema version 3). What can be derived is derived,
+as the cross-references already were: `circuit_model::StaticNets` numbers the
+copper nets (a second implementation of the compiler's copper phase, which a
+test in `circuit-sim` checks against it), `WireNumbers` numbers the nets from
+the rule of the project, `project_tree`, `links` and `loose_geometry` serve the
+window and the compiler, and `circuit-report` turns the document into `Table`s
+that the command line writes as text, JSON or CSV and `circuit-export` draws as
+PDF pages. What a person decides is stored, each field optional and omitted when
+empty: a wire number override, the catalog data of a device, the numbering
+rule and the waivers. A waiver hides nothing from the compiler; `validate`, the
+window and the reports mark the diagnostics that the project waives, and only
+warnings and informational diagnostics can be waived. The window changed by
+addition: sections after the existing ones in the inspector, a View item and a
+key for the net trace, a strip of recent parts, parts placed in series with a
+wire, and buttons on the lines of the problems list.

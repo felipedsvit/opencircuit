@@ -441,9 +441,10 @@ fn check_wire_numbers(doc: &Schematic, out: &mut Vec<Diagnostic>) {
             continue;
         };
         let (a, b) = (find(&mut parent, a), find(&mut parent, b));
-        if a != b
-            && let Some(slot) = parent.get_mut(a.max(b))
-        {
+        if a == b {
+            continue;
+        }
+        if let Some(slot) = parent.get_mut(a.max(b)) {
             *slot = a.min(b);
         }
     }

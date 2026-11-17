@@ -52,9 +52,11 @@ type Place = (circuit_model::ReadingKey, u64);
 /// not have, and [`CommandError::InvalidReference`] when a prefix is so long
 /// that the new designator would not be valid.
 pub fn renumber(doc: &Schematic, scope: Scope) -> Result<Transaction, CommandError> {
-    if let Scope::Sheet(number) = scope
-        && !doc.sheets.iter().any(|sheet| sheet.number == number)
-    {
+    let missing_sheet = match scope {
+        Scope::Sheet(number) => !doc.sheets.iter().any(|sheet| sheet.number == number),
+        Scope::All => false,
+    };
+    if let (true, Scope::Sheet(number)) = (missing_sheet, scope) {
         return Err(CommandError::InvalidSheet(format!(
             "there is no sheet number {number}"
         )));

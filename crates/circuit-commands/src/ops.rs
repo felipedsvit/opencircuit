@@ -307,16 +307,19 @@ pub fn place_on_wire(
             turn.rotate(terminal.offset)
                 .and_then(|offset| offset.checked_add(at))
         };
-        if let (Some(first), Some(second)) = (place(one), place(other))
-            && across(first) == across(at)
-            && across(second) == across(at)
-            && along(first) != along(second)
-            && [first, second]
-                .iter()
-                .all(|pin| low < along(*pin) && along(*pin) < high)
-        {
-            pins = Some((first, second));
-            break;
+        let fits_the_line = |first: GridPoint, second: GridPoint| {
+            across(first) == across(at)
+                && across(second) == across(at)
+                && along(first) != along(second)
+                && [first, second]
+                    .iter()
+                    .all(|pin| low < along(*pin) && along(*pin) < high)
+        };
+        if let (Some(first), Some(second)) = (place(one), place(other)) {
+            if fits_the_line(first, second) {
+                pins = Some((first, second));
+                break;
+            }
         }
         turn = turn.next();
     }

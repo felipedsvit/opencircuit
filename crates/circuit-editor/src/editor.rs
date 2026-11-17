@@ -193,10 +193,10 @@ fn place_at(
     rotation: QuarterTurn,
     hit: Option<&Hit>,
 ) -> Result<Transaction, CommandError> {
-    if let Some(Hit::Wire { wire, .. }) = hit
-        && let Ok(tx) = ops::place_on_wire(doc, catalog, model, symbol, at, rotation, *wire)
-    {
-        return Ok(tx);
+    if let Some(Hit::Wire { wire, .. }) = hit {
+        if let Ok(tx) = ops::place_on_wire(doc, catalog, model, symbol, at, rotation, *wire) {
+            return Ok(tx);
+        }
     }
     ops::place(doc, catalog, model, symbol, at, rotation)
 }
