@@ -66,6 +66,7 @@ usage:
   opencircuit report <project.ocircuit> --kind bom|wires|terminals|strips|xref|io|problems|all
                      [--format text|json|csv] [--output <file.csv|json|txt|pdf>]
                      [--library <file.oclib|dir>]
+  opencircuit diff <before.ocircuit> <after.ocircuit> [--format text|json|csv]
   opencircuit mcp [--root <directory>]
   opencircuit serve <project.ocircuit> [--listen <address:port>]
                     [--print-map [--format text|json]]
@@ -73,6 +74,10 @@ usage:
 
 A directory given to --library stands for its *.oclib files. Scenarios name
 their libraries in `libraries` (scenario schema version 2).
+
+diff lists what changed between two versions of a project: elements added,
+removed or changed, matched by their stable IDs, with the fields that differ.
+It exits with 0 when they are the same and 1 when they differ.
 
 report derives the tables of a project (bill of materials, wires, terminals,
 cross-reference exceptions, I/O map, problems). Without --output the tables

@@ -58,6 +58,9 @@ enum Pending {
     OpenDialog,
     /// Close the window.
     Close,
+    /// Open a saved version as a new, unsaved project.
+    #[cfg(not(target_arch = "wasm32"))]
+    Restore(crate::versions::Version),
 }
 
 /// What the window is for at the moment.
@@ -223,6 +226,13 @@ pub struct DesktopApp {
     /// and when the last attempt was, in window seconds.
     #[cfg(not(target_arch = "wasm32"))]
     lock_retry: (f64, f64),
+    /// Where every save keeps a version; off unless `main` turns it on.
+    #[cfg(not(target_arch = "wasm32"))]
+    versions: Option<crate::versions::VersionStore>,
+    /// The version history window, while open: each version and how many
+    /// elements differ from the project as it was when the window opened.
+    #[cfg(not(target_arch = "wasm32"))]
+    history: Option<Vec<(crate::versions::Version, usize)>>,
 }
 
 impl DesktopApp {
@@ -273,6 +283,60 @@ impl DesktopApp {
     ) {
         self.project_locks = Some(locks);
         self.lock_retry = (retry_seconds.max(0.0), f64::NEG_INFINITY);
+    }
+
+    /// Keep a version of the project in `store` at every save.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_version_history(&mut self, store: crate::versions::VersionStore) {
+        self.versions = Some(store);
+    }
+
+    /// Open the version history window of the project, newest first.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn show_version_history(&mut self) {
+        let (Some(store), Some(session)) = (&self.versions, &self.session) else {
+            return;
+        };
+        let Some(path) = session.path() else {
+            return;
+        };
+        let current = session.document();
+        let listed = store
+            .list(path)
+            .into_iter()
+            .map(|version| {
+                let changes = version
+                    .read()
+                    .ok()
+                    .and_then(|text| circuit_project::from_str(&text).ok())
+                    .map_or(0, |old| circuit_report::diff(&old, current).rows.len());
+                (version, changes)
+            })
+            .collect();
+        self.history = Some(listed);
+    }
+
+    /// How many versions the history window lists, if it is open.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn versions_listed(&self) -> Option<usize> {
+        self.history.as_ref().map(Vec::len)
+    }
+
+    /// Keep the project as it is now as a version of its file.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_version(&mut self) {
+        let (Some(store), Some(session)) = (&self.versions, &self.session) else {
+            return;
+        };
+        let (Some(path), Ok(text)) = (session.path(), session.text()) else {
+            return;
+        };
+        // The project is saved either way; a version that cannot be kept is
+        // said, not treated as a failed save.
+        if let Err(error) = store.record(path, &text) {
+            self.error = Some(trf("The version history was not updated: {0}", &[&error]));
+        }
     }
 
     /// Whether another window has the open project open too.
@@ -414,6 +478,8 @@ impl DesktopApp {
         match session.save() {
             Ok(()) => {
                 self.error = None;
+                #[cfg(not(target_arch = "wasm32"))]
+                self.record_version();
                 true
             }
             Err(SaveError::NoPath) => self.save_as_dialog(),
@@ -434,6 +500,8 @@ impl DesktopApp {
         match session.save_as(path) {
             Ok(()) => {
                 self.error = None;
+                #[cfg(not(target_arch = "wasm32"))]
+                self.record_version();
                 true
             }
             Err(error) => {
@@ -567,6 +635,22 @@ impl DesktopApp {
                     self.open_path(&path);
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            Pending::Restore(version) => {
+                let loaded = version
+                    .read()
+                    .map_err(|error| error.to_string())
+                    .and_then(|text| Session::load(&text, None).map_err(|error| error.to_string()));
+                match loaded {
+                    Ok(mut session) => {
+                        session.mark_unsaved();
+                        self.replace(session);
+                        self.path_input.clear();
+                        self.history = None;
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
             Pending::Close => {
                 // Closed on purpose: no copy is kept for a recovery.
                 #[cfg(not(target_arch = "wasm32"))]
@@ -597,6 +681,54 @@ impl DesktopApp {
             let wait = autosave.due_in(now).max(0.1);
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
+    }
+
+    /// The version history of the project, while it is open.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn history_window(&mut self, ui: &Ui) {
+        let Some(listed) = &self.history else {
+            return;
+        };
+        let mut open = true;
+        let mut restore = None;
+        egui::Window::new(tr("Version history"))
+            .open(&mut open)
+            .collapsible(false)
+            .show(ui.ctx(), |ui| {
+                if listed.is_empty() {
+                    ui.label(tr("No version yet: one is kept at every save."));
+                }
+                egui::ScrollArea::vertical()
+                    .max_height(360.0)
+                    .show(ui, |ui| {
+                        for (index, (version, changes)) in listed.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.label(version.label());
+                                ui.label(trf("{0} differences", &[changes]));
+                                let response = ui.button(tr("Open as new project"));
+                                let label = format!("Open version {}", index.saturating_add(1));
+                                response.widget_info(|| {
+                                    egui::WidgetInfo::labeled(
+                                        egui::Role::Button,
+                                        true,
+                                        label.as_str(),
+                                    )
+                                });
+                                if response.clicked() {
+                                    restore = Some(version.clone());
+                                }
+                            });
+                        }
+                    });
+            });
+        if let Some(version) = restore {
+            self.guard(Pending::Restore(version));
+            if self.confirm.is_none() {
+                self.history = None;
+            }
+        } else if !open {
+            self.history = None;
         }
     }
 
@@ -968,6 +1100,7 @@ impl DesktopApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.recovery_dialog(ui);
+            self.history_window(ui);
             self.autosave_tick(ui);
             self.relock(ui);
         }
@@ -1296,6 +1429,20 @@ impl DesktopApp {
                     {
                         ui.close();
                         self.save_as_dialog();
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if self.versions.is_some() {
+                        let saved = self.session.as_ref().and_then(Session::path).is_some();
+                        if ui
+                            .add_enabled(saved, egui::Button::new(tr("Version history…")))
+                            .on_hover_text(tr(
+                                "Every save of this project; open one as a new project",
+                            ))
+                            .clicked()
+                        {
+                            ui.close();
+                            self.show_version_history();
+                        }
                     }
                     ui.separator();
                     if ui.button(tr("Load library…")).clicked() {

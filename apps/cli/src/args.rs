@@ -84,6 +84,11 @@ pub(crate) enum Command {
         output: Option<(PathBuf, FileFormat)>,
         library: Option<PathBuf>,
     },
+    Diff {
+        before: PathBuf,
+        after: PathBuf,
+        format: TableFormat,
+    },
 }
 
 /// Which reports `report` makes.
@@ -408,6 +413,27 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
             })
         }
         "report" => parse_report(rest),
+        "diff" => {
+            let words = Words::split(rest, &["--format"], &[])?;
+            let [before, after] = words.positional.as_slice() else {
+                return Err("`diff` takes two project files: before and after".to_owned());
+            };
+            let format = match words.value("--format") {
+                None | Some("text") => TableFormat::Text,
+                Some("json") => TableFormat::Json,
+                Some("csv") => TableFormat::Csv,
+                Some(other) => {
+                    return Err(format!(
+                        "unknown format `{other}`; use `text`, `json` or `csv`"
+                    ));
+                }
+            };
+            Ok(Command::Diff {
+                before: PathBuf::from(before),
+                after: PathBuf::from(after),
+                format,
+            })
+        }
         "mcp" => {
             let words = Words::split(rest, &["--root"], &[])?;
             if !words.positional.is_empty() {

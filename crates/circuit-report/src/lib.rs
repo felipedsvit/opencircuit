@@ -14,6 +14,7 @@
 //! | [`xref`] | cross-reference exception: a coil with no contact, a contact with no coil, a symbol off the sheets |
 //! | [`io`] | address of the Modbus map (ADR-0009) |
 //! | [`problems`] | diagnostic |
+//! | [`diff`] | element added, removed or changed between two versions of a project |
 //!
 //! Rows are in reading order (designators in natural order, so `K2` comes
 //! before `K10`), and nothing depends on the order of the collections of the
@@ -34,6 +35,9 @@
 )]
 
 use std::collections::BTreeMap;
+
+mod diff;
+pub use diff::diff;
 
 use circuit_io::IoMap;
 use circuit_model::{

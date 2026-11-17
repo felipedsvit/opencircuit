@@ -376,10 +376,12 @@ Decisions, to be confirmed in #118:
   bar; a lock is released however its window ends, so it is never stale
   (`apps/desktop/tests/project_lock.rs`). Same user and machine only; the
   command line does not take it.
-- [ ] Version history: a copy per save in the data folder, restored as a new
-  document.
-- [ ] Semantic comparison of two projects (`opencircuit diff`, and in the
-  window): devices, symbols, wires and parameters added, removed or changed.
+- [x] Version history: a copy per save in the data folder (the newest 20),
+  opened as a new, unsaved project from File > Version history
+  (`apps/desktop/tests/versions.rs`).
+- [x] Semantic comparison of two projects: `opencircuit diff`
+  (`apps/cli/tests/diff.rs`), and in the window the number of differences of
+  each version from the project.
 
 ### M9.2 — Productivity (no schema change)
 

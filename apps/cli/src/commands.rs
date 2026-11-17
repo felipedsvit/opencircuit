@@ -163,6 +163,11 @@ pub(crate) fn execute(
             };
             report(&request, &catalog, out, err)
         }
+        Command::Diff {
+            before,
+            after,
+            format,
+        } => diff(before, after, *format, out, err),
         Command::Serve {
             project,
             listen,
@@ -595,6 +600,67 @@ struct TablesReport<'a> {
     command: &'static str,
     ok: bool,
     reports: Vec<TableEntry<'a>>,
+}
+
+#[derive(Serialize)]
+struct DiffReport<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    /// Whether the two projects are the same document.
+    same: bool,
+    changes: TableEntry<'a>,
+}
+
+/// Compare two projects: exit 0 when they are the same, 1 when they differ.
+fn diff(
+    before: &Path,
+    after: &Path,
+    format: TableFormat,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<u8, CliError> {
+    let console = match format {
+        TableFormat::Json => OutputFormat::Json,
+        TableFormat::Text | TableFormat::Csv => OutputFormat::Text,
+    };
+    let mut docs = Vec::with_capacity(2);
+    for path in [before, after] {
+        let text = read_text(path, MAX_PROJECT_BYTES)?;
+        match circuit_project::from_str(&text) {
+            Ok(doc) => docs.push(doc),
+            Err(error) => {
+                let message = format!("{}: {error}", path.display());
+                return fail(console, "diff", &message, &[], out, err);
+            }
+        }
+    }
+    let (Some(old), Some(new)) = (docs.first(), docs.get(1)) else {
+        return Ok(EXIT_FAILED);
+    };
+    let table = circuit_report::diff(old, new);
+    let same = table.rows.is_empty();
+    match format {
+        TableFormat::Text if same => writeln!(out, "no changes")?,
+        TableFormat::Text => out.write_all(table.to_text().as_bytes())?,
+        TableFormat::Csv => out.write_all(table.to_csv().as_bytes())?,
+        TableFormat::Json => emit(
+            out,
+            &DiffReport {
+                format: JSON_FORMAT,
+                command: "diff",
+                ok: true,
+                same,
+                changes: TableEntry {
+                    kind: "diff",
+                    title: &table.title,
+                    columns: &table.columns,
+                    rows: &table.rows,
+                },
+            },
+        )?,
+    }
+    Ok(if same { EXIT_OK } else { EXIT_FAILED })
 }
 
 #[derive(Serialize)]

@@ -28,6 +28,15 @@ here when it lands.
   system releases however the process ends, so a copy is offered as soon as
   the window is gone. A panic in the window writes the newest changes before
   the process ends.
+- **Version history** (File > Version history): every save that changes the
+  project keeps a version in the user's data folder (the newest 20 per
+  project). The window lists them with their date (UTC) and how many elements
+  differ from the project, and opens one as a new, unsaved project; the file
+  is never touched.
+- **`opencircuit diff <before> <after>`**: what changed between two versions of
+  a project, one row per element added, removed or changed with the fields
+  that differ, as text, JSON or CSV. It exits with 1 when they differ. A project
+  saved by an older build compares as the same document after its migration.
 - **A project open in two windows** is said in the status bar of the second
   ("Open in another window"): saving in both overwrites each other's changes.
   The lock lives in the user's data folder, never next to the project, and is

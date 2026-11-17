@@ -183,6 +183,7 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 | `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
 | `new` | `file` |
 | `edit` | `operations`, `created` (each named element with `kind` and `id`), `wrote` (the file, or `null` for a dry run), `errors`, `warnings`, `diagnostics` |
+| `diff` | `same` (whether the projects are the same document) and `changes`: `kind` (`diff`), `title`, `columns` and `rows` |
 | `report` | `reports`: a list of `kind`, `title`, `columns` and `rows` (every cell is text); with `--output`, `file`, `kind` (`csv`, `json`, `txt` or `pdf`) and `reports` (how many tables) |
 | `serve --print-map` | `map`: a list of `table` (`coil`, `discrete_input` or `input_register`), `address`, `words`, `name`, `meaning`; the same lines as the text map |
 
@@ -288,6 +289,21 @@ Designators sort in natural order (`K2` before `K10`). A terminal is written
 `K1:A1`, with the printed number of the terminal. A CSV cell that a
 spreadsheet would read as a formula (it starts with `=`, `+`, `-`, `@`, a tab
 or a carriage return) gets a leading apostrophe.
+
+## Comparing two versions
+
+`opencircuit diff <before> <after>` lists what changed between two versions
+of a project, one row per element added, removed or changed: `Change`,
+`Element` (`project`, `sheet`, `supply`, `device`, `symbol`, `junction`,
+`wire`, `waiver`, `text` or `layer`), `ID`, a `Name` a person recognizes (a
+designator, `K1 coil`, a sheet title, a layer name) and the `Fields` that
+differ. Elements are matched by their stable IDs; waivers by code and
+subject. `next_id` and the schema version are left out, so a project saved by
+an older build compares as the same document after its migration. The output
+is text (`no changes` when there are none), JSON or CSV (`--format`). The
+exit code is `0` when the projects are the same and `1` when they differ, as
+for `diff(1)`; with `--format json` the document then has `ok: true` and
+`same: false`. A file that is not a project is a failure with `ok: false`.
 
 ## Terminals and signal arrows
 
