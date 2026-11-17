@@ -37,6 +37,12 @@ here when it lands.
   a project, one row per element added, removed or changed with the fields
   that differ, as text, JSON or CSV. It exits with 1 when they differ. A project
   saved by an older build compares as the same document after its migration.
+- **Report `devices`**: one row per device (model, symbols, sheets and catalog
+  data), in `opencircuit report --kind devices` and in `--kind all`, where it
+  is the last table.
+- **Sheet renumbering**: the sheets are numbered 1, 2, 3… in reading order of
+  their frames, in one undoable step: `{ "op": "renumber_sheets" }` in an edit
+  file, `sheets renumber` on the command line of the window.
 - **A project open in two windows** is said in the status bar of the second
   ("Open in another window"): saving in both overwrites each other's changes.
   The lock lives in the user's data folder, never next to the project, and is

@@ -198,6 +198,8 @@ enum Operation {
     /// Renumber the designators in reading order, on every sheet or on the
     /// sheet with this number.
     Renumber { sheet: Option<u32> },
+    /// Number the sheets 1, 2, 3 in reading order of their frames.
+    RenumberSheets {},
     /// Add a text note (ADR-0015): one line of at most 120 characters.
     AddText {
         at: [i32; 2],
@@ -252,6 +254,7 @@ impl Operation {
             Self::Waive { .. } => "waive",
             Self::Unwaive { .. } => "unwaive",
             Self::Renumber { .. } => "renumber",
+            Self::RenumberSheets {} => "renumber_sheets",
             Self::AddText { .. } => "add_text",
             Self::SetText { .. } => "set_text",
             Self::AddLayer { .. } => "add_layer",
@@ -836,6 +839,7 @@ impl Run<'_> {
                 let tx = designators::renumber(&self.doc, scope).map_err(refused)?;
                 self.commit(&tx)
             }
+            Operation::RenumberSheets {} => self.commit(&sheets::renumber_sheets(&self.doc)),
         }
     }
 
@@ -1397,6 +1401,30 @@ mod tests {
         let (_, message) = refused(run(doc.clone(), &wire("p1", "")));
         assert!(message.contains("several"), "{message}");
         assert!(run(doc, &wire("p1", r#", "slot": 2"#)).is_ok());
+    }
+
+    #[test]
+    fn renumber_sheets_numbers_the_frames_in_reading_order() {
+        let doc = run(
+            fresh(),
+            r#"[
+              { "op": "add_sheet", "number": 9, "origin": [400, 0] },
+              { "op": "add_sheet", "number": 4, "origin": [0, 0] },
+              { "op": "renumber_sheets" }
+            ]"#,
+        )
+        .unwrap()
+        .doc;
+
+        let mut numbers: Vec<(i32, u32)> =
+            doc.sheets.iter().map(|s| (s.origin.x, s.number)).collect();
+        numbers.sort_unstable();
+        assert_eq!(numbers, [(0, 1), (400, 2)]);
+        let invalid = run(fresh(), r#"[ { "op": "renumber_sheets", "x": 1 } ]"#);
+        assert!(
+            matches!(&invalid, Err(EditError::Invalid(message)) if message.contains("unknown field")),
+            "{invalid:?}"
+        );
     }
 
     #[test]

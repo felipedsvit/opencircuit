@@ -114,6 +114,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "Choose the select tool.",
     },
     CommandSpec {
+        name: "sheets",
+        aliases: &[],
+        usage: "sheets renumber",
+        help: "Number the sheets 1, 2, 3 in reading order of their frames.",
+    },
+    CommandSpec {
         name: "sim",
         aliases: &[],
         usage: "sim play|pause|step|reset",
@@ -332,6 +338,12 @@ pub fn run(line: &str, context: &Context<'_>) -> Result<Vec<Request>, CommandLin
         "place" => place(rest, context),
         "move" => move_selection(rest, context),
         "renumber" => renumber_designators(rest, context),
+        "sheets" => match rest {
+            ["renumber"] => Ok(vec![Request::Edit(crate::sheets::renumber_sheets(
+                context.doc,
+            ))]),
+            _ => Err(CommandLineError::Usage("sheets renumber")),
+        },
         "rotate" => rotate_selection(rest, context),
         "delete" => delete_selection(rest, context),
         "undo" => bare(rest, command, Request::Undo),
@@ -855,6 +867,23 @@ mod tests {
             assert_eq!(
                 run(line, &context(&doc, &catalog, &selection)),
                 Err(CommandLineError::Usage("renumber [sheet]")),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn sheets_renumber_asks_for_one_transaction() {
+        let catalog = ComponentCatalog::builtin();
+        let doc = Schematic::new("none");
+        let selection = BTreeSet::new();
+
+        let asked = run("sheets renumber", &context(&doc, &catalog, &selection)).unwrap();
+        assert!(matches!(&asked[..], [Request::Edit(tx)] if tx.label == "Renumber sheets"));
+        for line in ["sheets", "sheets renumber now", "sheets add"] {
+            assert_eq!(
+                run(line, &context(&doc, &catalog, &selection)),
+                Err(CommandLineError::Usage("sheets renumber")),
                 "{line}"
             );
         }

@@ -118,6 +118,7 @@ const REPORTED: &[(&str, &[circuit_report::Kind])] = &[
             circuit_report::Kind::Terminals,
             circuit_report::Kind::Xref,
             circuit_report::Kind::Io,
+            circuit_report::Kind::Devices,
         ],
     ),
     (
@@ -157,6 +158,7 @@ fn reports() -> Vec<Result<(String, Vec<u8>), String>> {
                 circuit_report::Kind::Xref => circuit_report::xref(&doc, &catalog),
                 circuit_report::Kind::Io => circuit_report::io(&doc, &catalog),
                 circuit_report::Kind::Problems => circuit_report::problems(&doc, &[]),
+                circuit_report::Kind::Devices => circuit_report::devices(&doc, &catalog),
             };
             out.push(Ok((
                 format!("{directory}/{}.csv", kind.name()),

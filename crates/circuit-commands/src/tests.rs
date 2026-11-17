@@ -2064,6 +2064,56 @@ fn sheets_are_added_numbered_in_order_and_undone() {
 }
 
 #[test]
+fn sheets_are_renumbered_in_reading_order_in_one_undoable_step() {
+    let mut doc = Schematic::new("sheets");
+    let mut history = History::new();
+    // Added out of order: 7 at the right, 3 at the left, 5 on the row below.
+    for (number, x, y) in [(7, 1000, 0), (3, 0, 0), (5, 0, 1000)] {
+        let spec = SheetSpec {
+            number: Some(number),
+            ..SheetSpec::a4("sheet", point(x, y))
+        };
+        run(&mut doc, &mut history, |doc| sheets::add_sheet(doc, &spec));
+    }
+    let by_place = |doc: &Schematic| {
+        let mut sheets: Vec<_> = doc
+            .sheets
+            .iter()
+            .map(|s| ((s.origin.y, s.origin.x), s.number))
+            .collect();
+        sheets.sort_unstable();
+        sheets.into_iter().map(|(_, n)| n).collect::<Vec<_>>()
+    };
+    assert_eq!(by_place(&doc), [3, 7, 5]);
+
+    run(&mut doc, &mut history, |doc| {
+        Ok(sheets::renumber_sheets(doc))
+    });
+
+    assert_eq!(by_place(&doc), [1, 2, 3]);
+    assert!(doc.validate().is_empty());
+    assert_eq!(history.undo_label(), Some("Renumber sheets"));
+    history.undo(&mut doc).unwrap();
+    assert_eq!(by_place(&doc), [3, 7, 5]);
+}
+
+#[test]
+fn sheets_numbered_in_order_already_give_an_empty_renumbering() {
+    let mut doc = Schematic::new("sheets");
+    let mut history = History::new();
+    run(&mut doc, &mut history, |doc| {
+        sheets::add_sheet(doc, &SheetSpec::a4("one", point(0, 0)))
+    });
+
+    assert!(sheets::renumber_sheets(&doc).edits.is_empty());
+    assert!(
+        sheets::renumber_sheets(&Schematic::new("none"))
+            .edits
+            .is_empty()
+    );
+}
+
+#[test]
 fn a_sheet_that_the_format_would_refuse_is_refused_before_it_is_added() {
     let mut doc = Schematic::new("sheets");
     let mut history = History::new();
