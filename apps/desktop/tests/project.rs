@@ -340,3 +340,56 @@ fn tracing_does_nothing_without_a_selection() {
             .is_none()
     );
 }
+
+#[test]
+fn the_palette_remembers_the_parts_chosen_and_offers_them_again() {
+    let mut harness = Harness::new_ui_state(
+        |ui, app: &mut DesktopApp| app.show(ui),
+        DesktopApp::default(),
+    );
+    harness.set_size(egui::Vec2::new(1300.0, 900.0));
+    harness.run();
+    click(&mut harness, "New");
+    assert!(harness.query_by_label_contains("Recent ").is_none());
+
+    press(&mut harness, "lamp.generic · lamp");
+    press(&mut harness, "pushbutton_no · contact");
+
+    // Newest first, both there, and the strip does not add a tab.
+    assert!(
+        harness
+            .query_by_label("Recent lamp.generic · lamp")
+            .is_some()
+    );
+    assert!(
+        harness
+            .query_by_label("Recent pushbutton_no · contact")
+            .is_some()
+    );
+    // Choosing the older one from the strip chooses the part again.
+    press(&mut harness, "Recent lamp.generic · lamp");
+    click_grid(&mut harness, 0, 0);
+    let doc = document(&harness);
+    assert_eq!(doc.devices.len(), 1);
+    assert_eq!(doc.devices[0].model.id, "lamp.generic");
+}
+
+#[test]
+fn a_part_clicked_on_a_wire_in_the_window_is_put_in_series_with_it() {
+    let doc = two_buttons();
+    let mut harness = drawing(&doc);
+
+    press(&mut harness, "pushbutton_no · contact");
+    // The wire between the buttons is at x = 0, from y = 2 to y = 8.
+    click_grid(&mut harness, 0, 5);
+
+    let after = document(&harness);
+    assert_eq!(after.symbols.len(), 3);
+    assert_eq!(after.wires.len(), 2);
+    assert_eq!(after.devices.len(), 3);
+
+    click(&mut harness, "Modify");
+    click(&mut harness, "Undo last change");
+    let undone = document(&harness);
+    assert_eq!((undone.symbols.len(), undone.wires.len()), (2, 1));
+}

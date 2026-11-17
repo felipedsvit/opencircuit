@@ -181,6 +181,26 @@ fn last_point(start_at: GridPoint, waypoints: &[GridPoint]) -> GridPoint {
     waypoints.last().copied().unwrap_or(start_at)
 }
 
+/// What placing a part at `at` does. On a wire, a part with two terminals is
+/// put in series with it when it fits there (ADR-0014); everywhere else, and
+/// when it does not fit, it is placed loose, as it always was.
+fn place_at(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    model: &ModelRef,
+    symbol: &SymbolKey,
+    at: GridPoint,
+    rotation: QuarterTurn,
+    hit: Option<&Hit>,
+) -> Result<Transaction, CommandError> {
+    if let Some(Hit::Wire { wire, .. }) = hit
+        && let Ok(tx) = ops::place_on_wire(doc, catalog, model, symbol, at, rotation, *wire)
+    {
+        return Ok(tx);
+    }
+    ops::place(doc, catalog, model, symbol, at, rotation)
+}
+
 impl Editor {
     /// An editor with the select tool and nothing selected.
     #[must_use]
@@ -309,7 +329,7 @@ impl Editor {
                 symbol,
                 rotation,
             } => {
-                let result = ops::place(doc, catalog, model, symbol, at, *rotation);
+                let result = place_at(doc, catalog, model, symbol, at, *rotation, hit.as_ref());
                 if let Ok(tx) = &result {
                     self.selection = tx.inserted().into_iter().collect();
                 }
@@ -671,9 +691,18 @@ impl Editor {
                     rotation,
                 },
             ) => Preview {
-                document: self
-                    .cursor
-                    .and_then(|at| applied(ops::place(doc, catalog, model, symbol, at, *rotation))),
+                document: self.cursor.and_then(|at| {
+                    let hit = hit_test(doc, catalog, at);
+                    applied(place_at(
+                        doc,
+                        catalog,
+                        model,
+                        symbol,
+                        at,
+                        *rotation,
+                        hit.as_ref(),
+                    ))
+                }),
                 ..Preview::default()
             },
             (Gesture::Idle | Gesture::Pressed { .. }, _) => Preview::default(),
