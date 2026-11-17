@@ -6,6 +6,9 @@
 
 use std::path::PathBuf;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::i18n::tr;
+
 /// Extension of project files.
 pub const PROJECT_EXTENSION: &str = "ocircuit";
 /// Extension of library files.
@@ -18,7 +21,7 @@ pub fn pick_project() -> Option<PathBuf> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         rfd::FileDialog::new()
-            .add_filter("OpenCircuit project", &[PROJECT_EXTENSION])
+            .add_filter(tr("OpenCircuit project"), &[PROJECT_EXTENSION])
             .pick_file()
     }
     #[cfg(target_arch = "wasm32")]
@@ -32,7 +35,7 @@ pub fn pick_project() -> Option<PathBuf> {
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn choose_save_path(name: &str) -> Option<PathBuf> {
-    save_path("OpenCircuit project", name, PROJECT_EXTENSION)
+    save_path(tr("OpenCircuit project"), name, PROJECT_EXTENSION)
 }
 
 /// Ask where to write a drawing in the format of `extension` (`svg` or
@@ -42,9 +45,9 @@ pub fn choose_save_path(name: &str) -> Option<PathBuf> {
 #[must_use]
 pub fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
     let filter = if extension == "pdf" {
-        "PDF document"
+        tr("PDF document")
     } else {
-        "SVG drawing"
+        tr("SVG drawing")
     };
     save_path(filter, name, extension)
 }
@@ -55,7 +58,11 @@ pub fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn choose_problems_path(name: &str) -> Option<PathBuf> {
-    save_path("Comma-separated values", &format!("{name}-problems"), "csv")
+    save_path(
+        tr("Comma-separated values"),
+        &format!("{name}-problems"),
+        "csv",
+    )
 }
 
 /// Ask for library files to load; empty when the user cancels or no file
@@ -65,7 +72,7 @@ pub fn pick_libraries() -> Vec<PathBuf> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         rfd::FileDialog::new()
-            .add_filter("OpenCircuit library", &[LIBRARY_EXTENSION])
+            .add_filter(tr("OpenCircuit library"), &[LIBRARY_EXTENSION])
             .pick_files()
             .unwrap_or_default()
     }

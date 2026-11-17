@@ -18,6 +18,7 @@ use circuit_model::{
 };
 use eframe::egui::{self, Ui};
 
+use crate::i18n::{tr, trf};
 use crate::inspector::{InspectorState, Request};
 use crate::session::Session;
 
@@ -54,8 +55,8 @@ pub fn project_section(
             .show(ui, |ui| {
                 if let Some(sheet) = group.sheet
                     && ui
-                        .small_button("Show sheet")
-                        .on_hover_text("Fit the view to this sheet")
+                        .small_button(tr("Show sheet"))
+                        .on_hover_text(tr("Fit the view to this sheet"))
                         .clicked()
                 {
                     go = Some(Goto::Sheet(sheet));
@@ -85,7 +86,10 @@ pub fn project_section(
             });
     }
     if rows > MAX_TREE_ROWS {
-        ui.label(format!("… and {} more", rows.saturating_sub(MAX_TREE_ROWS)));
+        ui.label(trf(
+            "… and {0} more",
+            &[&rows.saturating_sub(MAX_TREE_ROWS)],
+        ));
     }
     go
 }
@@ -116,11 +120,11 @@ pub fn connections_section(ui: &mut Ui, session: &Session, symbol_id: SymbolId) 
         ui.horizontal_wrapped(|ui| {
             ui.strong(&label);
             if !connected {
-                ui.label("not connected");
+                ui.label(tr("not connected"));
                 return;
             }
             if let Some(number) = net.and_then(|net| numbers.of_net(net.id)) {
-                ui.label(format!("wire {number}"));
+                ui.label(trf("wire {0}", &[&number]));
             }
             let others = net.map_or_else(Vec::new, |net| {
                 net.pins.iter().filter(|other| **other != pin).collect()
@@ -128,7 +132,7 @@ pub fn connections_section(ui: &mut Ui, session: &Session, symbol_id: SymbolId) 
             for other in others.iter().take(MAX_MEETS) {
                 if ui
                     .small_button(pin_name(doc, catalog, other))
-                    .on_hover_text("Select the other end")
+                    .on_hover_text(tr("Select the other end"))
                     .clicked()
                 {
                     go = Some(Goto::Subject(Subject::Symbol(other.symbol_id)));
@@ -166,12 +170,12 @@ pub fn xref_section(ui: &mut Ui, session: &Session, symbol: SymbolId) -> Option<
         return None;
     }
     let mut go = None;
-    egui::CollapsingHeader::new("Cross-references")
+    egui::CollapsingHeader::new(tr("Cross-references"))
         .default_open(false)
         .show(ui, |ui| {
             let found = links(doc, catalog, symbol);
             if found.is_empty() {
-                ui.label("Nothing to go to.");
+                ui.label(tr("Nothing to go to."));
             }
             for link in &found {
                 if ui.button(&link.text).clicked() {
@@ -197,14 +201,22 @@ pub fn catalog_section(
         .and_then(|s| layout.device(s.device_id))?;
     let info = device.info.clone().unwrap_or_default();
     let mut request = None;
-    egui::CollapsingHeader::new("Catalog data")
+    egui::CollapsingHeader::new(tr("Catalog data"))
         .default_open(false)
         .show(ui, |ui| {
             let fields = [
-                ("manufacturer", "Manufacturer", info.manufacturer.as_deref()),
-                ("part_no", "Part no", info.part_no.as_deref()),
-                ("description", "Description", info.description.as_deref()),
-                ("location", "Location", info.location.as_deref()),
+                (
+                    "manufacturer",
+                    tr("Manufacturer"),
+                    info.manufacturer.as_deref(),
+                ),
+                ("part_no", tr("Part no"), info.part_no.as_deref()),
+                (
+                    "description",
+                    tr("Description"),
+                    info.description.as_deref(),
+                ),
+                ("location", tr("Location"), info.location.as_deref()),
             ];
             for (key, label, current) in fields {
                 let Some(text) = state.text_field(
@@ -241,18 +253,19 @@ pub fn wire_section(
     let nets = StaticNets::build(doc, session.catalog());
     let numbers = WireNumbers::build(doc, session.catalog(), &nets);
     let mut request = None;
-    egui::CollapsingHeader::new("Wire number")
+    egui::CollapsingHeader::new(tr("Wire number"))
         .default_open(true)
         .show(ui, |ui| {
             match numbers.of_wire(wire) {
-                Some(number) => ui.label(format!("Number {number}")),
-                None => ui
-                    .label("No number: set a rule under Sheets and title block, or type one here."),
+                Some(number) => ui.label(trf("Number {0}", &[&number])),
+                None => ui.label(tr(
+                    "No number: set a rule under Sheets and title block, or type one here.",
+                )),
             };
             if let Some(text) = state.text_field(
                 ui,
                 format!("wire:{wire}:number"),
-                "Own number",
+                tr("Own number"),
                 found.number.as_deref().unwrap_or(""),
             ) {
                 request = Some(edits::set_wire_number(doc, wire, Some(&text)));
@@ -272,11 +285,11 @@ pub fn text_section(
     let doc = session.document();
     let found = doc.texts.iter().find(|candidate| candidate.id == text)?;
     let mut request = None;
-    egui::CollapsingHeader::new("Text")
+    egui::CollapsingHeader::new(tr("Text"))
         .default_open(true)
         .show(ui, |ui| {
             if let Some(words) =
-                state.text_field(ui, format!("text:{text}:words"), "Words", &found.text)
+                state.text_field(ui, format!("text:{text}:words"), tr("Words"), &found.text)
             {
                 request = Some(edits::set_text(doc, text, &words));
             }
@@ -296,21 +309,21 @@ pub fn layers_section(
     let doc = session.document();
     let mut request = None;
     if doc.layers.is_empty() {
-        ui.label("No layers: every element is on the default layer.");
+        ui.label(tr("No layers: every element is on the default layer."));
     }
     for layer in &doc.layers {
         ui.horizontal(|ui| {
             ui.label(&layer.name);
             let mut visible = layer.visible;
             if ui
-                .checkbox(&mut visible, format!("Show {}", layer.name))
+                .checkbox(&mut visible, trf("Show {0}", &[&layer.name]))
                 .changed()
             {
                 request = Some(layers::set_layer(doc, layer.id, None, Some(visible), None));
             }
             let mut locked = layer.locked;
             if ui
-                .checkbox(&mut locked, format!("Lock {}", layer.name))
+                .checkbox(&mut locked, trf("Lock {0}", &[&layer.name]))
                 .changed()
             {
                 request = Some(layers::set_layer(doc, layer.id, None, None, Some(locked)));
@@ -318,7 +331,7 @@ pub fn layers_section(
         });
         if !selection.is_empty()
             && ui
-                .button(format!("Put selection on {}", layer.name))
+                .button(trf("Put selection on {0}", &[&layer.name]))
                 .clicked()
         {
             request = Some(layers::assign_layer(doc, selection, Some(layer.id)));
@@ -326,11 +339,13 @@ pub fn layers_section(
     }
     if !selection.is_empty()
         && !doc.layers.is_empty()
-        && ui.button("Put selection on the default layer").clicked()
+        && ui
+            .button(tr("Put selection on the default layer"))
+            .clicked()
     {
         request = Some(layers::assign_layer(doc, selection, None));
     }
-    if let Some(name) = state.text_field(ui, "layers:new".to_owned(), "New layer", "") {
+    if let Some(name) = state.text_field(ui, "layers:new".to_owned(), tr("New layer"), "") {
         request = Some(layers::add_layer(doc, &name, true, false));
     }
     request
@@ -348,7 +363,7 @@ pub fn numbering_block(
     let mut request = None;
     ui.separator();
     let mut on = current.is_some();
-    if ui.checkbox(&mut on, "Number the wires").changed() {
+    if ui.checkbox(&mut on, tr("Number the wires")).changed() {
         request = Some(edits::set_wire_numbering(
             doc,
             on.then(|| WireNumbering {
@@ -362,8 +377,12 @@ pub fn numbering_block(
     let Some(rule) = current else {
         return request;
     };
-    if let Some(text) = state.text_field(ui, "numbering:prefix".to_owned(), "Prefix", &rule.prefix)
-    {
+    if let Some(text) = state.text_field(
+        ui,
+        "numbering:prefix".to_owned(),
+        tr("Prefix"),
+        &rule.prefix,
+    ) {
         request = Some(edits::set_wire_numbering(
             doc,
             Some(WireNumbering {
@@ -375,7 +394,7 @@ pub fn numbering_block(
     if let Some(text) = state.text_field(
         ui,
         "numbering:start".to_owned(),
-        "First number",
+        tr("First number"),
         &rule.start.to_string(),
     ) {
         request = Some(match text.parse::<u32>() {
@@ -394,7 +413,7 @@ pub fn numbering_block(
     if let Some(text) = state.text_field(
         ui,
         "numbering:step".to_owned(),
-        "Step",
+        tr("Step"),
         &rule.step.to_string(),
     ) {
         request = Some(match text.parse::<u32>().ok().and_then(NonZeroU32::new) {
@@ -412,7 +431,7 @@ pub fn numbering_block(
     }
     let mut per_sheet = rule.per_sheet;
     if ui
-        .checkbox(&mut per_sheet, "Restart on each sheet")
+        .checkbox(&mut per_sheet, tr("Restart on each sheet"))
         .changed()
     {
         request = Some(edits::set_wire_numbering(

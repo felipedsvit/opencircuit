@@ -28,6 +28,7 @@ use crate::clock::{SPEEDS, SimClock};
 use crate::cmdline::CommandLine;
 use crate::dialogs;
 use crate::documentation;
+use crate::i18n::{self, Language, tr, trf, trn};
 use crate::icons::{self, Icon};
 use crate::inspector::{self, InspectorState};
 use crate::palette;
@@ -111,7 +112,7 @@ fn problem_row(ui: &mut Ui, diagnostic: &Diagnostic, action: &mut Option<PanelAc
             response
         };
         if diagnostic.code() == DiagnosticCode::LooseConnection
-            && button(ui, "Connect", "Join them with a wire").clicked()
+            && button(ui, tr("Connect"), tr("Join them with a wire")).clicked()
         {
             *action = Some(PanelAction::Connect(
                 diagnostic.subject().clone(),
@@ -120,7 +121,7 @@ fn problem_row(ui: &mut Ui, diagnostic: &Diagnostic, action: &mut Option<PanelAc
         }
         let waivable = diagnostic.severity() != Severity::Error
             && diagnostic.code() != DiagnosticCode::InvalidWaiver;
-        if waivable && button(ui, "Ignore", "Accept it, with a reason").clicked() {
+        if waivable && button(ui, tr("Ignore"), tr("Accept it, with a reason")).clicked() {
             *action = Some(PanelAction::StartWaive(
                 diagnostic.code().as_str().to_owned(),
                 diagnostic.subject().clone(),
@@ -134,6 +135,8 @@ fn problem_row(ui: &mut Ui, diagnostic: &Diagnostic, action: &mut Option<PanelAc
 pub struct DesktopApp {
     session: Option<Session>,
     mode: Mode,
+    /// What the window says its texts in (issue #103); English until chosen.
+    language: Language,
     /// Tool, selection and gesture; the selection is shared by both modes.
     editor: Editor,
     /// Where the pointer snapped with the wire tool, as of the last frame.
@@ -496,16 +499,16 @@ impl DesktopApp {
         };
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::unique("unsaved changes")).show(ui.ctx(), |ui| {
-            ui.heading("Unsaved changes");
-            ui.label("The project has changes that are not saved.");
+            ui.heading(tr("Unsaved changes"));
+            ui.label(tr("The project has changes that are not saved."));
             ui.horizontal(|ui| {
-                if ui.button("Save and continue").clicked() {
+                if ui.button(tr("Save and continue")).clicked() {
                     answer = Some("save");
                 }
-                if ui.button("Discard changes").clicked() {
+                if ui.button(tr("Discard changes")).clicked() {
                     answer = Some("discard");
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(tr("Cancel")).clicked() {
                     answer = Some("cancel");
                 }
             });
@@ -659,6 +662,19 @@ impl DesktopApp {
         self.mode
     }
 
+    /// The language of the window.
+    #[must_use]
+    pub const fn language(&self) -> Language {
+        self.language
+    }
+
+    /// Change the language of the window. It is not stored: the program
+    /// chooses one from the environment when it starts, and the Help menu
+    /// changes it while it runs.
+    pub const fn set_language(&mut self, language: Language) {
+        self.language = language;
+    }
+
     /// Switch between simulating and editing. Editing stops and clears the
     /// simulation; leaving it cancels the gesture in progress.
     pub fn set_mode(&mut self, mode: Mode) {
@@ -688,6 +704,7 @@ impl DesktopApp {
 
     /// Draw the whole window into `ui`.
     pub fn show(&mut self, ui: &mut Ui) {
+        i18n::set_language(self.language);
         if ui.input(|input| input.viewport().close_requested()) && !self.request_close() {
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -942,14 +959,17 @@ impl DesktopApp {
                 let text = if traced.is_empty() {
                     String::new()
                 } else {
-                    let plural = |n: usize, noun: &str| {
-                        format!("{n} {noun}{}", if n == 1 { "" } else { "s" })
-                    };
-                    format!(
-                        "Net of the selection: {}, {}",
-                        plural(count(|s| matches!(s, Subject::Pin(_))), "terminal"),
-                        plural(count(|s| matches!(s, Subject::Wire(_))), "wire")
-                    )
+                    let terminals = trn(
+                        "{0} terminal",
+                        "{0} terminals",
+                        count(|s| matches!(s, Subject::Pin(_))),
+                    );
+                    let wires = trn(
+                        "{0} wire",
+                        "{0} wires",
+                        count(|s| matches!(s, Subject::Wire(_))),
+                    );
+                    trf("Net of the selection: {0}, {1}", &[&terminals, &wires])
                 };
                 (traced, text)
             }
@@ -1024,38 +1044,40 @@ impl DesktopApp {
             egui::MenuBar::new().ui(ui, |ui| {
                 let has_session = self.session.is_some();
                 let editing = has_session && self.mode == Mode::Edit;
-                ui.menu_button("File", |ui| {
-                    if ui.button("New project").clicked() {
+                ui.menu_button(tr("File"), |ui| {
+                    if ui.button(tr("New project")).clicked() {
                         ui.close();
                         self.new_project();
                     }
-                    if ui.button("Open project…").clicked() {
+                    if ui.button(tr("Open project…")).clicked() {
                         ui.close();
                         self.guard(Pending::OpenDialog);
                     }
                     ui.separator();
                     if ui
-                        .add_enabled(has_session, egui::Button::new("Save project"))
+                        .add_enabled(has_session, egui::Button::new(tr("Save project")))
                         .clicked()
                     {
                         ui.close();
                         self.save();
                     }
                     if ui
-                        .add_enabled(has_session, egui::Button::new("Save project as…"))
+                        .add_enabled(has_session, egui::Button::new(tr("Save project as…")))
                         .clicked()
                     {
                         ui.close();
                         self.save_as_dialog();
                     }
                     ui.separator();
-                    if ui.button("Load library…").clicked() {
+                    if ui.button(tr("Load library…")).clicked() {
                         ui.close();
                         self.library_dialog();
                     }
                     ui.add_enabled_ui(has_session, |ui| {
-                        ui.menu_button("Export drawing", |ui| {
-                            for (label, extension) in [("As SVG…", "svg"), ("As PDF…", "pdf")] {
+                        ui.menu_button(tr("Export drawing"), |ui| {
+                            for (label, extension) in
+                                [(tr("As SVG…"), "svg"), (tr("As PDF…"), "pdf")]
+                            {
                                 if ui.button(label).clicked() {
                                     ui.close();
                                     self.export_dialog(extension);
@@ -1064,19 +1086,22 @@ impl DesktopApp {
                         });
                     });
                 });
-                ui.menu_button("Modify", |ui| {
+                ui.menu_button(tr("Modify"), |ui| {
                     let (can_undo, can_redo) = self.session.as_ref().map_or((false, false), |s| {
                         (s.history().can_undo(), s.history().can_redo())
                     });
                     if ui
-                        .add_enabled(editing && can_undo, egui::Button::new("Undo last change"))
+                        .add_enabled(
+                            editing && can_undo,
+                            egui::Button::new(tr("Undo last change")),
+                        )
                         .clicked()
                     {
                         ui.close();
                         self.undo();
                     }
                     if ui
-                        .add_enabled(editing && can_redo, egui::Button::new("Redo change"))
+                        .add_enabled(editing && can_redo, egui::Button::new(tr("Redo change")))
                         .clicked()
                     {
                         ui.close();
@@ -1084,12 +1109,12 @@ impl DesktopApp {
                     }
                     ui.separator();
                     for (label, key) in [
-                        ("Select everything", Key::SelectAll),
-                        ("Copy selection", Key::Copy),
-                        ("Paste", Key::Paste),
-                        ("Duplicate selection", Key::Duplicate),
-                        ("Rotate selection", Key::Rotate),
-                        ("Delete selection", Key::Delete),
+                        (tr("Select everything"), Key::SelectAll),
+                        (tr("Copy selection"), Key::Copy),
+                        (tr("Paste"), Key::Paste),
+                        (tr("Duplicate selection"), Key::Duplicate),
+                        (tr("Rotate selection"), Key::Rotate),
+                        (tr("Delete selection"), Key::Delete),
                     ] {
                         if ui.add_enabled(editing, egui::Button::new(label)).clicked() {
                             ui.close();
@@ -1098,14 +1123,14 @@ impl DesktopApp {
                     }
                     ui.separator();
                     if ui
-                        .add_enabled(editing, egui::Button::new("Add text"))
+                        .add_enabled(editing, egui::Button::new(tr("Add text")))
                         .clicked()
                     {
                         ui.close();
                         self.editor.set_tool(Tool::Text);
                     }
                     if ui
-                        .add_enabled(editing, egui::Button::new("Renumber designators"))
+                        .add_enabled(editing, egui::Button::new(tr("Renumber designators")))
                         .clicked()
                     {
                         ui.close();
@@ -1115,53 +1140,56 @@ impl DesktopApp {
                         }
                     }
                 });
-                ui.menu_button("View", |ui| {
+                ui.menu_button(tr("View"), |ui| {
                     if ui
-                        .add_enabled(has_session, egui::Button::new("Zoom to the whole drawing"))
+                        .add_enabled(
+                            has_session,
+                            egui::Button::new(tr("Zoom to the whole drawing")),
+                        )
                         .clicked()
                     {
                         ui.close();
                         self.fit_pending = true;
                     }
                     if ui
-                        .add_enabled(has_session, egui::Button::new("Zoom in"))
+                        .add_enabled(has_session, egui::Button::new(tr("Zoom in")))
                         .clicked()
                     {
                         self.zoom_request = Some(KEY_ZOOM);
                     }
                     if ui
-                        .add_enabled(has_session, egui::Button::new("Zoom out"))
+                        .add_enabled(has_session, egui::Button::new(tr("Zoom out")))
                         .clicked()
                     {
                         self.zoom_request = Some(1.0 / KEY_ZOOM);
                     }
                     ui.separator();
                     let mut grid = !self.grid_off;
-                    if ui.checkbox(&mut grid, "Show the grid").changed() {
+                    if ui.checkbox(&mut grid, tr("Show the grid")).changed() {
                         self.grid_off = !grid;
                     }
                     let mut snap = !self.snap_off;
-                    if ui.checkbox(&mut snap, "Snap wires to pins").changed() {
+                    if ui.checkbox(&mut snap, tr("Snap wires to pins")).changed() {
                         self.snap_off = !snap;
                     }
                     let mut cross = !self.crosshair_off;
-                    if ui.checkbox(&mut cross, "Cross-shaped cursor").changed() {
+                    if ui.checkbox(&mut cross, tr("Cross-shaped cursor")).changed() {
                         self.crosshair_off = !cross;
                     }
                     let mut problems = !self.diagnostics_hidden;
                     if ui
-                        .checkbox(&mut problems, "Show the problems list")
+                        .checkbox(&mut problems, tr("Show the problems list"))
                         .changed()
                     {
                         self.diagnostics_hidden = !problems;
                     }
-                    ui.checkbox(&mut self.trace_net, "Trace the net of the selection");
+                    ui.checkbox(&mut self.trace_net, tr("Trace the net of the selection"));
                 });
-                ui.menu_button("Run", |ui| {
+                ui.menu_button(tr("Run"), |ui| {
                     let mut mode = self.mode;
                     ui.add_enabled_ui(has_session, |ui| {
-                        ui.radio_value(&mut mode, Mode::Simulate, "Simulation mode");
-                        ui.radio_value(&mut mode, Mode::Edit, "Drawing mode");
+                        ui.radio_value(&mut mode, Mode::Simulate, tr("Simulation mode"));
+                        ui.radio_value(&mut mode, Mode::Edit, tr("Drawing mode"));
                     });
                     self.set_mode(mode);
                     ui.separator();
@@ -1170,9 +1198,9 @@ impl DesktopApp {
                         let simulating = mode == Mode::Simulate && session.can_simulate();
                         let running = session.is_running();
                         let label = if running {
-                            "Pause simulation"
+                            tr("Pause simulation")
                         } else {
-                            "Start simulation"
+                            tr("Start simulation")
                         };
                         if ui
                             .add_enabled(simulating, egui::Button::new(label))
@@ -1186,13 +1214,13 @@ impl DesktopApp {
                             }
                         }
                         if ui
-                            .add_enabled(simulating, egui::Button::new("Advance one tick"))
+                            .add_enabled(simulating, egui::Button::new(tr("Advance one tick")))
                             .clicked()
                         {
                             session.step();
                         }
                         if ui
-                            .add_enabled(simulating, egui::Button::new("Restart simulation"))
+                            .add_enabled(simulating, egui::Button::new(tr("Restart simulation")))
                             .clicked()
                         {
                             ui.close();
@@ -1200,15 +1228,27 @@ impl DesktopApp {
                         }
                     }
                 });
-                ui.menu_button("Help", |ui| {
-                    if ui.button("Keyboard shortcuts").clicked() {
+                ui.menu_button(tr("Help"), |ui| {
+                    if ui.button(tr("Keyboard shortcuts")).clicked() {
                         ui.close();
                         self.show_keys = true;
                     }
-                    if ui.button("About OpenCircuit").clicked() {
+                    if ui.button(tr("About OpenCircuit")).clicked() {
                         ui.close();
                         self.show_about = true;
                     }
+                    ui.separator();
+                    ui.menu_button(tr("Language"), |ui| {
+                        for language in Language::ALL {
+                            let chosen = ui
+                                .radio_value(&mut self.language, language, language.name())
+                                .clicked();
+                            if chosen {
+                                i18n::set_language(self.language);
+                                ui.close();
+                            }
+                        }
+                    });
                 });
             });
         });
@@ -1217,7 +1257,7 @@ impl DesktopApp {
     /// The windows of the Help menu.
     fn help_windows(&mut self, ui: &Ui) {
         let ctx = ui.ctx().clone();
-        egui::Window::new("Keyboard shortcuts")
+        egui::Window::new(tr("Keyboard shortcuts"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_keys)
             .collapsible(false)
@@ -1225,21 +1265,23 @@ impl DesktopApp {
             .show(&ctx, |ui| {
                 egui::Grid::new("keys").num_columns(2).show(ui, |ui| {
                     for (keys, action) in palette::KEYS {
-                        ui.monospace(*keys);
-                        ui.label(*action);
+                        ui.monospace(tr(keys));
+                        ui.label(tr(action));
                         ui.end_row();
                     }
                 });
             });
-        egui::Window::new("About OpenCircuit")
+        egui::Window::new(tr("About OpenCircuit"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_about)
             .collapsible(false)
             .resizable(false)
             .show(&ctx, |ui| {
                 ui.strong(format!("OpenCircuit {}", env!("CARGO_PKG_VERSION")));
-                ui.label("An open-source editor and simulator for industrial control circuits.");
-                ui.label("Licensed under MIT or Apache-2.0.");
+                ui.label(tr(
+                    "An open-source editor and simulator for industrial control circuits.",
+                ));
+                ui.label(tr("Licensed under MIT or Apache-2.0."));
             });
     }
 
@@ -1250,25 +1292,25 @@ impl DesktopApp {
         // row instead of cutting the last ones off.
         ui.horizontal_wrapped(|ui| {
             let has_session = self.session.is_some();
-            if icons::button(ui, Icon::New, "New", false).clicked() {
+            if icons::button(ui, Icon::New, tr("New"), false).clicked() {
                 self.new_project();
             }
-            if icons::button(ui, Icon::Open, "Open…", false).clicked() {
+            if icons::button(ui, Icon::Open, tr("Open…"), false).clicked() {
                 self.guard(Pending::OpenDialog);
             }
             ui.add_enabled_ui(has_session, |ui| {
-                if icons::button(ui, Icon::Save, "Save", false).clicked() {
+                if icons::button(ui, Icon::Save, tr("Save"), false).clicked() {
                     self.save();
                 }
-                if icons::button(ui, Icon::SaveAs, "Save as…", false).clicked() {
+                if icons::button(ui, Icon::SaveAs, tr("Save as…"), false).clicked() {
                     self.save_as_dialog();
                 }
             });
             if icons::button_hint(
                 ui,
                 Icon::Library,
-                "Library…",
-                "Load an extension library (.oclib): more components for this window",
+                tr("Library…"),
+                tr("Load an extension library (.oclib): more components for this window"),
                 false,
             )
             .clicked()
@@ -1276,10 +1318,10 @@ impl DesktopApp {
                 self.library_dialog();
             }
             ui.add_enabled_ui(has_session, |ui| {
-                ui.menu_button("Export", |ui| {
-                    ui.label("While simulating: the current tick in colour.");
-                    ui.label("While editing: the drawing at rest, black on white.");
-                    for (label, extension) in [("SVG…", "svg"), ("PDF…", "pdf")] {
+                ui.menu_button(tr("Export"), |ui| {
+                    ui.label(tr("While simulating: the current tick in colour."));
+                    ui.label(tr("While editing: the drawing at rest, black on white."));
+                    for (label, extension) in [(tr("SVG…"), "svg"), (tr("PDF…"), "pdf")] {
                         if ui.button(label).clicked() {
                             ui.close();
                             self.export_dialog(extension);
@@ -1288,35 +1330,35 @@ impl DesktopApp {
                 });
             });
             ui.separator();
-            let name = ui.label("Path");
+            let name = ui.label(tr("Path"));
             let field = ui
                 .add(
                     egui::TextEdit::singleline(&mut self.path_input)
-                        .hint_text("path to a .ocircuit file")
+                        .hint_text(tr("path to a .ocircuit file"))
                         .desired_width(260.0),
                 )
                 .labelled_by(name.id);
             let entered =
                 field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-            if ui.button("Open").clicked() || entered {
+            if ui.button(tr("Open")).clicked() || entered {
                 let path = PathBuf::from(self.path_input.trim());
                 self.request_open(path);
             }
             if ui
-                .add_enabled(has_session, egui::Button::new("Save here"))
+                .add_enabled(has_session, egui::Button::new(tr("Save here")))
                 .clicked()
             {
                 let path = PathBuf::from(self.path_input.trim());
                 self.save_to(path);
             }
             if has_session {
-                if icons::button(ui, Icon::Fit, "Fit", false).clicked() {
+                if icons::button(ui, Icon::Fit, tr("Fit"), false).clicked() {
                     self.fit_pending = true;
                 }
                 ui.separator();
                 let mut mode = self.mode;
-                ui.selectable_value(&mut mode, Mode::Simulate, "Simulate");
-                ui.selectable_value(&mut mode, Mode::Edit, "Edit");
+                ui.selectable_value(&mut mode, Mode::Simulate, tr("Simulate"));
+                ui.selectable_value(&mut mode, Mode::Edit, tr("Edit"));
                 self.set_mode(mode);
             }
         });
@@ -1348,7 +1390,7 @@ impl DesktopApp {
         let tokens = Tokens::of(ui);
         let mut name = session.document().project.name.clone();
         if session.is_dirty() {
-            name.push_str(" (unsaved)");
+            name.push_str(tr(" (unsaved)"));
         }
         egui::Frame::new()
             .fill(tokens.tab_active)
@@ -1387,7 +1429,7 @@ impl DesktopApp {
                     let label = format!("{number}: {title}");
                     if ui
                         .selectable_label(false, label)
-                        .on_hover_text("Frame this sheet")
+                        .on_hover_text(tr("Frame this sheet"))
                         .clicked()
                     {
                         self.fit_sheet = Some(id);
@@ -1411,8 +1453,8 @@ impl DesktopApp {
                 if icons::button_hint(
                     ui,
                     Icon::Warning,
-                    "Problems",
-                    "Show or hide the list of problems",
+                    tr("Problems"),
+                    tr("Show or hide the list of problems"),
                     !self.diagnostics_hidden,
                 )
                 .clicked()
@@ -1424,8 +1466,8 @@ impl DesktopApp {
                 if icons::button_hint(
                     ui,
                     Icon::Snap,
-                    "Snap",
-                    "Snap wires to pins, junctions and wires",
+                    tr("Snap"),
+                    tr("Snap wires to pins, junctions and wires"),
                     !self.snap_off,
                 )
                 .clicked()
@@ -1435,8 +1477,8 @@ impl DesktopApp {
                 if icons::button_hint(
                     ui,
                     Icon::Grid,
-                    "Grid",
-                    "Show the grid (edit mode)",
+                    tr("Grid"),
+                    tr("Show the grid (edit mode)"),
                     !self.grid_off,
                 )
                 .clicked()
@@ -1509,8 +1551,8 @@ impl DesktopApp {
             }
         }
         let mode = match self.mode {
-            Mode::Edit => "Drawing",
-            Mode::Simulate => "Simulating",
+            Mode::Edit => tr("Drawing"),
+            Mode::Simulate => tr("Simulating"),
         };
         let zoom = (self.camera.zoom / DEFAULT_ZOOM * 100.0).round();
         painter.text(
@@ -1553,23 +1595,23 @@ impl DesktopApp {
                 egui::Frame::menu(ui.style()).show(ui, |ui| {
                     ui.set_min_width(150.0);
                     for (label, key) in [
-                        ("Rotate selection", Key::Rotate),
-                        ("Duplicate selection", Key::Duplicate),
-                        ("Copy selection", Key::Copy),
-                        ("Delete selection", Key::Delete),
+                        (tr("Rotate selection"), Key::Rotate),
+                        (tr("Duplicate selection"), Key::Duplicate),
+                        (tr("Copy selection"), Key::Copy),
+                        (tr("Delete selection"), Key::Delete),
                     ] {
                         if ui.add_enabled(editing, egui::Button::new(label)).clicked() {
                             chosen = Some(key);
                         }
                     }
                     if ui
-                        .add_enabled(self.mode == Mode::Edit, egui::Button::new("Paste"))
+                        .add_enabled(self.mode == Mode::Edit, egui::Button::new(tr("Paste")))
                         .clicked()
                     {
                         chosen = Some(Key::Paste);
                     }
                     ui.separator();
-                    if ui.button("Zoom to the whole drawing").clicked() {
+                    if ui.button(tr("Zoom to the whole drawing")).clicked() {
                         fit = true;
                     }
                 });
@@ -1708,13 +1750,13 @@ impl DesktopApp {
                     .inner_margin(egui::Margin::same(2))
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
-                            if icons::button(ui, Icon::ZoomIn, "Zoom in", false).clicked() {
+                            if icons::button(ui, Icon::ZoomIn, tr("Zoom in"), false).clicked() {
                                 self.zoom_request = Some(KEY_ZOOM);
                             }
-                            if icons::button(ui, Icon::ZoomOut, "Zoom out", false).clicked() {
+                            if icons::button(ui, Icon::ZoomOut, tr("Zoom out"), false).clicked() {
                                 self.zoom_request = Some(1.0 / KEY_ZOOM);
                             }
-                            if icons::button(ui, Icon::Fit, "Zoom extents", false).clicked() {
+                            if icons::button(ui, Icon::Fit, tr("Zoom extents"), false).clicked() {
                                 self.fit_pending = true;
                             }
                         });
@@ -1736,25 +1778,29 @@ impl DesktopApp {
             None => (false, false, None, None),
         };
         ui.add_enabled_ui(can_undo, |ui| {
-            let hint =
-                undo_label.map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"));
-            if icons::button_hint(ui, Icon::Undo, "Undo", &hint, false).clicked() {
+            let hint = undo_label.map_or_else(
+                || tr("Undo").to_owned(),
+                |label| trf("Undo: {0}", &[&label]),
+            );
+            if icons::button_hint(ui, Icon::Undo, tr("Undo"), &hint, false).clicked() {
                 self.undo();
             }
         });
         ui.add_enabled_ui(can_redo, |ui| {
-            let hint =
-                redo_label.map_or_else(|| "Redo".to_owned(), |label| format!("Redo: {label}"));
-            if icons::button_hint(ui, Icon::Redo, "Redo", &hint, false).clicked() {
+            let hint = redo_label.map_or_else(
+                || tr("Redo").to_owned(),
+                |label| trf("Redo: {0}", &[&label]),
+            );
+            if icons::button_hint(ui, Icon::Redo, tr("Redo"), &hint, false).clicked() {
                 self.redo();
             }
         });
         ui.separator();
         let hint = match self.editor.tool() {
-            Tool::Select => "Click to select, drag to move, R to rotate, Delete to remove.",
-            Tool::Place { .. } => "Click to place, R to rotate, Esc to stop placing.",
-            Tool::Wire => "Click a pin to start, empty space to bend, a pin or wire to finish.",
-            Tool::Text => "Click to add a note, then type its words in the inspector.",
+            Tool::Select => tr("Click to select, drag to move, R to rotate, Delete to remove."),
+            Tool::Place { .. } => tr("Click to place, R to rotate, Esc to stop placing."),
+            Tool::Wire => tr("Click a pin to start, empty space to bend, a pin or wire to finish."),
+            Tool::Text => tr("Click to add a note, then type its words in the inspector."),
         };
         ui.label(hint);
     }
@@ -1782,23 +1828,23 @@ impl DesktopApp {
         let Some(session) = &mut self.session else {
             return;
         };
-        ui.strong("Operator");
+        ui.strong(tr("Operator"));
         let operable = session.operable();
         if operable.is_empty() {
-            ui.label("No pushbutton, switch or thermal relay.");
+            ui.label(tr("No pushbutton, switch or thermal relay."));
         }
         for device in operable {
             let engaged = session.engaged(device.device, device.control);
             let mut label = control_label(&device.reference, device.control, engaged);
             if session.is_pending(device.device) {
-                label.push_str(" (next tick)");
+                label.push_str(tr(" (next tick)"));
             }
             if ui.button(label).clicked() {
                 session.operate(device.device, device.control);
             }
         }
         ui.separator();
-        ui.strong("Events");
+        ui.strong(tr("Events"));
         egui::ScrollArea::vertical()
             .stick_to_bottom(true)
             .show(ui, |ui| {
@@ -1810,21 +1856,21 @@ impl DesktopApp {
 
     fn diagnostics(&mut self, ui: &mut Ui) {
         let Some(session) = &self.session else {
-            ui.label("No project open.");
+            ui.label(tr("No project open."));
             return;
         };
         let selected = self.selected_description(session);
         let mut action: Option<PanelAction> = None;
         ui.horizontal(|ui| {
-            ui.strong("Diagnostics");
+            ui.strong(tr("Diagnostics"));
             if let Some(selected) = selected {
                 ui.separator();
                 ui.label(selected);
             }
             ui.separator();
             if ui
-                .small_button("Save list…")
-                .on_hover_text("Write the problems as a CSV file")
+                .small_button(tr("Save list…"))
+                .on_hover_text(tr("Write the problems as a CSV file"))
                 .clicked()
             {
                 action = Some(PanelAction::Save);
@@ -1833,7 +1879,7 @@ impl DesktopApp {
         let diagnostics = session.diagnostics();
         let faults = session.snapshot().map_or(&[][..], |s| s.faults.as_slice());
         if diagnostics.is_empty() && faults.is_empty() {
-            ui.label("No diagnostics: the project compiles.");
+            ui.label(tr("No diagnostics: the project compiles."));
             if let Some(PanelAction::Save) = action {
                 self.save_problems_dialog();
             }
@@ -1842,7 +1888,10 @@ impl DesktopApp {
         let waivers = WaiverIndex::new(session.document());
         let mut waived: Vec<&Diagnostic> = Vec::new();
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (title, list) in [("Runtime faults", faults), ("Compilation", diagnostics)] {
+            for (title, list) in [
+                (tr("Runtime faults"), faults),
+                (tr("Compilation"), diagnostics),
+            ] {
                 if list.is_empty() {
                     continue;
                 }
@@ -1860,25 +1909,25 @@ impl DesktopApp {
             }
             if let Some((code, subject)) = &self.waiving {
                 ui.horizontal(|ui| {
-                    ui.label(format!("Reason for waiving {code} on {subject}"));
+                    ui.label(trf("Reason for waiving {0} on {1}", &[&code, &subject]));
                     let field = ui.add(
                         egui::TextEdit::singleline(&mut self.waive_reason)
                             .id_salt("waive-reason")
                             .desired_width(220.0),
                     );
                     field.widget_info(|| {
-                        egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Reason")
+                        egui::WidgetInfo::labeled(egui::Role::TextInput, true, tr("Reason"))
                     });
-                    if ui.button("Waive it").clicked() {
+                    if ui.button(tr("Waive it")).clicked() {
                         action = Some(PanelAction::Waive);
                     }
-                    if ui.button("Keep it").clicked() {
+                    if ui.button(tr("Keep it")).clicked() {
                         action = Some(PanelAction::KeepIt);
                     }
                 });
             }
             if !waived.is_empty() {
-                egui::CollapsingHeader::new(format!("Waived ({})", waived.len()))
+                egui::CollapsingHeader::new(trf("Waived ({0})", &[&waived.len()]))
                     .default_open(false)
                     .show(ui, |ui| {
                         for diagnostic in &waived {
@@ -1886,18 +1935,20 @@ impl DesktopApp {
                                 .of(diagnostic)
                                 .map_or("", |waiver| waiver.reason.as_str());
                             ui.horizontal(|ui| {
-                                ui.label(format!(
-                                    "{} {}: {} (reason: {reason})",
-                                    diagnostic.code(),
-                                    diagnostic.subject(),
-                                    diagnostic.message()
+                                ui.label(trf(
+                                    "{0} {1}: {2} (reason: {3})",
+                                    &[
+                                        &diagnostic.code(),
+                                        &diagnostic.subject(),
+                                        &diagnostic.message(),
+                                        &reason,
+                                    ],
                                 ));
-                                let label = format!(
-                                    "Restore {} {}",
-                                    diagnostic.code(),
-                                    diagnostic.subject()
+                                let label = trf(
+                                    "Restore {0} {1}",
+                                    &[&diagnostic.code(), &diagnostic.subject()],
                                 );
-                                let response = ui.small_button("Restore");
+                                let response = ui.small_button(tr("Restore"));
                                 response.widget_info(|| {
                                     egui::WidgetInfo::labeled(
                                         egui::Role::Button,
@@ -1966,13 +2017,15 @@ impl DesktopApp {
         let layout = LayoutIndex::new(session.document(), session.catalog());
         let symbol = layout.symbol(*id)?;
         let device = layout.device(symbol.device_id)?;
-        Some(format!(
-            "{} — {} ({} v{}), symbol `{}`",
-            device.reference.0,
-            symbol.id,
-            device.model.id,
-            device.model.version,
-            symbol.symbol_key.0
+        Some(trf(
+            "{0} — {1} ({2} v{3}), symbol `{4}`",
+            &[
+                &device.reference.0,
+                &symbol.id,
+                &device.model.id,
+                &device.model.version,
+                &symbol.symbol_key.0,
+            ],
         ))
     }
 
@@ -2212,12 +2265,12 @@ impl DesktopApp {
 /// The text of the button of an operator control.
 fn control_label(reference: &str, control: Control, engaged: bool) -> String {
     let verb = match (control, engaged) {
-        (Control::Hold, false) => "press",
-        (Control::Hold, true) => "release",
-        (Control::Toggle, false) => "close",
-        (Control::Toggle, true) => "open",
-        (Control::Trip, false) => "trip",
-        (Control::Trip, true) => "reset",
+        (Control::Hold, false) => tr("press"),
+        (Control::Hold, true) => tr("release"),
+        (Control::Toggle, false) => tr("close"),
+        (Control::Toggle, true) => tr("open"),
+        (Control::Trip, false) => tr("trip"),
+        (Control::Trip, true) => tr("reset"),
     };
     format!("{reference}: {verb}")
 }
@@ -2225,30 +2278,30 @@ fn control_label(reference: &str, control: Control, engaged: bool) -> String {
 /// Play, pause, step, reset, fault reset, speed and time.
 fn simulation_controls(ui: &mut Ui, session: &mut Session) {
     if session.is_running() {
-        if icons::button(ui, Icon::Pause, "Pause", false).clicked() {
+        if icons::button(ui, Icon::Pause, tr("Pause"), false).clicked() {
             session.pause();
         }
     } else {
         ui.add_enabled_ui(!session.is_faulted(), |ui| {
-            if icons::button(ui, Icon::Play, "Play", false).clicked() {
+            if icons::button(ui, Icon::Play, tr("Play"), false).clicked() {
                 session.play();
             }
         });
     }
-    if icons::button(ui, Icon::Step, "Step", false).clicked() {
+    if icons::button(ui, Icon::Step, tr("Step"), false).clicked() {
         session.step();
     }
-    if icons::button(ui, Icon::Reset, "Reset", false).clicked() {
+    if icons::button(ui, Icon::Reset, tr("Reset"), false).clicked() {
         session.reset();
     }
     if ui
-        .add_enabled(session.is_faulted(), egui::Button::new("Reset fault"))
+        .add_enabled(session.is_faulted(), egui::Button::new(tr("Reset fault")))
         .clicked()
     {
         session.reset_fault();
     }
     let mut speed = session.clock().speed_index();
-    egui::ComboBox::from_label("Speed")
+    egui::ComboBox::from_label(tr("Speed"))
         .selected_text(session.clock().speed().label())
         .show_ui(ui, |ui| {
             for (index, choice) in SPEEDS.iter().enumerate() {
@@ -2260,7 +2313,10 @@ fn simulation_controls(ui: &mut Ui, session: &mut Session) {
         .next_tick()
         .saturating_mul(u64::from(session.tick_us()))
         / 1_000;
-    ui.label(format!("tick {} · {elapsed_ms} ms", session.next_tick()));
+    ui.label(trf(
+        "tick {0} · {1} ms",
+        &[&session.next_tick(), &elapsed_ms],
+    ));
     if let Some(message) = session.message() {
         ui.colored_label(ui.visuals().error_fg_color, message);
     }
