@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "circuit": "control-transformer.ocircuit",
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 4, "action": "release", "device": "S1" },
+    { "tick": 8, "action": "open", "device": "Q1" }
+  ],
+  "until_tick": 12,
+  "expect": { "trace": "run.trace", "diagnostics": [] }
+}

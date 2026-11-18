@@ -10,11 +10,14 @@ may change anything, and what changes in a file format is listed under
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-11-18
+
 Version 0.0.2 closes M9 (`ROADMAP.md`): resilience, work safety,
-productivity, schema version 5 and new document views. Two items of M9.0 are
-left for their own pull requests: the CI changes (clippy on Windows, pinned
-actions, a release-mode test job, a coverage threshold) and the macOS file
-dialogs.
+productivity, schema version 5, new document views, and an audit of the
+window (M9.5). It includes everything of 0.0.2-dev below. Two items of M9.0
+are left for their own pull requests: the CI changes (clippy on Windows,
+pinned actions, a release-mode test job, a coverage threshold) and the macOS
+file dialogs.
 
 ### Added
 
@@ -180,6 +183,10 @@ dialogs.
 
 ### Changed
 
+- **The window reads its keymap in place** instead of copying it three times a
+  frame, and `tests/compat/v0.0.2` freezes the examples, library, scenarios,
+  golden traces and edit files of this release (schema version 5), so that a
+  later build must open and simulate them as this one does.
 - **Project files are schema version 5** (ADR-0018). A version 4 file opens and
   is saved as version 5; the migration only raises the version, because every
   new field is optional and left out when empty. A version 5 file does not
@@ -188,6 +195,14 @@ dialogs.
 
 ### Fixed
 
+- **Open sections and windows keep their state when the language changes**: the
+  sections of the inspector, the Find and replace, Command palette, Print
+  preview, Version history, Symbol editor, shortcut and About windows took
+  their identity from their translated title, so choosing another language
+  closed the sections and moved the windows back to their first place.
+- **Contrast**: the secondary text over the drawing (zoom, rulers) in the dark
+  theme and the "no sim" warning in the light theme now reach 4.5:1 (WCAG AA);
+  two colours moved a few steps and nothing else in the palette changed.
 - **A command no longer writes over a file it reads**: `simulate --trace` or
   `--snapshot-json` naming the project, the scenario, a library or the other
   output, `edit --output` naming the edit file or a library, and
@@ -307,5 +322,7 @@ and the command line (`opencircuit`).
 - Packages for Windows (`.zip`), macOS (`.dmg`), Debian and Ubuntu (`.deb`),
   Fedora (`.rpm`) and any Linux (AppImage and `.tar.gz`).
 
+[Unreleased]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2-dev...v0.0.2
 [0.0.2-dev]: https://github.com/felipedsvit/opencircuit/compare/v0.0.1...v0.0.2-dev
 [0.0.1]: https://github.com/felipedsvit/opencircuit/releases/tag/v0.0.1

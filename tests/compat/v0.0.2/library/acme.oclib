@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "id": "acme",
+  "version": 1,
+  "name": "ACME control relays",
+  "provenance": {
+    "origin": "ACME example library, written for the OpenCircuit documentation",
+    "license": "MIT OR Apache-2.0",
+    "standard_reference": null
+  },
+  "models": [
+    {
+      "id": "acme.relay_r2",
+      "version": 1,
+      "class": "relay",
+      "operator": null,
+      "category": "automation", "title": "ACME relay R2", "note": "Example only",
+      "params": [
+        { "key": "rated_voltage_mv", "type": { "int": { "min": 1, "max": 4294967295 } }, "default": 24000 },
+        { "key": "connection", "type": { "enum": ["dc"] }, "default": "dc" }
+      ],
+      "symbols": [
+        { "key": "coil", "kind": "coil", "min": 1, "max": 1, "slotted": false, "artwork": null },
+        {
+          "key": "no",
+          "kind": "contact_no",
+          "min": 0,
+          "max": 2,
+          "slotted": true,
+          "artwork": {
+            "rest": [
+              { "line": { "from": [0, -20], "to": [0, -8] } },
+              { "line": { "from": [0, 8], "to": [0, 20] } },
+              { "line": { "from": [0, 8], "to": [-7, -7] } },
+              { "rect": { "from": [-12, -12], "to": [12, 12] } }
+            ],
+            "operated": [
+              { "line": { "from": [0, -20], "to": [0, -8] } },
+              { "line": { "from": [0, 8], "to": [0, 20] } },
+              { "line": { "from": [0, 8], "to": [0, -8] } },
+              { "rect": { "from": [-12, -12], "to": [12, 12] } }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

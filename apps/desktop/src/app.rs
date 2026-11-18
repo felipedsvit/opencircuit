@@ -1852,6 +1852,7 @@ impl DesktopApp {
         let mut open = true;
         let mut restore = None;
         egui::Window::new(tr("Version history"))
+            .id(egui::Id::unique("Version history"))
             .open(&mut open)
             .collapsible(false)
             .show(ui.ctx(), |ui| {
@@ -2238,6 +2239,7 @@ impl DesktopApp {
         let mut open = true;
         let mut action: Option<&str> = None;
         egui::Window::new(tr("Symbol editor"))
+        .id(egui::Id::unique("Symbol editor"))
             .open(&mut open)
             .default_width(560.0)
             .show(ui.ctx(), |ui| {
@@ -2523,7 +2525,7 @@ impl DesktopApp {
                 ui.ctx().request_repaint();
             }
         }
-        if self.settings.keys.clone().pressed(ui, Action::CommandLine) {
+        if self.settings.keys.pressed(ui, Action::CommandLine) {
             self.command_line.focus();
         }
         // The shortcut window takes the keys it waits for before any
@@ -2634,21 +2636,20 @@ impl DesktopApp {
         } else if pressed(ui, egui::Modifiers::COMMAND, egui::Key::Z) {
             self.undo();
         }
-        let keys = self.settings.keys.clone();
-        if keys.pressed(ui, Action::WireTool) {
+        if self.settings.keys.pressed(ui, Action::WireTool) {
             self.editor.set_tool(Tool::Wire);
         }
-        if keys.pressed(ui, Action::FindReplace) {
+        if self.settings.keys.pressed(ui, Action::FindReplace) {
             self.find_replace.open();
         }
-        if keys.pressed(ui, Action::EditLabel) {
+        if self.settings.keys.pressed(ui, Action::EditLabel) {
             self.edit_label();
         }
-        if keys.pressed(ui, Action::TypePoint) {
+        if self.settings.keys.pressed(ui, Action::TypePoint) {
             self.type_point();
         }
         let mut actions = Vec::new();
-        if keys.pressed(ui, Action::SelectAll) {
+        if self.settings.keys.pressed(ui, Action::SelectAll) {
             actions.push(Key::SelectAll);
         }
         // The window system may turn Ctrl+C and Ctrl+V into clipboard events
@@ -2669,7 +2670,7 @@ impl DesktopApp {
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::V) || paste {
             actions.push(Key::Paste);
         }
-        if keys.pressed(ui, Action::Duplicate) {
+        if self.settings.keys.pressed(ui, Action::Duplicate) {
             actions.push(Key::Duplicate);
         }
         // Shift moves five grid units; the plain arrow one.
@@ -2688,10 +2689,10 @@ impl DesktopApp {
                 }
             }
         }
-        if keys.pressed(ui, Action::Rotate) {
+        if self.settings.keys.pressed(ui, Action::Rotate) {
             actions.push(Key::Rotate);
         }
-        if keys.pressed(ui, Action::Mirror) {
+        if self.settings.keys.pressed(ui, Action::Mirror) {
             actions.push(Key::Mirror);
         }
         for (key, action) in [
@@ -2721,15 +2722,14 @@ impl DesktopApp {
         if ui.ctx().egui_wants_keyboard_input() {
             return;
         }
-        let keys = self.settings.keys.clone();
         // The command palette, in both modes.
-        if keys.pressed(ui, Action::CommandPalette) {
+        if self.settings.keys.pressed(ui, Action::CommandPalette) {
             self.command_palette.open();
         }
-        if keys.pressed(ui, Action::PreviousView) {
+        if self.settings.keys.pressed(ui, Action::PreviousView) {
             self.previous_view();
         }
-        if keys.pressed(ui, Action::SidePanels) {
+        if self.settings.keys.pressed(ui, Action::SidePanels) {
             self.side_panels_hidden = !self.side_panels_hidden;
         }
         let pressed = |ui: &mut Ui, key: egui::Key| {
@@ -2743,13 +2743,15 @@ impl DesktopApp {
         if pressed(ui, egui::Key::Minus) {
             self.zoom_request = Some(1.0 / KEY_ZOOM);
         }
-        if keys.pressed(ui, Action::FitDrawing) {
+        if self.settings.keys.pressed(ui, Action::FitDrawing) {
             self.fit_pending = true;
         }
-        if keys.pressed(ui, Action::FitSelection) && !self.editor.selection().is_empty() {
+        if self.settings.keys.pressed(ui, Action::FitSelection)
+            && !self.editor.selection().is_empty()
+        {
             self.frame_selection = true;
         }
-        if keys.pressed(ui, Action::TraceNet) {
+        if self.settings.keys.pressed(ui, Action::TraceNet) {
             self.trace_net = !self.trace_net;
         }
     }
@@ -3445,6 +3447,7 @@ impl DesktopApp {
         }
         let mut open = true;
         egui::Window::new(tr("Customize shortcuts"))
+            .id(egui::Id::unique("Customize shortcuts"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut open)
             .collapsible(false)
@@ -3504,6 +3507,7 @@ impl DesktopApp {
     fn help_windows(&mut self, ui: &Ui) {
         let ctx = ui.ctx().clone();
         egui::Window::new(tr("Keyboard shortcuts"))
+            .id(egui::Id::unique("Keyboard shortcuts"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_keys)
             .collapsible(false)
@@ -3527,6 +3531,7 @@ impl DesktopApp {
                 });
             });
         egui::Window::new(tr("About OpenCircuit"))
+            .id(egui::Id::unique("About OpenCircuit"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_about)
             .collapsible(false)
@@ -4501,6 +4506,7 @@ impl DesktopApp {
             }
             if !waived.is_empty() {
                 egui::CollapsingHeader::new(trf("Waived ({0})", &[&waived.len()]))
+                    .id_salt("Waived ({0})")
                     .default_open(false)
                     .show(ui, |ui| {
                         for diagnostic in &waived {

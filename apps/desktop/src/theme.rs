@@ -120,7 +120,7 @@ impl Tokens {
         grid: Color32::from_rgb(0x3a, 0x40, 0x4a),
         text: Color32::from_rgb(0xe1, 0xe5, 0xea),
         text_dim: Color32::from_rgb(0xa8, 0xb0, 0xbb),
-        text_faint: Color32::from_rgb(0x7b, 0x84, 0x90),
+        text_faint: Color32::from_rgb(0x7e, 0x87, 0x93),
         icon: Color32::from_rgb(0xd2, 0xd8, 0xe0),
         accent: Color32::from_rgb(0x36, 0x9c, 0xd8),
         warn: Color32::from_rgb(0xf2, 0xc5, 0x6b),
@@ -146,7 +146,7 @@ impl Tokens {
         text_faint: Color32::from_rgb(0x6b, 0x73, 0x7f),
         icon: Color32::from_rgb(0x34, 0x3b, 0x46),
         accent: Color32::from_rgb(0x1f, 0x7f, 0xc0),
-        warn: Color32::from_rgb(0xa8, 0x6a, 0x00),
+        warn: Color32::from_rgb(0x94, 0x5c, 0x00),
         crosshair: Color32::from_rgb(0x2a, 0x2f, 0x36),
         window_select: Color32::from_rgb(0x1d, 0x6f, 0xd1),
         crossing_select: Color32::from_rgb(0x1f, 0x8f, 0x4a),
@@ -375,6 +375,80 @@ mod tests {
                 assert!(
                     difference > 70.0,
                     "{text:?} on {background:?}: {difference}"
+                );
+            }
+        }
+    }
+
+    /// WCAG relative luminance of an opaque colour.
+    fn wcag_luminance(color: Color32) -> f64 {
+        let linear = |channel: u8| {
+            let value = f64::from(channel) / 255.0;
+            if value <= 0.039_28 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
+    }
+
+    /// WCAG contrast ratio between two opaque colours.
+    fn contrast(a: Color32, b: Color32) -> f64 {
+        let (a, b) = (wcag_luminance(a), wcag_luminance(b));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    /// The text of the window reads at 4.5:1 or better (WCAG AA) on the
+    /// surfaces it is drawn on, in both themes.
+    #[test]
+    fn text_meets_the_aa_contrast_on_the_surfaces_it_is_drawn_on() {
+        for (name, tokens) in [("dark", Tokens::DARK), ("light", Tokens::LIGHT)] {
+            let mut pairs = Vec::new();
+            for surface in [
+                tokens.chrome,
+                tokens.chrome_dark,
+                tokens.panel,
+                tokens.canvas,
+                tokens.command,
+                tokens.control,
+                tokens.control_hover,
+                tokens.tab_active,
+            ] {
+                pairs.push(("text", tokens.text, surface));
+            }
+            for surface in [
+                tokens.chrome,
+                tokens.chrome_dark,
+                tokens.panel,
+                tokens.canvas,
+                tokens.command,
+            ] {
+                pairs.push(("text_dim", tokens.text_dim, surface));
+            }
+            // The warning of the palette is drawn on the side panel, which
+            // has the colour of the chrome, and the notes of the drawing
+            // are on the canvas.
+            pairs.push(("warn", tokens.warn, tokens.chrome));
+            pairs.push(("warn", tokens.warn, tokens.panel));
+            pairs.push(("text_faint", tokens.text_faint, tokens.canvas));
+            // Selected text: the selection fill is the accent at 45 %.
+            for surface in [tokens.chrome, tokens.panel] {
+                let blend = |accent: u8, base: u8| {
+                    (f32::from(accent) * 0.45 + f32::from(base) * 0.55).round() as u8
+                };
+                let fill = Color32::from_rgb(
+                    blend(tokens.accent.r(), surface.r()),
+                    blend(tokens.accent.g(), surface.g()),
+                    blend(tokens.accent.b(), surface.b()),
+                );
+                pairs.push(("text on selection", tokens.text, fill));
+            }
+            for (what, foreground, background) in pairs {
+                let ratio = contrast(foreground, background);
+                assert!(
+                    ratio >= 4.5,
+                    "{name}: {what} {foreground:?} on {background:?} is {ratio:.2}:1"
                 );
             }
         }

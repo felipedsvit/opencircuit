@@ -44,8 +44,15 @@ and `opencircuit diff`, optional backups, productivity tools (command palette,
 find and replace, wire tools, macros, workspaces and custom shortcuts, projects
 in tabs), schema version 5 (wire data, annotations, groups, mirrored symbols,
 single-line and panel-layout sheets, PLC modules), DXF export, IEC-style and
-ANSI-style symbol sets and a symbol editor. How to extend OpenCircuit, and the safety limits of each interface,
-are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
+ANSI-style symbol sets and a symbol editor. M9.5 audits the window against egui
+0.37: nothing is deprecated, nothing repaints without a reason, open sections
+and windows keep their state when the language changes, text reaches the AA
+contrast in both themes, and the files of 0.0.2 are frozen for compatibility
+(`tests/compat/v0.0.2`).
+
+How to extend OpenCircuit, and the safety limits of each interface,
+are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md) and the
+list of changes in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Workspace
 

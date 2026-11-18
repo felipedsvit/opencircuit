@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "circuit": "reversing.ocircuit",
+  "config": { "fault_policy": "report" },
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 2, "action": "press", "device": "S3" },
+    { "tick": 7, "action": "release", "device": "S1" },
+    { "tick": 7, "action": "release", "device": "S3" }
+  ],
+  "until_tick": 10,
+  "expect": { "trace": "simultaneous-report.trace", "diagnostics": [] }
+}
