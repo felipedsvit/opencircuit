@@ -311,7 +311,7 @@ colour, colours and line types per layer, a "current layer", rotated or
 several-line text, other languages and a stored language setting, and a
 translated command line. New work starts with an issue.
 
-## M9 — Work safety, productivity and new document views (in progress; version 0.0.2)
+## M9 — Work safety, productivity and new document views (implemented, except two items of M9.0; version 0.0.2)
 
 Tracking issue #118. Version 0.0.2 closes M9. The scope comes from a triage of the features of
 electrical CAD tools against this repository: what already exists was left
@@ -320,7 +320,7 @@ below is listed at the end of this section. Clean room as for M5 to M8: other
 tools shaped the scope only; no code, strings, artwork or symbol files are
 copied.
 
-Decisions, to be confirmed in #118:
+Decisions (taken by default, open to change in #118):
 
 - **PLC:** modules with channels and an I/O mapping, documentation only. A
   PLC program still runs outside OpenCircuit, against the Modbus server; "real
@@ -341,7 +341,7 @@ Decisions, to be confirmed in #118:
   window, the command line, `circuit-model`, `circuit-commands`,
   `circuit-report`, `circuit-export`).
 
-### M9.0 — Resilience (done, except where marked)
+### M9.0 — Resilience (done, except where marked: both items left are outside a feature pull request)
 
 - [x] No crash on a command-line argument that is not UTF-8 or on a standard
   stream that cannot be written.
@@ -357,8 +357,9 @@ Decisions, to be confirmed in #118:
 - [x] CI runs locally with `act` (`docs/local-ci.md`).
 - [x] The Modbus server frees the slots of closed connections before it
   refuses a new client.
-- [ ] CI, in its own pull request: clippy on Windows, actions pinned by
-  commit, a `cargo test --release` job and a coverage threshold.
+- [ ] CI, in its own pull request (`.github/workflows/` never changes in a
+  feature pull request): clippy on Windows, actions pinned by commit, a
+  `cargo test --release` job and a coverage threshold.
 - [ ] macOS: reproduce the native file dialogs opened inside the event loop;
   switch to asynchronous dialogs if it is confirmed.
 
@@ -474,7 +475,12 @@ traces; every check of `docs/releasing.md` passes. The tests are named in this
 section when each item lands.
 
 Order of work: M9.0, then M9.1, M9.2, M9.3 (ADR-0018 before any field) and
-M9.4, in stacked pull requests of one item each, as in M7 and M8.
+M9.4, in stacked pull requests, as in M7 and M8 (#119 to #130).
+
+Not part of M9 and left for later: drawing every shape kind with the pointer
+(the command line of the window and the edit files add them; the pointer
+picks, moves and deletes them), comments drawn on the sheet, nested groups, a
+panel layout with real dimensions and rails, and floating panels.
 
 Considered and not done in M9: free drawing, scaling, fillet, chamfer, explode
 and polar tracking (they do not fit the orthogonal, quantized drawing);
