@@ -88,7 +88,9 @@ impl<'a> Choice<'a> {
         }
     }
 
-    /// The same button with an accessible name of its own.
+    /// The same button with an accessible name of its own (only the list of
+    /// copies to recover, which the browser build does not have).
+    #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
     pub const fn named(mut self, name: &'a str) -> Self {
         self.name = Some(name);
@@ -199,7 +201,8 @@ fn paint_icon(ui: &mut Ui, kind: Kind, size: f32) {
 }
 
 /// One button, drawn for its role, for the rows of a dialog that has a
-/// list (the copies to recover).
+/// list (the copies to recover, which the browser build does not have).
+#[cfg(not(target_arch = "wasm32"))]
 pub fn choice_button(ui: &mut Ui, choice: Choice<'_>) -> Response {
     let tokens = Tokens::of(ui);
     let response = button(ui, choice, tokens);
