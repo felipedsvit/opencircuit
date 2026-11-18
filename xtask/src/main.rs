@@ -22,6 +22,7 @@
 mod architecture;
 mod bench;
 mod examples;
+mod symbol_sets;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -102,7 +103,8 @@ fn generate_examples(check_only: bool) -> Result<String, Vec<String>> {
 
     let mut problems = Vec::new();
     let mut written = 0_usize;
-    let outputs = examples::outputs();
+    let mut outputs = examples::outputs();
+    outputs.extend(symbol_sets::outputs());
     let total = outputs.len();
     for output in outputs {
         let (relative, text) = match output {

@@ -1,0 +1,751 @@
+{
+  "id": "iec",
+  "models": [
+    {
+      "category": "automation",
+      "class": "relay",
+      "id": "iec.relay",
+      "note": null,
+      "operator": null,
+      "params": [
+        {
+          "default": 24000,
+          "key": "rated_voltage_mv",
+          "type": {
+            "int": {
+              "max": 4294967295,
+              "min": 1
+            }
+          }
+        },
+        {
+          "default": "dc",
+          "key": "connection",
+          "type": {
+            "enum": [
+              "dc",
+              "line_neutral",
+              "line_line"
+            ]
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "artwork": {
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "rect": {
+                  "from": [
+                    -12,
+                    -8
+                  ],
+                  "to": [
+                    12,
+                    8
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "coil",
+          "kind": "coil",
+          "max": 1,
+          "min": 1,
+          "slotted": false
+        },
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    -8,
+                    -8
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "no",
+          "kind": "contact_no",
+          "max": 4,
+          "min": 0,
+          "slotted": true
+        },
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    -8,
+                    -6
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -8
+                  ],
+                  "to": [
+                    10,
+                    -8
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    8,
+                    -10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -8
+                  ],
+                  "to": [
+                    10,
+                    -8
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "nc",
+          "kind": "contact_nc",
+          "max": 4,
+          "min": 0,
+          "slotted": true
+        }
+      ],
+      "title": "Relay (IEC style)",
+      "version": 1
+    },
+    {
+      "category": "controls",
+      "class": "pushbutton",
+      "id": "iec.pushbutton_no",
+      "note": null,
+      "operator": "push",
+      "params": [],
+      "symbols": [
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    0
+                  ],
+                  "to": [
+                    -4,
+                    0
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    -5
+                  ],
+                  "to": [
+                    -18,
+                    5
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    -8,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    0
+                  ],
+                  "to": [
+                    -8,
+                    0
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    -5
+                  ],
+                  "to": [
+                    -18,
+                    5
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "no",
+          "kind": "contact_no",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Pushbutton, normally open (IEC style)",
+      "version": 1
+    },
+    {
+      "category": "controls",
+      "class": "pushbutton",
+      "id": "iec.pushbutton_nc",
+      "note": null,
+      "operator": "push",
+      "params": [],
+      "symbols": [
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    -8,
+                    -6
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -8
+                  ],
+                  "to": [
+                    10,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    0
+                  ],
+                  "to": [
+                    -4,
+                    0
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    -5
+                  ],
+                  "to": [
+                    -18,
+                    5
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    8
+                  ],
+                  "to": [
+                    8,
+                    -10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -8
+                  ],
+                  "to": [
+                    10,
+                    -8
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    0
+                  ],
+                  "to": [
+                    -8,
+                    0
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -18,
+                    -5
+                  ],
+                  "to": [
+                    -18,
+                    5
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "nc",
+          "kind": "contact_nc",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Pushbutton, normally closed (IEC style)",
+      "version": 1
+    },
+    {
+      "category": "controls",
+      "class": "lamp",
+      "id": "iec.lamp",
+      "note": null,
+      "operator": null,
+      "params": [
+        {
+          "default": 24000,
+          "key": "rated_voltage_mv",
+          "type": {
+            "int": {
+              "max": 4294967295,
+              "min": 1
+            }
+          }
+        },
+        {
+          "default": "dc",
+          "key": "connection",
+          "type": {
+            "enum": [
+              "dc",
+              "line_neutral",
+              "line_line"
+            ]
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "artwork": {
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    10
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "circle": {
+                  "center": [
+                    0,
+                    0
+                  ],
+                  "radius": 10
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -7,
+                    -7
+                  ],
+                  "to": [
+                    7,
+                    7
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    7,
+                    -7
+                  ],
+                  "to": [
+                    -7,
+                    7
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "lamp",
+          "kind": "lamp",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Pilot lamp (IEC style)",
+      "version": 1
+    },
+    {
+      "category": "protection",
+      "class": "fuse",
+      "id": "iec.fuse",
+      "note": "A fuse never melts in the simulation: it always conducts.",
+      "operator": null,
+      "params": [],
+      "symbols": [
+        {
+          "artwork": {
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "rect": {
+                  "from": [
+                    -5,
+                    -12
+                  ],
+                  "to": [
+                    5,
+                    12
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "link",
+          "kind": "fuse_link",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Fuse (IEC style)",
+      "version": 1
+    }
+  ],
+  "name": "IEC-style symbols",
+  "provenance": {
+    "license": "MIT OR Apache-2.0",
+    "origin": "Drawn for OpenCircuit from the geometry of its symbol kinds; no symbol file was copied, and no conformance with a standard is claimed",
+    "standard_reference": null
+  },
+  "schema_version": 2,
+  "version": 1
+}

@@ -454,9 +454,12 @@ Decisions, to be confirmed in #118:
 
 ### M9.4 — Symbols and exchange
 
-- [ ] A symbol editor that writes extension libraries (`LIBRARY.md`).
-- [ ] Symbol sets in an IEC-like and an ANSI-like style, drawn for this
-  project, with no claim of conformance.
+- [x] A symbol editor that writes extension libraries (`LIBRARY.md`): File >
+  Symbol editor… (`apps/desktop/src/symbol_editor.rs`,
+  `apps/desktop/tests/symbols.rs`).
+- [x] Symbol sets in an IEC-like and an ANSI-like style, drawn for this
+  project, with no claim of conformance (`libraries/iec-style.oclib`,
+  `libraries/ansi-style.oclib`, File > Symbol sets).
 - [x] DXF export from the neutral scene (`circuit_export::dxf`, AutoCAD R12;
   `opencircuit export --output file.dxf`, `--to dxf`; Export > DXF in the
   window).

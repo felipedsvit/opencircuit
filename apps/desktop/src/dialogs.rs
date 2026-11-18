@@ -112,6 +112,13 @@ pub fn pick_libraries() -> Vec<PathBuf> {
     }
 }
 
+/// Ask where to save an extension library drawn in the symbol editor.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn choose_library_path(name: &str) -> Option<PathBuf> {
+    save_path(tr("OpenCircuit library"), name, LIBRARY_EXTENSION)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn save_path(filter: &str, name: &str, extension: &str) -> Option<PathBuf> {
     let mut path = rfd::FileDialog::new()
