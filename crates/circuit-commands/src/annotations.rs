@@ -192,8 +192,8 @@ pub fn add_shape(
     if let Some(problem) = kind.problem() {
         return Err(CommandError::Invalid(problem));
     }
-    if let Some(layer) = layer
-        && !doc.layers.iter().any(|candidate| candidate.id == layer)
+    if let Some(layer) =
+        layer.filter(|layer| !doc.layers.iter().any(|candidate| candidate.id == *layer))
     {
         return Err(CommandError::Missing(Subject::Layer(layer)));
     }
@@ -529,8 +529,9 @@ fn check_plc(doc: &Schematic, module: &PlcModule) -> Result<(), CommandError> {
         )));
     }
     for channel in &module.channels {
-        if let Some(device) = channel.device
-            && !doc.devices.iter().any(|candidate| candidate.id == device)
+        if let Some(device) = channel
+            .device
+            .filter(|device| !doc.devices.iter().any(|candidate| candidate.id == *device))
         {
             return Err(CommandError::Missing(Subject::Device(device)));
         }

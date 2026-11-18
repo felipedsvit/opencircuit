@@ -486,7 +486,7 @@ impl ShapeKind {
         match self {
             Self::Polyline { points, closed } => {
                 let mut path: Vec<(i64, i64)> = points.iter().map(|p| at(*p)).collect();
-                if *closed && let Some(first) = path.first().copied() {
+                if let Some(first) = path.first().copied().filter(|_| *closed) {
                     path.push(first);
                 }
                 vec![path]

@@ -502,8 +502,11 @@ fn check_annotations(doc: &Schematic, out: &mut Vec<Diagnostic>) {
             message,
         ));
     };
-    if let Some(client) = &doc.project.client
-        && !is_valid_text(client, MAX_CLIENT_CHARS)
+    if doc
+        .project
+        .client
+        .as_deref()
+        .is_some_and(|client| !is_valid_text(client, MAX_CLIENT_CHARS))
     {
         warn(
             Subject::Document,
@@ -525,11 +528,11 @@ fn check_annotations(doc: &Schematic, out: &mut Vec<Diagnostic>) {
         }
     }
     for device in &doc.devices {
-        if let Some(link) = device
+        if device
             .info
             .as_ref()
             .and_then(|info| info.datasheet.as_deref())
-            && !is_valid_datasheet(link)
+            .is_some_and(|link| !is_valid_datasheet(link))
         {
             warn(
                 Subject::Device(device.id),
@@ -653,9 +656,10 @@ fn check_plc_channels(doc: &Schematic, out: &mut Vec<Diagnostic>) {
             if !addresses.insert(channel.address.as_str()) {
                 problems.insert(format!("address {} is used twice", channel.address));
             }
-            if let Some(device) = channel.device
-                && driven.insert((device, channel.direction), plc.id).is_some()
-            {
+            let Some(device) = channel.device else {
+                continue;
+            };
+            if driven.insert((device, channel.direction), plc.id).is_some() {
                 problems.insert(format!(
                     "device {device} is on two {} channels",
                     channel.direction.name()

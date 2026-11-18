@@ -210,9 +210,9 @@ pub fn set_project_info(
 /// control character.
 pub fn set_client(doc: &Schematic, client: Option<&str>) -> Result<Transaction, CommandError> {
     let client = client.map(str::trim).filter(|text| !text.is_empty());
-    if let Some(text) = client
-        && !circuit_model::annotations::is_valid_text(text, circuit_model::MAX_CLIENT_CHARS)
-    {
+    if client.is_some_and(|text| {
+        !circuit_model::annotations::is_valid_text(text, circuit_model::MAX_CLIENT_CHARS)
+    }) {
         return Err(CommandError::Invalid(format!(
             "a client is 1 to {} characters with no control character",
             circuit_model::MAX_CLIENT_CHARS

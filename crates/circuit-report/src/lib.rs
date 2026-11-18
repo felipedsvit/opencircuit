@@ -409,9 +409,7 @@ pub fn wires(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
                         .get(wire)
                         .and_then(|spec| spec.values().get(field).copied())
                         .and_then(|value| value.as_deref());
-                    if let Some(value) = value
-                        && !values.contains(&value)
-                    {
+                    if let Some(value) = value.filter(|value| !values.contains(value)) {
                         values.push(value);
                     }
                 }
