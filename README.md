@@ -36,11 +36,15 @@ trace, recent parts and parts placed on a wire. M8 is implemented: terminal
 strips and a terminal plan, signal arrows that continue a circuit from one sheet
 to another, text notes, layers that hide and lock groups of elements, an MCP
 server (`opencircuit mcp`) for tools that edit and check projects, and the window
-in Brazilian Portuguese. M9 is in progress and closes version 0.0.2: saves
-that keep a file's permissions and links, compatibility with the files of
-v0.0.1, then autosave and recovery, productivity tools, schema version 5
-(wire data, annotations, single-line and panel-layout sheets, PLC modules), a
-symbol editor and DXF export. How to extend OpenCircuit, and the safety limits of each interface,
+in Brazilian Portuguese. M9 is implemented and closes version 0.0.2 (except
+two items of M9.0, a CI pull request and the macOS file dialogs): saves that
+keep a file's permissions and links, compatibility with the files of v0.0.1,
+autosave and recovery (also in the browser), project locks, version history
+and `opencircuit diff`, optional backups, productivity tools (command palette,
+find and replace, wire tools, macros, workspaces and custom shortcuts, projects
+in tabs), schema version 5 (wire data, annotations, groups, mirrored symbols,
+single-line and panel-layout sheets, PLC modules), DXF export, IEC-style and
+ANSI-style symbol sets and a symbol editor. How to extend OpenCircuit, and the safety limits of each interface,
 are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
@@ -56,11 +60,12 @@ crates/
   circuit-renderer/    neutral scene: primitives with semantic styles, no GUI
   circuit-commands/    transactional edits with undo/redo
   circuit-editor/      selection, tools and hit-test, no GUI
-  circuit-export/      deterministic SVG and PDF from the neutral scene
+  circuit-export/      deterministic SVG, PDF and DXF from the neutral scene
   circuit-io/          Modbus TCP codec and I/O map, no sockets
   circuit-report/      reports of a project as tables: bill of materials, wires, terminals, ...
 xtask/                 architecture checks and example generation
 examples/              reference projects with scenarios and golden traces
+libraries/             the IEC-style and ANSI-style symbol sets (extension libraries)
 tests/fixtures/        projects that must be rejected, with their scenarios
 ```
 

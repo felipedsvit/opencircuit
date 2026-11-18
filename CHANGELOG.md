@@ -11,8 +11,10 @@ may change anything, and what changes in a file format is listed under
 ## [Unreleased]
 
 Version 0.0.2 closes M9 (`ROADMAP.md`): resilience, work safety,
-productivity, schema version 5 and new document views. Each item is listed
-here when it lands.
+productivity, schema version 5 and new document views. Two items of M9.0 are
+left for their own pull requests: the CI changes (clippy on Windows, pinned
+actions, a release-mode test job, a coverage threshold) and the macOS file
+dialogs.
 
 ### Added
 
