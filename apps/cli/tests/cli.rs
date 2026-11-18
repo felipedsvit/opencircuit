@@ -2526,3 +2526,40 @@ fn the_plc_and_comments_reports_list_the_documentation_of_schema_5() {
     let validate = opencircuit(&["validate", path, "--deny-warnings"]);
     assert_eq!(code(&validate), 0, "{}", stdout(&validate));
 }
+
+#[test]
+fn export_writes_a_dxf_drawing_by_its_extension_or_by_to() {
+    let directory = scratch("export-dxf");
+    let output = directory.join("starter.dxf");
+    let path = output.to_str().expect("utf-8 path");
+    let result = opencircuit(&["export", STARTER, "--output", path, "--format", "json"]);
+    assert_eq!(code(&result), 0, "{}", stderr(&result));
+    let document: serde_json::Value = serde_json::from_str(&stdout(&result)).expect("JSON");
+    assert_eq!(document["kind"], "dxf");
+    let text = fs::read_to_string(&output).expect("written");
+    assert!(text.starts_with("  0\nSECTION\n  2\nHEADER\n"));
+    assert!(text.contains("AC1009"));
+    assert!(text.ends_with("  0\nEOF\n"));
+    // The same project gives the same bytes.
+    let again = directory.join("again.dxf");
+    let result = opencircuit(&[
+        "export",
+        STARTER,
+        "--output",
+        again.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&result), 0);
+    assert_eq!(fs::read_to_string(&again).expect("written"), text);
+    // Several projects with --to dxf.
+    let folder = directory.join("many");
+    let result = opencircuit(&[
+        "export",
+        STARTER,
+        "--output-dir",
+        folder.to_str().expect("utf-8"),
+        "--to",
+        "dxf",
+    ]);
+    assert_eq!(code(&result), 0, "{}", stderr(&result));
+    assert!(folder.join("starter.dxf").exists());
+}

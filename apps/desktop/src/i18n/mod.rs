@@ -344,7 +344,7 @@ mod tests {
     }
 
     /// Technical texts that read the same in both languages.
-    const THE_SAME: [&str; 25] = [
+    const THE_SAME: [&str; 26] = [
         "{0} ({1})",
         "{0} terminal",
         "{0} wire",
@@ -357,6 +357,7 @@ mod tests {
         "Ctrl+H",
         "Ctrl+K",
         "Ctrl+Z / Ctrl+Y",
+        "DXF…",
         "Del",
         "Esc",
         "F",

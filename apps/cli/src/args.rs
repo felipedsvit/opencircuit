@@ -134,6 +134,8 @@ pub(crate) const DEFAULT_LISTEN: &str = "127.0.0.1:5020";
 pub(crate) enum ExportFormat {
     Svg,
     Pdf,
+    /// AutoCAD R12 DXF (M9.4).
+    Dxf,
 }
 
 impl ExportFormat {
@@ -142,6 +144,7 @@ impl ExportFormat {
         match self {
             Self::Svg => "svg",
             Self::Pdf => "pdf",
+            Self::Dxf => "dxf",
         }
     }
 }
@@ -338,7 +341,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 (None, Some(output)) => Some(PathBuf::from(output)),
                 (None, None) => {
                     return Err(
-                        "`export` needs `--output <file>`, or `--output-dir <dir>` with `--to svg|pdf`"
+                        "`export` needs `--output <file>`, or `--output-dir <dir>` with `--to svg|pdf|dxf`"
                             .to_owned(),
                     );
                 }
@@ -355,21 +358,23 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                 {
                     Some("svg") => ExportFormat::Svg,
                     Some("pdf") => ExportFormat::Pdf,
+                    Some("dxf") => ExportFormat::Dxf,
                     _ => {
                         return Err(format!(
-                            "cannot tell the format of `{}`; the output must end in `.svg` or `.pdf`",
+                            "cannot tell the format of `{}`; the output must end in `.svg` or `.pdf`, or `.dxf` for a CAD drawing",
                             output.display()
                         ));
                     }
                 },
                 (None, Some("svg")) => ExportFormat::Svg,
                 (None, Some("pdf")) => ExportFormat::Pdf,
+                (None, Some("dxf")) => ExportFormat::Dxf,
                 (None, Some(other)) => {
                     return Err(format!(
-                        "unknown format `{other}`; use `--to svg` or `--to pdf`"
+                        "unknown format `{other}`; use `--to svg`, `--to pdf` or `--to dxf`"
                     ));
                 }
-                (None, None) => return Err("`--output-dir` needs `--to svg|pdf`".to_owned()),
+                (None, None) => return Err("`--output-dir` needs `--to svg|pdf|dxf`".to_owned()),
             };
             let theme = match words.value("--theme") {
                 None | Some("print") => Theme::Print,
@@ -390,7 +395,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
                         format!("`--sheet` takes `all` or a sheet number from 1, not `{number}`")
                     })?,
             };
-            if format == ExportFormat::Svg && sheet == SheetChoice::All {
+            if format != ExportFormat::Pdf && sheet == SheetChoice::All {
                 return Err(
                     "an SVG holds one page; give `--sheet <number>` or write a `.pdf` for every sheet"
                         .to_owned(),

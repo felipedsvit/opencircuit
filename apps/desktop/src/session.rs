@@ -467,14 +467,25 @@ impl Session {
     /// Returns [`FileError`] when the file cannot be written; nothing is
     /// left behind then.
     pub fn export(&self, path: &Path, with_state: bool) -> Result<(), FileError> {
-        let is_pdf = path
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"));
-        if is_pdf {
+        let extension = |wanted: &str| {
+            path.extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
+        };
+        if extension("pdf") {
             write_atomic(path, self.pdf(with_state))
+        } else if extension("dxf") {
+            write_atomic(path, self.dxf(with_state))
         } else {
             write_atomic(path, self.svg(with_state))
         }
+    }
+
+    /// The drawing as a DXF drawing (AutoCAD R12, M9.4), with the same
+    /// exporter as the command line: the whole canvas, sheets included.
+    #[must_use]
+    pub fn dxf(&self, with_state: bool) -> String {
+        let (scene, _, theme) = self.export_scene(with_state);
+        circuit_export::dxf(&scene, theme)
     }
 
     /// Whether the simulation advances with real time.
@@ -754,6 +765,14 @@ mod tests {
         session
             .snapshot()
             .is_some_and(|s| s.active_devices.contains(&id))
+    }
+
+    #[test]
+    fn the_dxf_export_is_the_one_of_the_command_line() {
+        let session = Session::load(COMMAND, None).unwrap();
+        let text = session.dxf(false);
+        assert!(text.contains("AC1009") && text.ends_with("  0\nEOF\n"));
+        assert_eq!(session.dxf(false), text);
     }
 
     #[test]

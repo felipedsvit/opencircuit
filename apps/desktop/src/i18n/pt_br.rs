@@ -66,6 +66,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Outro atalho tem estas teclas agora; dê outras teclas a ele primeiro.",
     ),
     ("Arrows", "Setas"),
+    ("As DXF…", "Como DXF…"),
     ("As PDF…", "Como PDF…"),
     ("As SVG…", "Como SVG…"),
     (
@@ -135,6 +136,8 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Ctrl+Z / Ctrl+Y", "Ctrl+Z / Ctrl+Y"),
     ("Customize shortcuts", "Personalizar atalhos"),
     ("Customize shortcuts…", "Personalizar atalhos…"),
+    ("DXF drawing", "Desenho DXF"),
+    ("DXF…", "DXF…"),
     ("Dark", "Escuro"),
     ("Datasheet", "Folha de dados"),
     ("Date", "Data"),

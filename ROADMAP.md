@@ -457,7 +457,9 @@ Decisions, to be confirmed in #118:
 - [ ] A symbol editor that writes extension libraries (`LIBRARY.md`).
 - [ ] Symbol sets in an IEC-like and an ANSI-like style, drawn for this
   project, with no claim of conformance.
-- [ ] DXF export from the neutral scene.
+- [x] DXF export from the neutral scene (`circuit_export::dxf`, AutoCAD R12;
+  `opencircuit export --output file.dxf`, `--to dxf`; Export > DXF in the
+  window).
 
 **Exit criterion:** a project is drawn in the window with autosave on; the
 process is killed and the project is recovered with no edit lost; a second

@@ -28,6 +28,11 @@ here when it lands.
   system releases however the process ends, so a copy is offered as soon as
   the window is gone. A panic in the window writes the newest changes before
   the process ends.
+- **DXF export** (`opencircuit export --output drawing.dxf`, `--to dxf`,
+  Export > DXF in the window): an AutoCAD R12 ASCII drawing of the canvas or
+  of one sheet, in millimetres, one entity per item on layers by what it is
+  (wires, symbols, labels, frame, state, marks), deterministic like the SVG
+  and PDF exports.
 - **Autosave in the browser build**: a project with unsaved changes is kept
   in the browser storage of the page, and the next page opened offers to
   recover it or discard it; the status bar says when the copy is current.
