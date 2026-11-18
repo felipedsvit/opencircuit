@@ -36,7 +36,11 @@ trace, recent parts and parts placed on a wire. M8 is implemented: terminal
 strips and a terminal plan, signal arrows that continue a circuit from one sheet
 to another, text notes, layers that hide and lock groups of elements, an MCP
 server (`opencircuit mcp`) for tools that edit and check projects, and the window
-in Brazilian Portuguese. How to extend OpenCircuit, and the safety limits of each interface,
+in Brazilian Portuguese. M9 is in progress and closes version 0.0.2: saves
+that keep a file's permissions and links, compatibility with the files of
+v0.0.1, then autosave and recovery, productivity tools, schema version 5
+(wire data, annotations, single-line and panel-layout sheets, PLC modules), a
+symbol editor and DXF export. How to extend OpenCircuit, and the safety limits of each interface,
 are in [`EXTENDING.md`](EXTENDING.md). See [`ROADMAP.md`](ROADMAP.md).
 
 ## Workspace
@@ -205,6 +209,8 @@ cargo deny check
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md) — contributing code, components and libraries; reporting vulnerabilities.
 - [`docs/adr/`](docs/adr/README.md) — architecture decision records.
 - [`ROADMAP.md`](ROADMAP.md) — milestones and scope.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed in each release.
+- [`docs/releasing.md`](docs/releasing.md) and [`docs/local-ci.md`](docs/local-ci.md) — making a release; running CI locally with `act`.
 
 ## Safety notice
 

@@ -72,6 +72,29 @@ programs must be universal), the `.zip` is unpacked, and the `.msi` is installed
 an example, `opencircuit` is on the `PATH`, the `.ocircuit` association and the
 Start menu entry exist) and then removed.
 
+## Before a release without `-dev`
+
+A release whose version has no `-` is one people are told to rely on. Before
+tagging it, run on the merge commit, besides the pull request's CI:
+
+- The whole CI workflow on your machine with `act` (`docs/local-ci.md`):
+  `act push -W .github/workflows/ci.yml`. Every job succeeds.
+- The property tests at a hundred times their usual count, in release mode:
+
+  ```sh
+  PROPTEST_CASES=20000 PROPTEST_MAX_GLOBAL_REJECTS=1000000 \
+      cargo test --release --locked --no-fail-fast --workspace --exclude opencircuit-desktop
+  ```
+
+  The higher reject limit is needed: a few properties discard inputs, and
+  proptest gives up after 1,024 discards whatever the case count.
+- The files of the previous release still open and simulate the same:
+  `apps/cli/tests/compat.rs` runs on `tests/compat/v0.0.1`. When a release
+  writes a new schema version, freeze its examples, scenarios and traces in
+  `tests/compat/vX.Y.Z` (no SVG or PDF; drawings may change) and add them to
+  that test.
+- `cargo deny check` against today's advisory database.
+
 ## What a release does not have yet
 
 - **Signing.** Nothing is signed or notarized, because that needs

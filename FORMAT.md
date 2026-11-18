@@ -7,7 +7,8 @@ is fixed in the same change.
 
 ## Rules
 
-- The file is JSON (UTF-8) with the `.ocircuit` extension.
+- The file is JSON (UTF-8) with the `.ocircuit` extension. A byte order mark
+  at the start is accepted when reading and never written.
 - `schema_version` is mandatory. The current version is 4.
 - `next_id` is mandatory. Every entity of every collection draws its ID from
   this one counter: IDs start at 1, are unique across collections, are below
@@ -343,10 +344,15 @@ diagnostics, so that a broken project can still be opened and explained.
 `circuit-project` converts between text and the model. It does not call
 `std::fs` and does not know paths. The application writes atomically:
 
-1. write a temporary file in the same directory;
-2. flush and `fsync`;
-3. rename it over the destination;
-4. remove the temporary file on error.
+1. follow a symbolic link to the file it names (at most 16 links), so that the
+   link is kept and its file replaced;
+2. create a temporary file with a short name of its own in the same directory,
+   refusing one that exists (never write through a link or over a file that is
+   not ours);
+3. write, then give it the permissions and the group of the file it replaces
+   (Unix; without the group, the group gets no access), then flush and `fsync`;
+4. rename it over the destination and flush the directory (Unix, best effort);
+5. remove the temporary file on error.
 
 ## Migrations
 

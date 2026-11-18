@@ -372,8 +372,18 @@ fn prepare(root: &Path, name: &str, arguments: &Map<String, Value>) -> Result<Pr
             // The operations go to a file of their own, next to the root's
             // files and removed afterwards.
             let temporary = root.join(format!(".mcp-edit-{}.json", std::process::id()));
-            fs::write(&temporary, bytes)
+            // `create_new`: a file already at that name belongs to someone
+            // else and is neither overwritten nor removed afterwards.
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
                 .map_err(|error| format!("cannot write the edit file: {error}"))?;
+            if let Err(error) = file.write_all(&bytes) {
+                drop(file);
+                let _ = fs::remove_file(&temporary);
+                return Err(format!("cannot write the edit file: {error}"));
+            }
             args.push("--apply".to_owned());
             args.push(temporary.to_string_lossy().into_owned());
             cleanup = Some(temporary);
@@ -781,5 +791,196 @@ mod tests {
 
         assert_eq!(answer["result"]["isError"], true);
         assert!(!root.parent().expect("parent").join("escaped.svg").exists());
+    }
+
+    #[test]
+    fn a_file_at_the_name_of_the_edit_file_is_neither_overwritten_nor_removed() {
+        let root = scratch("edit-name-taken");
+        call_tool(&root, "new", &json!({ "project": "demo.ocircuit" }));
+        let taken = root.join(format!(".mcp-edit-{}.json", std::process::id()));
+        fs::write(&taken, "someone else's").expect("file");
+        let before = fs::read_to_string(root.join("demo.ocircuit")).expect("project");
+
+        let answer = call_tool(
+            &root,
+            "edit",
+            &json!({ "project": "demo.ocircuit", "operations": [
+                { "op": "place", "model": "pushbutton_no", "symbol": "contact",
+                  "at": [0, 0], "reference": "S1" }
+            ] }),
+        );
+
+        assert_eq!(answer["result"]["isError"], true);
+        assert!(text_of(&answer).contains("cannot write the edit file"));
+        assert_eq!(fs::read_to_string(&taken).expect("kept"), "someone else's");
+        assert_eq!(
+            fs::read_to_string(root.join("demo.ocircuit")).expect("project"),
+            before
+        );
+    }
+
+    mod hostile {
+        use proptest::prelude::*;
+
+        use super::*;
+
+        /// Paths an agent might send, most of them trying to leave the root.
+        const PATHS: &[&str] = &[
+            "demo.ocircuit",
+            "out.svg",
+            "",
+            ".",
+            "..",
+            "../outside.ocircuit",
+            "a/../../outside.svg",
+            "/etc/passwd",
+            "@FENCE@/outside.svg",
+            "@FENCE@/root/../outside.ocircuit",
+            "nested/deeper/x.ocircuit",
+            "a\u{0}b",
+            "C:\\outside.svg",
+            "\\\\server\\share\\x",
+        ];
+        const KEYS: &[&str] = &[
+            "jsonrpc",
+            "id",
+            "method",
+            "params",
+            "name",
+            "arguments",
+            "project",
+            "scenario",
+            "output",
+            "library",
+            "operations",
+            "kind",
+            "theme",
+            "sheet",
+            "dry_run",
+            "force",
+            "deny_warnings",
+            "tick_us",
+        ];
+        const METHODS: &[&str] = &[
+            "initialize",
+            "notifications/initialized",
+            "ping",
+            "tools/list",
+            "tools/call",
+            "resources/list",
+            "",
+        ];
+        const TOOLS: &[&str] = &[
+            "new", "validate", "simulate", "edit", "report", "export", "rm",
+        ];
+
+        fn hostile_value() -> impl Strategy<Value = Value> {
+            let leaf = prop_oneof![
+                Just(Value::Null),
+                any::<bool>().prop_map(Value::Bool),
+                any::<i64>().prop_map(Value::from),
+                any::<u64>().prop_map(Value::from),
+                prop::sample::select(PATHS.to_vec()).prop_map(Value::from),
+                prop::sample::select(METHODS.to_vec()).prop_map(Value::from),
+                prop::sample::select(TOOLS.to_vec()).prop_map(Value::from),
+                ".{0,12}".prop_map(Value::from),
+            ];
+            leaf.prop_recursive(4, 48, 6, |inner| {
+                prop_oneof![
+                    prop::collection::vec(inner.clone(), 0..4).prop_map(Value::Array),
+                    prop::collection::vec((prop::sample::select(KEYS.to_vec()), inner), 0..7)
+                        .prop_map(|pairs| {
+                            Value::Object(
+                                pairs
+                                    .into_iter()
+                                    .map(|(key, value)| (key.to_owned(), value))
+                                    .collect(),
+                            )
+                        }),
+                ]
+            })
+        }
+
+        /// A request shaped like a tool call, with hostile arguments.
+        fn hostile_call() -> impl Strategy<Value = Value> {
+            (
+                prop::sample::select(TOOLS.to_vec()),
+                prop::collection::vec(
+                    (
+                        prop::sample::select(KEYS.to_vec()),
+                        prop_oneof![
+                            prop::sample::select(PATHS.to_vec()).prop_map(Value::from),
+                            hostile_value(),
+                        ],
+                    ),
+                    0..6,
+                ),
+            )
+                .prop_map(|(tool, arguments)| {
+                    let arguments: Map<String, Value> = arguments
+                        .into_iter()
+                        .map(|(key, value)| (key.to_owned(), value))
+                        .collect();
+                    json!({ "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                        "params": { "name": tool, "arguments": arguments } })
+                })
+        }
+
+        fn answers_are_json_rpc(answer: Option<Value>) -> Result<(), TestCaseError> {
+            if let Some(answer) = answer {
+                prop_assert_eq!(&answer["jsonrpc"], "2.0", "{}", answer);
+                prop_assert!(
+                    answer.get("result").is_some() != answer.get("error").is_some(),
+                    "{}",
+                    answer
+                );
+            }
+            Ok(())
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(128))]
+
+            #[test]
+            fn arbitrary_bytes_never_panic_and_get_a_json_rpc_answer(
+                bytes in prop::collection::vec(any::<u8>(), 0..256),
+            ) {
+                let root = scratch("hostile-bytes");
+                answers_are_json_rpc(handle(&root, &Env::default(), &bytes))?;
+            }
+
+            #[test]
+            fn arbitrary_messages_never_panic_and_get_a_json_rpc_answer(
+                message in hostile_value(),
+            ) {
+                let root = scratch("hostile-messages");
+                let bytes = message.to_string().into_bytes();
+                answers_are_json_rpc(handle(&root, &Env::default(), &bytes))?;
+            }
+
+            /// Whatever a tool call asks for, nothing appears outside the
+            /// root: the root is a directory inside a fence directory that
+            /// must keep only the root.
+            #[test]
+            fn hostile_tool_calls_never_write_outside_the_root(call in hostile_call()) {
+                let fence = scratch("hostile-fence");
+                let root = fence.join("root");
+                fs::create_dir_all(&root).expect("root");
+                fs::write(root.join("demo.ocircuit"), "{}").expect("project");
+                // Absolute paths aim at the fence itself.
+                let fence_text = serde_json::to_string(&fence.to_string_lossy()).expect("JSON");
+                let fence_text = fence_text.trim_matches('"');
+                let bytes = call.to_string().replace("@FENCE@", fence_text).into_bytes();
+
+                answers_are_json_rpc(handle(&root, &Env::default(), &bytes))?;
+
+                let mut names: Vec<String> = fs::read_dir(&fence)
+                    .expect("fence")
+                    .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
+                    .collect();
+                names.sort();
+                prop_assert_eq!(names, vec!["root".to_owned()], "{}", call);
+            }
+        }
     }
 }

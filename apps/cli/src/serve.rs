@@ -101,7 +101,11 @@ pub(crate) fn serve(
             return Ok(EXIT_OK);
         }
 
-        accept(&listener, &mut clients, now);
+        accept(&listener, &mut clients, now, |clients| {
+            clients.retain_mut(|client| {
+                serve_client(client, &map, snapshot.as_ref(), &mut pending, now)
+            });
+        });
 
         // Advance the simulation with real time.
         let real_us = u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX);
@@ -134,9 +138,20 @@ fn listen_error(address: SocketAddr, source: io::Error) -> CliError {
 }
 
 /// Accept waiting clients up to the limit; refuse the others by closing
-/// their connection at once.
-fn accept(listener: &TcpListener, clients: &mut Vec<Client>, now: Instant) {
+/// their connection at once. When every slot is taken, `reap` first reads
+/// the clients there are: one that has closed (it may have waited in the
+/// listen queue with the new one) frees its slot instead of getting the new
+/// client refused.
+fn accept(
+    listener: &TcpListener,
+    clients: &mut Vec<Client>,
+    now: Instant,
+    mut reap: impl FnMut(&mut Vec<Client>),
+) {
     while let Ok((stream, _)) = listener.accept() {
+        if clients.len() >= MAX_CONNECTIONS {
+            reap(clients);
+        }
         if clients.len() >= MAX_CONNECTIONS || stream.set_nonblocking(true).is_err() {
             drop(stream);
             continue;

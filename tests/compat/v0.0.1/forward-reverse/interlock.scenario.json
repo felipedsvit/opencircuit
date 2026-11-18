@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit": "reversing.ocircuit",
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 3, "action": "release", "device": "S1" },
+    { "tick": 6, "action": "press", "device": "S3" },
+    { "tick": 8, "action": "release", "device": "S3" }
+  ],
+  "until_tick": 10,
+  "expect": { "trace": "interlock.trace", "diagnostics": [] }
+}

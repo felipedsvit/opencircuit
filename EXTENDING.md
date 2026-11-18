@@ -395,10 +395,16 @@ protection or guarantee operational safety.
   not a controller. Modbus has no authentication: anyone who reaches the
   port can operate the simulated circuit. The server listens on loopback
   unless `--listen` names another address, and then it prints a warning.
-- **Server limits:** at most 4 clients (others are disconnected at once),
+- **Server limits:** at most 4 clients (others are disconnected at once;
+  a connection already closed by its client frees its slot first),
   frames up to 260 bytes (a longer or malformed frame closes the
   connection), idle connections closed after 30 s, at most 1000 ticks
   simulated per turn of the loop.
+- **A command never writes over a file it reads.** An output (`--trace`,
+  `--snapshot-json`, `edit --output`, a golden trace written by
+  `--update-golden`) that names the project, the scenario, the edit file, a
+  library or another output of the same command, through any link, is a
+  usage error (exit code 2) and nothing is written.
 - **Hostile input is refused, never repaired.** Projects, libraries,
   scenarios and Modbus frames are read strictly with size and count limits
   (a library: 1 MiB, 256 models, 32 symbols per model; a library directory:

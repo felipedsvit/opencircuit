@@ -3,6 +3,18 @@
 
 // A release build for Windows is a window program: no console behind it.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unimplemented,
+    clippy::todo,
+    clippy::unreachable,
+    // `println!` and `eprintln!` panic when the stream cannot be written.
+    clippy::print_stdout,
+    clippy::print_stderr
+)]
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> std::process::ExitCode {
@@ -17,6 +29,7 @@ fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
+    use std::io::Write as _;
     use std::path::PathBuf;
     use std::process::ExitCode;
 
@@ -28,15 +41,16 @@ mod native {
     pub(crate) fn main() -> ExitCode {
         let mut args = std::env::args_os().skip(1);
         let path = args.next().map(PathBuf::from);
+        // Nothing more can be done when a standard stream is closed.
         if args.next().is_some() {
-            eprintln!("{USAGE}");
+            let _ = writeln!(std::io::stderr(), "{USAGE}");
             return ExitCode::from(2);
         }
         if path
             .as_deref()
             .is_some_and(|p| p.as_os_str() == "--help" || p.as_os_str() == "-h")
         {
-            println!("{USAGE}");
+            let _ = writeln!(std::io::stdout(), "{USAGE}");
             return ExitCode::SUCCESS;
         }
 
@@ -63,7 +77,7 @@ mod native {
         match result {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
-                eprintln!("opencircuit-desktop: {error}");
+                let _ = writeln!(std::io::stderr(), "opencircuit-desktop: {error}");
                 ExitCode::FAILURE
             }
         }

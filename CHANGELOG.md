@@ -8,6 +8,45 @@ new" in the notes of the draft release, and stops if the section is missing
 may change anything, and what changes in a file format is listed under
 "Changed".
 
+## [Unreleased]
+
+Version 0.0.2 closes M9 (`ROADMAP.md`): resilience, work safety,
+productivity, schema version 5 and new document views. Each item is listed
+here when it lands.
+
+### Fixed
+
+- **A command no longer writes over a file it reads**: `simulate --trace` or
+  `--snapshot-json` naming the project, the scenario, a library or the other
+  output, `edit --output` naming the edit file or a library, and
+  `test --update-golden` with an `expect.trace` that names the project or the
+  scenario replaced that file and lost it. They now stop with a usage error
+  (exit code 2) and write nothing. Links and other names of the same file are
+  recognized. `edit --output` may still name the project.
+- **Saving keeps the permissions, the group and the links of a file** (window
+  and command line): a project readable only by its owner (`0600`) became
+  readable by everyone (`0664`) after a save, and saving through a symbolic
+  link replaced the link with a copy and left the file it pointed to as it
+  was. A replaced file now keeps its mode and group (or loses group access
+  when the group cannot be kept), and a link is followed to its file.
+- **A project with a name near the 255-byte limit** opened but could not be
+  saved: the temporary file of a save has a short name of its own.
+- **A file that starts with a byte order mark** (written by some Windows
+  editors) is read: projects, libraries, scenarios and edit files.
+- **`opencircuit serve` refused a client** that arrived right after other
+  clients had closed their connections: closed connections still held the four
+  slots until the next turn. They now free their slot first.
+- **`opencircuit` with an argument that is not UTF-8** (a file name made of
+  other bytes) stops with a usage error (exit code 2) instead of crashing.
+- **`opencircuit-desktop --help`** no longer crashes when its output cannot be
+  written (a closed pipe, a full disk).
+- **Saving on Linux and macOS** also flushes the directory after the new file
+  is renamed over the old one, so that the rename itself reaches the disk and
+  not only the contents (where the file system allows it). The temporary file
+  is created only if nothing has its name, so a file or a link that is already
+  there is never written through nor removed (window, command line and MCP
+  `edit`).
+
 ## [0.0.2-dev] - 2026-11-17
 
 A development build: M7 (electrical documentation) and M8 (panel documentation
