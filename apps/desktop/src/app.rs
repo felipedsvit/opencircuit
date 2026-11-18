@@ -1585,6 +1585,8 @@ impl DesktopApp {
             let name = format!("{}.{extension}", session.document().project.name);
             let downloaded = if extension == "pdf" {
                 crate::web::download(&name, &session.pdf(with_state), "application/pdf")
+            } else if extension == "dxf" {
+                crate::web::download(&name, session.dxf(with_state).as_bytes(), "image/vnd.dxf")
             } else {
                 crate::web::download(&name, session.svg(with_state).as_bytes(), "image/svg+xml")
             };
@@ -2679,8 +2681,11 @@ impl DesktopApp {
                     }
                     ui.add_enabled_ui(has_session, |ui| {
                         ui.menu_button(tr("Export drawing"), |ui| {
-                            for (label, extension) in
-                                [(tr("As SVG…"), "svg"), (tr("As PDF…"), "pdf")]
+                            for (label, extension) in [
+                                (tr("As SVG…"), "svg"),
+                                (tr("As PDF…"), "pdf"),
+                                (tr("As DXF…"), "dxf"),
+                            ]
                             {
                                 if ui.button(label).clicked() {
                                     ui.close();
@@ -3306,7 +3311,11 @@ impl DesktopApp {
                 ui.menu_button(tr("Export"), |ui| {
                     ui.label(tr("While simulating: the current tick in colour."));
                     ui.label(tr("While editing: the drawing at rest, black on white."));
-                    for (label, extension) in [(tr("SVG…"), "svg"), (tr("PDF…"), "pdf")] {
+                    for (label, extension) in [
+                        (tr("SVG…"), "svg"),
+                        (tr("PDF…"), "pdf"),
+                        (tr("DXF…"), "dxf"),
+                    ] {
                         if ui.button(label).clicked() {
                             ui.close();
                             self.export_dialog(extension);

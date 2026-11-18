@@ -14,7 +14,7 @@ the simulator.
 | [JSON output](#json-output) | read the result of any command from another program | this file |
 | [Project files](#project-files) | generate or transform schematics with another tool | [`FORMAT.md`](FORMAT.md) |
 | [Modbus TCP server](#modbus-tcp-server) | let a PLC program or an HMI under test press buttons and read outputs | [ADR-0009](docs/adr/0009-industrial-io.md) |
-| [Export](#export) | publish drawings as SVG or PDF | [ADR-0006](docs/adr/0006-pdf-export.md) |
+| [Export](#export) | publish drawings as SVG, PDF or DXF | [ADR-0006](docs/adr/0006-pdf-export.md) |
 | [Rust crates](#rust-crates) | embed the compiler and the simulator in another Rust program | the crate documentation |
 
 ## Extension libraries
@@ -206,7 +206,7 @@ reads one stream. A usage or I/O error (exit code 2) still writes on stderr.
 | `validate` | `error` (why the file did not load, or `null`), `errors`, `warnings` (those the project does not waive), `waived` (how many it does), `diagnostics`: each with `waived`, `null` or `{ "reason": ... }` |
 | `simulate` | `tick` (the last solved tick), `faulted`, `diagnostics`, `trace` (the text of the trace, `null` when `--trace` wrote it to a file), `snapshot` (the last solved tick, as `--snapshot-json` writes it) |
 | `test` | `total`, `failed`, `scenarios`: a list of `path`, `status` (`pass`, `updated` or `fail`) and `reasons` |
-| `export` | `file`, `kind` (`svg` or `pdf`), `pages` |
+| `export` | `file`, `kind` (`svg`, `pdf` or `dxf`), `pages` |
 | `new` | `file` |
 | `edit` | `operations`, `created` (each named element with `kind` and `id`), `wrote` (the file, or `null` for a dry run), `errors`, `warnings`, `diagnostics` |
 | `diff` | `same` (whether the projects are the same document) and `changes`: `kind` (`diff`), `title`, `columns` and `rows` |
@@ -272,15 +272,22 @@ OPC UA and MQTT were evaluated and are not implemented
 
 ## Export
 
-`opencircuit export <project> --output <file.svg | file.pdf>` draws the
+`opencircuit export <project> --output <file.svg | file.pdf | file.dxf>` draws the
 sheet, and the desktop application has the same in its Export menu, with File
 > Print preview showing the pages of the PDF first. Output is
 deterministic: the same project gives the same bytes on every platform,
 which is what the committed drawings under `examples/` are checked against.
 Library artwork is drawn when its library is loaded.
 
+A DXF (M9.4) is an AutoCAD R12 ASCII drawing (`AC1009`) of the whole canvas,
+or of one sheet with `--sheet <number>`: coordinates in millimetres (a grid
+unit is about 3.53 mm), `y` upwards, one entity per item of the scene (LINE,
+POLYLINE, CIRCLE, SOLID for the modules of a QR code, TEXT with non-ASCII
+characters as `\U+XXXX`), on the layers `WIRES`, `SYMBOLS`, `LABELS`,
+`FRAME`, `STATE` and `MARKS`, in the nearest colour of the AutoCAD index.
+
 Several projects go into one folder with `opencircuit export <project>...
---output-dir <dir> --to svg|pdf`: each is written as `<dir>/<file name>.<svg|pdf>`
+--output-dir <dir> --to svg|pdf|dxf`: each is written as `<dir>/<file name>.<svg|pdf|dxf>`
 (`a.scenario.json` gives `a.scenario.pdf`), with the same `--theme` and
 `--sheet` for all. A project that cannot be drawn is reported and the others
 are still written, with exit code 1; two projects that would write the same

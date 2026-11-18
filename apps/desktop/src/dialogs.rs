@@ -74,10 +74,10 @@ pub fn choose_save_path(name: &str) -> Option<PathBuf> {
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn choose_export_path(name: &str, extension: &str) -> Option<PathBuf> {
-    let filter = if extension == "pdf" {
-        tr("PDF document")
-    } else {
-        tr("SVG drawing")
+    let filter = match extension {
+        "pdf" => tr("PDF document"),
+        "dxf" => tr("DXF drawing"),
+        _ => tr("SVG drawing"),
     };
     save_path(filter, name, extension)
 }

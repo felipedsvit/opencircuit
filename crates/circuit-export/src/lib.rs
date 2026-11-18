@@ -3,7 +3,8 @@
 //! An exporter receives the neutral [`Scene`] built by `circuit-renderer`
 //! (integer logical coordinates and semantic styles), never GUI structures,
 //! so a file written by the command line and one written by the desktop
-//! application are the same. [`svg`] writes SVG text directly; [`pdf`]
+//! application are the same. [`svg`] writes SVG text directly, [`dxf`] a
+//! DXF drawing (AutoCAD R12) for CAD programs; [`pdf`]
 //! writes a PDF with `pdf-writer` (ADR-0006), one page for a scene or one
 //! page per sheet through [`pdf_pages`]. A report [`Table`](circuit_model::Table) is
 //! set as pages of text by [`table_pdf`].
@@ -28,6 +29,7 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+mod dxf;
 mod font;
 mod pdf;
 mod sfnt;
@@ -35,6 +37,7 @@ mod svg;
 mod table;
 mod theme;
 
+pub use dxf::dxf;
 pub use pdf::{pdf, pdf_pages};
 pub use svg::{MARGIN, svg};
 pub use table::{MAX_CELL_CHARS, table_pdf};

@@ -586,6 +586,11 @@ fn draw(
     Ok(Ok(match (format, one) {
         (ExportFormat::Svg, Some(page)) => (circuit_export::svg(&page, theme).into_bytes(), 1),
         (ExportFormat::Pdf, Some(page)) => (circuit_export::pdf(&page, theme), 1),
+        (ExportFormat::Dxf, Some(page)) => (circuit_export::dxf(&page, theme).into_bytes(), 1),
+        (ExportFormat::Dxf, None) => {
+            let scene = circuit_renderer::build_scene(&doc, catalog, None, &options);
+            (circuit_export::dxf(&scene, theme).into_bytes(), 1)
+        }
         (ExportFormat::Svg, None) => {
             let scene = circuit_renderer::build_scene(&doc, catalog, None, &options);
             (circuit_export::svg(&scene, theme).into_bytes(), 1)
