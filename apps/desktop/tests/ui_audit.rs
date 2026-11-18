@@ -130,3 +130,31 @@ fn no_control_is_pushed_past_the_side_of_a_small_window() {
         }
     }
 }
+
+/// An icon has no text, so its tooltip is all it says; the undo and redo of a
+/// fresh window are disabled and must still say what they are.
+#[test]
+fn a_disabled_icon_still_has_its_tooltip() {
+    for (label, other) in [("Undo", "Redo"), ("Redo", "Undo")] {
+        let mut harness = window(Language::English);
+        click(&mut harness, "New");
+        assert_eq!(
+            harness.get_all_by_label(label).count(),
+            1,
+            "{label} at rest"
+        );
+
+        // Nothing is shown before the pointer rests on the icon.
+        harness.get_by_label(label).hover();
+        for _ in 0..12 {
+            harness.step();
+        }
+
+        assert_eq!(
+            harness.get_all_by_label(label).count(),
+            2,
+            "the disabled {label} icon shows no tooltip"
+        );
+        assert_eq!(harness.get_all_by_label(other).count(), 1);
+    }
+}

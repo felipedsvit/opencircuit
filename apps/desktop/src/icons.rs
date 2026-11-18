@@ -628,7 +628,13 @@ pub fn button_sized(
         };
         ui.painter().extend(shapes(icon, inner, color, accent));
     }
-    response.on_hover_text(hint)
+    // A disabled widget shows `on_hover_text` never: the undo and redo of a
+    // window with no history would say nothing about what they are.
+    if enabled {
+        response.on_hover_text(hint)
+    } else {
+        response.on_disabled_hover_text(hint)
+    }
 }
 
 #[cfg(test)]

@@ -195,6 +195,10 @@ file dialogs.
 
 ### Fixed
 
+- **A disabled icon shows its tooltip**: the undo and redo icons of a window
+  with nothing to undo said nothing when the pointer rested on them, because
+  egui shows the hover text of an enabled widget only. Every icon button now
+  names itself, enabled or not.
 - **Open sections and windows keep their state when the language changes**: the
   sections of the inspector, the Find and replace, Command palette, Print
   preview, Version history, Symbol editor, shortcut and About windows took

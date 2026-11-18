@@ -483,6 +483,8 @@ inconsistent, and a fresh window looks and behaves as before.
 - [x] The sections of the inspector and the windows keep their open state and
   place when the language changes: their identifiers come from the English
   text, not from the translated title (`Id::unique`, `id_salt`).
+- [x] Every icon says what it is: the tooltip of a disabled icon (undo and redo
+  of a window with no history) was never shown, and now is.
 - [x] The keymap is read in place; three copies per frame are gone.
 - [x] Contrast: text, secondary text, the warning and the notes over the
   canvas reach 4.5:1 (WCAG AA) in both themes
