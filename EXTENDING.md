@@ -142,6 +142,7 @@ elements with their kind and ID.
 | `waive` | `code`, `subject`, `reason` | accepts a warning or informational diagnostic with a reason; `subject` is a name, `{ "device": "K1" }`, `{ "wire": ... }`, `{ "junction": ... }`, `{ "symbol": ..., "terminal": "p2" }` for a terminal, or `"document"`; an error cannot be waived |
 | `unwaive` | `code`, `subject` | takes a waiver away |
 | `renumber` | `sheet` | gives the designators the next numbers in reading order, on every sheet or on the sheet with this number |
+| `renumber_sheets` | | numbers the sheets 1, 2, 3… in reading order of their frames (top to bottom, then left to right); the cross-references follow |
 | `add_text` | `at`, `text`, `anchor`, `as` | a text note (ADR-0015): one line of 1 to 120 characters; `anchor` is `left` (default) or `center` |
 | `set_text` | `text` (name or ID), `to` | changes the words of a note |
 | `add_layer` | `name`, `visible`, `locked`, `as` | a layer (ADR-0015), visible and unlocked unless said otherwise; a name of 1 to 32 characters, with no space at either end, not used by another layer |
@@ -262,7 +263,7 @@ canvas. Text is set in Liberation Mono, embedded in the PDF as a subset
 
 ## Reports
 
-`opencircuit report <project> --kind bom|wires|terminals|xref|io|problems|all`
+`opencircuit report <project> --kind bom|wires|terminals|strips|xref|io|problems|devices|all`
 derives tables from the project, and writes them as text, JSON (`--format`)
 or, for one table, CSV. With `--output <file>` the extension picks the format
 (`.csv`, `.json`, `.txt` or `.pdf`) and `--format` says how the
@@ -278,6 +279,7 @@ confirmation is written. Nothing is stored in the project: the tables are a func
 | `xref` | exception: a coil with no contact, contacts whose coil is not drawn, a symbol outside every sheet |
 | `io` | address of the Modbus map |
 | `problems` | diagnostic of the project, compiled |
+| `devices` | device, in natural order of designators: model and version, how many symbols draw it, the sheets they are on, manufacturer, part number and description; supply taps and signal arrows are not devices here. Unlike `bom`, two devices of one part are two rows |
 
 A PDF sets each table on A4 landscape pages in the embedded font (ADR-0012):
 the title, the headings (repeated on every page), a rule, one line per row and

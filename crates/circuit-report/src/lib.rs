@@ -14,6 +14,7 @@
 //! | [`xref`] | cross-reference exception: a coil with no contact, a contact with no coil, a symbol off the sheets |
 //! | [`io`] | address of the Modbus map (ADR-0009) |
 //! | [`problems`] | diagnostic |
+//! | [`devices`] | device: its model, symbols, sheets and catalog data |
 //! | [`diff`] | element added, removed or changed between two versions of a project |
 //!
 //! Rows are in reading order (designators in natural order, so `K2` comes
@@ -63,11 +64,13 @@ pub enum Kind {
     Io,
     /// [`problems`].
     Problems,
+    /// [`devices`].
+    Devices,
 }
 
 impl Kind {
     /// Every report, in the order the command line lists them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Bom,
         Self::Wires,
         Self::Terminals,
@@ -75,10 +78,11 @@ impl Kind {
         Self::Xref,
         Self::Io,
         Self::Problems,
+        Self::Devices,
     ];
 
-    /// The name of the report: `bom`, `wires`, `terminals`, `xref`, `io` or
-    /// `problems`.
+    /// The name of the report: `bom`, `wires`, `terminals`, `strips`, `xref`,
+    /// `io`, `problems` or `devices`.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -89,6 +93,7 @@ impl Kind {
             Self::Xref => "xref",
             Self::Io => "io",
             Self::Problems => "problems",
+            Self::Devices => "devices",
         }
     }
 
@@ -256,6 +261,75 @@ pub fn bom(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
             part_no,
             description,
         ]);
+    }
+    table
+}
+
+/// The devices: one row for every device in natural order of designators,
+/// with its model, how many symbols draw it, the sheets they are on and its
+/// catalog data. Unlike the bill of materials, two devices of one part are
+/// two rows. Supply taps and signal arrows, which are points of the drawing
+/// and not parts, are left out.
+#[must_use]
+pub fn devices(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
+    let view = View::new(doc, catalog);
+    let mut rows: Vec<(Natural, DeviceId, Vec<String>)> = Vec::new();
+    for device in view.devices.values() {
+        let model = catalog.model(&device.model);
+        if model.is_some_and(|model| {
+            matches!(
+                model.class(),
+                DeviceClass::PowerSupply | DeviceClass::SignalArrow
+            )
+        }) {
+            continue;
+        }
+        let drawn: Vec<&SymbolInstance> = view
+            .symbols
+            .values()
+            .filter(|symbol| symbol.device_id == device.id)
+            .copied()
+            .collect();
+        let mut sheets: Vec<u32> = drawn
+            .iter()
+            .filter_map(|symbol| sheet_at(doc, symbol.position).map(|sheet| sheet.number))
+            .collect();
+        sheets.sort_unstable();
+        sheets.dedup();
+        let info = device.info.clone().unwrap_or_default();
+        rows.push((
+            natural(&device.reference.0),
+            device.id,
+            vec![
+                device.reference.0.clone(),
+                format!("{} v{}", device.model.id, device.model.version),
+                drawn.len().to_string(),
+                sheets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                info.manufacturer.unwrap_or_default(),
+                info.part_no.unwrap_or_default(),
+                info.description.unwrap_or_default(),
+            ],
+        ));
+    }
+    rows.sort();
+    let mut table = Table::new(
+        "Devices",
+        &[
+            "Reference",
+            "Model",
+            "Symbols",
+            "Sheets",
+            "Manufacturer",
+            "Part no",
+            "Description",
+        ],
+    );
+    for (_, _, cells) in rows {
+        table.push(cells);
     }
     table
 }

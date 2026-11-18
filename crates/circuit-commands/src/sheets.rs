@@ -132,6 +132,25 @@ pub fn set_sheet(doc: &Schematic, sheet: Sheet) -> Result<Transaction, CommandEr
     Ok(tx)
 }
 
+/// Number the sheets 1, 2, 3… in reading order of their frames on the
+/// canvas: top to bottom, then left to right. An empty transaction when they
+/// are numbered so already. The cross-references, which name sheets by
+/// number, follow, since they are derived.
+pub fn renumber_sheets(doc: &Schematic) -> Transaction {
+    let mut order: Vec<&Sheet> = doc.sheets.iter().collect();
+    order.sort_by_key(|sheet| (sheet.origin.y, sheet.origin.x, sheet.id));
+    let mut tx = Transaction::new("Renumber sheets", doc.next_id);
+    for (number, sheet) in (1_u32..=u32::MAX).zip(order) {
+        if sheet.number != number {
+            tx.edits.push(Edit::SetSheet(Sheet {
+                number,
+                ..sheet.clone()
+            }));
+        }
+    }
+    tx
+}
+
 /// Remove a sheet. What was drawn on it stays on the canvas.
 ///
 /// # Errors

@@ -708,6 +708,7 @@ fn report(
                 circuit_report::Kind::Strips => circuit_report::strips(&doc, catalog),
                 circuit_report::Kind::Xref => circuit_report::xref(&doc, catalog),
                 circuit_report::Kind::Io => circuit_report::io(&doc, catalog),
+                circuit_report::Kind::Devices => circuit_report::devices(&doc, catalog),
                 circuit_report::Kind::Problems => {
                     circuit_report::problems(&doc, &compile(&doc, catalog).diagnostics)
                 }

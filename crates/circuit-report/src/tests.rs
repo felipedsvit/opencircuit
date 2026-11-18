@@ -381,3 +381,44 @@ fn a_description_that_looks_like_a_formula_is_neutralised_in_csv() {
 
     assert!(csv.contains("\"'=HYPERLINK(\"\"x\"\")\""), "{csv}");
 }
+
+#[test]
+fn devices_are_one_row_each_in_natural_order_without_supply_taps() {
+    let mut b = SchematicBuilder::new("devices");
+    let supply = b.dc_supply(24_000).unwrap();
+    let _ = supply;
+    let k10 = b.device("K10", "contactor.generic", &[]).unwrap();
+    let k2 = b.device("K2", "contactor.generic", &[]).unwrap();
+    b.symbol(k10, "coil", None, GridPoint::new(0, 0)).unwrap();
+    b.symbol(k10, "aux_no", Some(1), GridPoint::new(10, 0))
+        .unwrap();
+    b.symbol(k2, "coil", None, GridPoint::new(20, 0)).unwrap();
+    let mut doc = b.finish();
+    if let Some(device) = doc.devices.iter_mut().find(|d| d.reference.0 == "K2") {
+        device.info = Some(DeviceInfo {
+            manufacturer: Some("Acme".to_owned()),
+            ..DeviceInfo::default()
+        });
+    }
+
+    let table = devices(&doc, &ComponentCatalog::builtin());
+
+    assert_eq!(table.columns[0], "Reference");
+    let rows: Vec<(&str, &str, &str)> = table
+        .rows
+        .iter()
+        .map(|row| (row[0].as_str(), row[2].as_str(), row[4].as_str()))
+        .collect();
+    assert_eq!(rows, [("K2", "1", "Acme"), ("K10", "2", "")]);
+}
+
+#[test]
+fn devices_lists_the_sheets_their_symbols_are_on() {
+    let doc = project();
+    let table = devices(&doc, &ComponentCatalog::builtin());
+
+    assert!(table.rows.iter().all(|row| row[3].is_empty()), "no sheets");
+    assert_eq!(table.rows.len(), 3);
+    assert!(Kind::parse("devices") == Some(Kind::Devices));
+    assert_eq!(Kind::ALL.last(), Some(&Kind::Devices));
+}

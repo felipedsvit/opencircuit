@@ -388,7 +388,9 @@ Decisions, to be confirmed in #118:
 - [ ] Recent projects, project templates (File > New from template) and a
   saved copy of a project.
 - [ ] Command palette (Ctrl+K) and search over the whole project.
-- [ ] Reports: `devices` (one row per device) and renumbering of sheets.
+- [x] Reports: `devices` (one row per device) and renumbering of sheets
+  (`renumber_sheets` in edit files, `sheets renumber` on the command line of
+  the window).
 - [ ] Navigation: previous view, highlight of the element under the pointer,
   snapping to wire ends, middles and crossings, coordinates typed at the
   pointer, rulers.

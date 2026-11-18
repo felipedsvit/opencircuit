@@ -1475,7 +1475,8 @@ fn report_all_in_json_has_every_table_with_format_1() {
             "strips",
             "xref",
             "io",
-            "problems"
+            "problems",
+            "devices"
         ]
     );
     assert_eq!(document["reports"][0]["columns"][1], "Qty");
@@ -1521,10 +1522,10 @@ fn report_to_a_file_picks_the_format_from_the_extension() {
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let confirmation: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
     assert_eq!(confirmation["kind"], "json");
-    assert_eq!(confirmation["reports"], 7);
+    assert_eq!(confirmation["reports"], 8);
     let written: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&json).expect("written")).expect("JSON");
-    assert_eq!(written["reports"].as_array().expect("reports").len(), 7);
+    assert_eq!(written["reports"].as_array().expect("reports").len(), 8);
 }
 
 #[test]
