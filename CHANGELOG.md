@@ -28,6 +28,13 @@ here when it lands.
   system releases however the process ends, so a copy is offered as soon as
   the window is gone. A panic in the window writes the newest changes before
   the process ends.
+- **Symbol sets** (File > Symbol sets; `libraries/iec-style.oclib` and
+  `libraries/ansi-style.oclib`): a relay, pushbuttons, a pilot lamp and a fuse
+  drawn in an IEC-like and in an ANSI-like style, as extension libraries
+  drawn for OpenCircuit, with no claim of conformance with a standard.
+- **Symbol editor** (File > Symbol editor…): draw the symbol of a part as
+  lines of primitives, see it as the reader of libraries makes it, load it
+  into the palette or save it as an `.oclib` extension library.
 - **DXF export** (`opencircuit export --output drawing.dxf`, `--to dxf`,
   Export > DXF in the window): an AutoCAD R12 ASCII drawing of the canvas or
   of one sheet, in millimetres, one entity per item on layers by what it is

@@ -460,6 +460,11 @@ mod tests {
                     .map(crate::workspace::ThemeChoice::name),
             )
             .chain(crate::workspace::MESSAGES)
+            .chain(
+                crate::symbol_editor::Template::ALL
+                    .into_iter()
+                    .map(crate::symbol_editor::Template::name),
+            )
             .collect();
         for key in &in_tables {
             assert!(

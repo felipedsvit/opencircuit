@@ -40,6 +40,7 @@ pub mod recent;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod recovery;
 pub mod session;
+mod symbol_editor;
 pub mod templates;
 mod theme;
 #[cfg(not(target_arch = "wasm32"))]

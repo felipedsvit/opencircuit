@@ -364,6 +364,12 @@ fn shorten(text: &str, most: usize) -> String {
 
 /// Paint `scene`, centred in `area` and scaled to fit it.
 fn paint_preview(ui: &Ui, area: Rect, scene: &Scene) {
+    paint_scaled(ui, area, scene, MAX_SCALE);
+}
+
+/// Paint `scene`, centred in `area` and scaled to fit it, at most
+/// `max_scale` points to a subunit (the symbol editor draws larger).
+pub(crate) fn paint_scaled(ui: &Ui, area: Rect, scene: &Scene, max_scale: f32) {
     let Some(bounds) = scene.bounds else {
         return;
     };
@@ -373,7 +379,7 @@ fn paint_preview(ui: &Ui, area: Rect, scene: &Scene) {
     let height = to_points(bounds.max.y.saturating_sub(bounds.min.y)).max(1.0);
     let scale = (area.width() / width)
         .min(area.height() / height)
-        .min(MAX_SCALE);
+        .min(max_scale);
     let middle = ScenePoint::new(
         bounds.min.x.saturating_add(bounds.max.x) / 2,
         bounds.min.y.saturating_add(bounds.max.y) / 2,

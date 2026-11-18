@@ -1,0 +1,889 @@
+{
+  "id": "ansi",
+  "models": [
+    {
+      "category": "automation",
+      "class": "relay",
+      "id": "ansi.relay",
+      "note": null,
+      "operator": null,
+      "params": [
+        {
+          "default": 24000,
+          "key": "rated_voltage_mv",
+          "type": {
+            "int": {
+              "max": 4294967295,
+              "min": 1
+            }
+          }
+        },
+        {
+          "default": "dc",
+          "key": "connection",
+          "type": {
+            "enum": [
+              "dc",
+              "line_neutral",
+              "line_line"
+            ]
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "artwork": {
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    10
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "circle": {
+                  "center": [
+                    0,
+                    0
+                  ],
+                  "radius": 10
+                }
+              }
+            ]
+          },
+          "key": "coil",
+          "kind": "coil",
+          "max": 1,
+          "min": 1,
+          "slotted": false
+        },
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -4
+                  ],
+                  "to": [
+                    0,
+                    4
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "no",
+          "kind": "contact_no",
+          "max": 4,
+          "min": 0,
+          "slotted": true
+        },
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    10
+                  ],
+                  "to": [
+                    10,
+                    -10
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "nc",
+          "kind": "contact_nc",
+          "max": 4,
+          "min": 0,
+          "slotted": true
+        }
+      ],
+      "title": "Relay (ANSI style)",
+      "version": 1
+    },
+    {
+      "category": "controls",
+      "class": "pushbutton",
+      "id": "ansi.pushbutton_no",
+      "note": null,
+      "operator": "push",
+      "params": [],
+      "symbols": [
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -4
+                  ],
+                  "to": [
+                    0,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -12,
+                    -10
+                  ],
+                  "to": [
+                    -12,
+                    10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -20,
+                    0
+                  ],
+                  "to": [
+                    -12,
+                    0
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -16,
+                    -10
+                  ],
+                  "to": [
+                    -16,
+                    10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -20,
+                    0
+                  ],
+                  "to": [
+                    -16,
+                    0
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "no",
+          "kind": "contact_no",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Pushbutton, normally open (ANSI style)",
+      "version": 1
+    },
+    {
+      "category": "controls",
+      "class": "pushbutton",
+      "id": "ansi.pushbutton_nc",
+      "note": null,
+      "operator": "push",
+      "params": [],
+      "symbols": [
+        {
+          "artwork": {
+            "operated": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -12,
+                    -10
+                  ],
+                  "to": [
+                    -12,
+                    10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -20,
+                    0
+                  ],
+                  "to": [
+                    -12,
+                    0
+                  ]
+                }
+              }
+            ],
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    4
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    -4
+                  ],
+                  "to": [
+                    10,
+                    -4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    4
+                  ],
+                  "to": [
+                    10,
+                    4
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -10,
+                    10
+                  ],
+                  "to": [
+                    10,
+                    -10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -16,
+                    -10
+                  ],
+                  "to": [
+                    -16,
+                    10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    -20,
+                    0
+                  ],
+                  "to": [
+                    -16,
+                    0
+                  ]
+                }
+              }
+            ]
+          },
+          "key": "nc",
+          "kind": "contact_nc",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Pushbutton, normally closed (ANSI style)",
+      "version": 1
+    },
+    {
+      "category": "controls",
+      "class": "lamp",
+      "id": "ansi.lamp",
+      "note": null,
+      "operator": null,
+      "params": [
+        {
+          "default": 24000,
+          "key": "rated_voltage_mv",
+          "type": {
+            "int": {
+              "max": 4294967295,
+              "min": 1
+            }
+          }
+        },
+        {
+          "default": "dc",
+          "key": "connection",
+          "type": {
+            "enum": [
+              "dc",
+              "line_neutral",
+              "line_line"
+            ]
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "artwork": {
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -10
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    10
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "circle": {
+                  "center": [
+                    0,
+                    0
+                  ],
+                  "radius": 10
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    12,
+                    -12
+                  ],
+                  "to": [
+                    16,
+                    -16
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    14,
+                    0
+                  ],
+                  "to": [
+                    19,
+                    0
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    12,
+                    12
+                  ],
+                  "to": [
+                    16,
+                    16
+                  ]
+                }
+              },
+              {
+                "text": {
+                  "at": [
+                    0,
+                    0
+                  ],
+                  "text": "L"
+                }
+              }
+            ]
+          },
+          "key": "lamp",
+          "kind": "lamp",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Pilot lamp (ANSI style)",
+      "version": 1
+    },
+    {
+      "category": "protection",
+      "class": "fuse",
+      "id": "ansi.fuse",
+      "note": "A fuse never melts in the simulation: it always conducts.",
+      "operator": null,
+      "params": [],
+      "symbols": [
+        {
+          "artwork": {
+            "rest": [
+              {
+                "line": {
+                  "from": [
+                    0,
+                    -20
+                  ],
+                  "to": [
+                    0,
+                    -12
+                  ]
+                }
+              },
+              {
+                "line": {
+                  "from": [
+                    0,
+                    12
+                  ],
+                  "to": [
+                    0,
+                    20
+                  ]
+                }
+              },
+              {
+                "polyline": [
+                  [
+                    0,
+                    -12
+                  ],
+                  [
+                    6,
+                    -6
+                  ],
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    -6,
+                    6
+                  ],
+                  [
+                    0,
+                    12
+                  ]
+                ]
+              }
+            ]
+          },
+          "key": "link",
+          "kind": "fuse_link",
+          "max": 1,
+          "min": 0,
+          "slotted": false
+        }
+      ],
+      "title": "Fuse (ANSI style)",
+      "version": 1
+    }
+  ],
+  "name": "ANSI-style symbols",
+  "provenance": {
+    "license": "MIT OR Apache-2.0",
+    "origin": "Drawn for OpenCircuit from the geometry of its symbol kinds; no symbol file was copied, and no conformance with a standard is claimed",
+    "standard_reference": null
+  },
+  "schema_version": 2,
+  "version": 1
+}
