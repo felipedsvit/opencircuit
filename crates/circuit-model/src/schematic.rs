@@ -14,6 +14,7 @@ use std::fmt;
 use serde::de::{Deserializer, Error as _, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 
+use crate::annotations::{Comment, DeviceView, Group, PlcModule, Shape, WireSpec};
 use crate::diagnostics::Diagnostic;
 use crate::documentation::{DeviceInfo, TextNote, Waiver, WireNumbering};
 use crate::geometry::{GridPoint, QuarterTurn};
@@ -24,7 +25,7 @@ use crate::supply::SupplyProfile;
 use crate::validate;
 
 /// Schema version written by this build.
-pub const CURRENT_SCHEMA_VERSION: u32 = 4;
+pub const CURRENT_SCHEMA_VERSION: u32 = 5;
 
 /// User-visible label of a device, such as `K1` or `S2`.
 ///
@@ -168,6 +169,44 @@ pub struct SymbolInstance {
     /// The layer the symbol is on (ADR-0015); absent: the default layer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<LayerId>,
+    /// The symbol is mirrored about the vertical line through its origin,
+    /// then rotated (ADR-0018); absent: not mirrored.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mirrored: bool,
+}
+
+impl SymbolInstance {
+    /// Where a point of the symbol's own drawing lands on the sheet: mirrored
+    /// about the vertical axis when the symbol is (ADR-0018), rotated, then
+    /// moved to the symbol's position. `None` beyond the coordinate range.
+    #[must_use]
+    pub fn place(&self, local: GridPoint) -> Option<GridPoint> {
+        let local = if self.mirrored {
+            GridPoint::new(local.x.checked_neg()?, local.y)
+        } else {
+            local
+        };
+        self.rotation.rotate(local)?.checked_add(self.position)
+    }
+
+    /// The area of a local rectangle of the symbol on the sheet, as
+    /// [`place`](Self::place) maps it.
+    #[must_use]
+    pub fn place_rect(
+        &self,
+        local: crate::geometry::GridRect,
+    ) -> Option<crate::geometry::GridRect> {
+        Some(crate::geometry::GridRect::from_corners(
+            self.place(local.min)?,
+            self.place(local.max)?,
+        ))
+    }
+}
+
+/// Whether a flag is off, so that it is left out of the file.
+#[allow(clippy::trivially_copy_pass_by_ref)] // The signature serde asks for.
+const fn is_false(flag: &bool) -> bool {
+    !*flag
 }
 
 /// Explicit connection point between wires.
@@ -222,6 +261,9 @@ pub struct Wire {
     /// The layer the wire is on (ADR-0015); absent: the default layer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<LayerId>,
+    /// What the wire is made of (ADR-0018); absent when not set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec: Option<WireSpec>,
 }
 
 /// Document metadata without electrical meaning.
@@ -245,6 +287,9 @@ pub struct ProjectMeta {
     /// numbered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wire_numbering: Option<WireNumbering>,
+    /// The client, for the title block (ADR-0018); absent when not set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
 }
 
 /// The schematic document.
@@ -281,6 +326,22 @@ pub struct Schematic {
     /// with no layer are on the default layer, which always shows and edits.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub layers: Vec<Layer>,
+    /// Shapes, revision clouds and QR codes (ADR-0018), sorted by ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shapes: Vec<Shape>,
+    /// Comments about elements (ADR-0018), sorted by ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub comments: Vec<Comment>,
+    /// Groups of elements (ADR-0018), sorted by ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<Group>,
+    /// Views of devices on panel layouts and single-line diagrams
+    /// (ADR-0018), sorted by ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub views: Vec<DeviceView>,
+    /// PLC modules (ADR-0018), sorted by ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plcs: Vec<PlcModule>,
 }
 
 impl Schematic {
@@ -298,6 +359,7 @@ impl Schematic {
                 revision: None,
                 date: None,
                 wire_numbering: None,
+                client: None,
             },
             sheets: Vec::new(),
             supplies: Vec::new(),
@@ -308,6 +370,11 @@ impl Schematic {
             waivers: Vec::new(),
             texts: Vec::new(),
             layers: Vec::new(),
+            shapes: Vec::new(),
+            comments: Vec::new(),
+            groups: Vec::new(),
+            views: Vec::new(),
+            plcs: Vec::new(),
         }
     }
 
@@ -323,6 +390,11 @@ impl Schematic {
             && self.wires.is_sorted_by_key(|wire| wire.id)
             && self.texts.is_sorted_by_key(|text| text.id)
             && self.layers.is_sorted_by_key(|layer| layer.id)
+            && self.shapes.is_sorted_by_key(|shape| shape.id)
+            && self.comments.is_sorted_by_key(|comment| comment.id)
+            && self.groups.is_sorted_by_key(|group| group.id)
+            && self.views.is_sorted_by_key(|view| view.id)
+            && self.plcs.is_sorted_by_key(|plc| plc.id)
             && self
                 .waivers
                 .is_sorted_by(|a, b| a.sort_key() <= b.sort_key())
@@ -338,6 +410,11 @@ impl Schematic {
         self.wires.sort_by_key(|wire| wire.id);
         self.texts.sort_by_key(|text| text.id);
         self.layers.sort_by_key(|layer| layer.id);
+        self.shapes.sort_by_key(|shape| shape.id);
+        self.comments.sort_by_key(|comment| comment.id);
+        self.groups.sort_by_key(|group| group.id);
+        self.views.sort_by_key(|view| view.id);
+        self.plcs.sort_by_key(|plc| plc.id);
         self.waivers.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
     }
 
@@ -430,6 +507,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             })
             .to_vec();
 

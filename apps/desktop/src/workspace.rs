@@ -136,11 +136,13 @@ pub enum Action {
     CommandLine,
     /// Show or hide the side panels.
     SidePanels,
+    /// Mirror the selected symbols (ADR-0018).
+    Mirror,
 }
 
 impl Action {
     /// Every action, in the order of the shortcut window.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::WireTool,
         Self::Rotate,
         Self::SelectAll,
@@ -155,6 +157,7 @@ impl Action {
         Self::TraceNet,
         Self::CommandLine,
         Self::SidePanels,
+        Self::Mirror,
     ];
 
     /// What the action does, in English, translated by the caller. The
@@ -176,6 +179,7 @@ impl Action {
             Self::TraceNet => "trace the net of the selection",
             Self::CommandLine => "put the keyboard in the command line",
             Self::SidePanels => "show or hide the side panels",
+            Self::Mirror => "mirror",
         }
     }
 
@@ -197,6 +201,7 @@ impl Action {
             Self::TraceNet => (Mods::NONE, Key::T),
             Self::CommandLine => (Mods::COMMAND, Key::Num9),
             Self::SidePanels => (Mods::COMMAND, Key::B),
+            Self::Mirror => (Mods::NONE, Key::M),
         };
         Chord { modifiers, key }
     }

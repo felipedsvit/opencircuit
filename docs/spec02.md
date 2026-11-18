@@ -1158,6 +1158,9 @@ Regras:
 | OC-STR-020 | `InvalidWaiver` | Warning | não | Dispensa que nomeia algo que não é um código, um código que não pode ser dispensado (erro, ou este), um sujeito que não está no documento, ou que repete outra (ADR-0014) |
 | OC-STR-021 | `InvalidText` | Warning | não | Nota de texto vazia, com mais de 120 caracteres ou com caractere de controle (ADR-0015) |
 | OC-STR-022 | `InvalidLayer` | Warning | não | Camada com nome vazio, com mais de 32 caracteres, com caractere de controle ou espaço nas pontas, ou com o nome de outra camada (ADR-0015) |
+| OC-STR-023 | `InvalidAnnotation` | Warning | não | Forma, comentário, grupo, vista, módulo de CLP, especificação de fio, cliente ou folha de dados fora dos limites, ou elemento em dois grupos (ADR-0018) |
+| OC-STR-024 | `ViewOffItsSheet` | Warning | não | Vista de dispositivo fora de uma folha unifilar ou de leiaute de painel, ou símbolo dentro de uma (ADR-0018) |
+| OC-STR-025 | `PlcChannelConflict` | Warning | não | Dois canais de um módulo de CLP com o mesmo endereço, ou um dispositivo em dois canais da mesma direção (ADR-0018) |
 | OC-SEM-001 | `DuplicateReference` | Error | não | Designador repetido entre dispositivos distintos |
 | OC-SEM-002 | `InvalidReference` | Error | não | Designador fora do padrão |
 | OC-SEM-003 | `MissingRequiredTerminal` | Error | não | Terminal `required` sem conexão |

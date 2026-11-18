@@ -66,6 +66,55 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
     count("waivers", doc.waivers.len(), MAX_WAIVERS)?;
     count("texts", doc.texts.len(), MAX_ENTITIES_PER_COLLECTION)?;
     count("layers", doc.layers.len(), crate::layers::MAX_LAYERS)?;
+    count("shapes", doc.shapes.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    count("comments", doc.comments.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    count("groups", doc.groups.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    count("views", doc.views.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    count("PLC modules", doc.plcs.len(), MAX_ENTITIES_PER_COLLECTION)?;
+    for shape in &doc.shapes {
+        match &shape.kind {
+            crate::annotations::ShapeKind::Polyline { points, .. } => {
+                count("polyline points", points.len(), MAX_ROUTE_POINTS)?;
+            }
+            crate::annotations::ShapeKind::Cloud {
+                revision: Some(revision),
+                ..
+            } => text("revision mark", revision)?,
+            crate::annotations::ShapeKind::Qr { text: value, .. } => text("QR code text", value)?,
+            _ => {}
+        }
+    }
+    for comment in &doc.comments {
+        text("comment", &comment.text)?;
+        if let Some(author) = &comment.author {
+            text("comment author", author)?;
+        }
+    }
+    for group in &doc.groups {
+        text("group name", &group.name)?;
+        count(
+            "group members",
+            group.members.len(),
+            MAX_ENTITIES_PER_COLLECTION,
+        )?;
+    }
+    for plc in &doc.plcs {
+        text("PLC module name", &plc.name)?;
+        if let Some(description) = &plc.description {
+            text("PLC module description", description)?;
+        }
+        count(
+            "PLC channels",
+            plc.channels.len(),
+            crate::annotations::MAX_PLC_CHANNELS.saturating_mul(4),
+        )?;
+        for channel in &plc.channels {
+            text("channel address", &channel.address)?;
+            if let Some(label) = &channel.label {
+                text("channel label", label)?;
+            }
+        }
+    }
 
     text("project name", &doc.project.name)?;
     for (what, value) in [
@@ -73,6 +122,7 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
         ("project company", &doc.project.company),
         ("project revision", &doc.project.revision),
         ("project date", &doc.project.date),
+        ("project client", &doc.project.client),
     ] {
         if let Some(value) = value {
             text(what, value)?;
@@ -108,6 +158,7 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
                 ("device part number", &info.part_no),
                 ("device description", &info.description),
                 ("device location", &info.location),
+                ("device datasheet", &info.datasheet),
             ] {
                 if let Some(value) = value {
                     text(what, value)?;
@@ -132,6 +183,11 @@ pub fn check(doc: &Schematic) -> Result<(), LimitExceeded> {
         count("wire route points", wire.route.len(), MAX_ROUTE_POINTS)?;
         if let Some(number) = &wire.number {
             text("wire number", number)?;
+        }
+        if let Some(spec) = &wire.spec {
+            for value in spec.values().into_iter().flatten() {
+                text("wire specification", value)?;
+            }
         }
         for endpoint in [&wire.from, &wire.to] {
             if let Endpoint::Terminal(pin) = endpoint {
@@ -176,6 +232,7 @@ mod tests {
                 columns: 1,
                 rows: 1,
             },
+            kind: Default::default(),
         };
         doc.sheets = vec![sheet; MAX_SHEETS + 1];
         assert_eq!(
@@ -210,6 +267,7 @@ mod tests {
             route: vec![GridPoint::default(); MAX_ROUTE_POINTS + 1],
             number: None,
             layer: None,
+            spec: None,
         });
 
         assert_eq!(check(&doc).map_err(|e| e.what), Err("wire route points"));

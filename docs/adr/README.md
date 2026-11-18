@@ -29,3 +29,4 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0015](0015-text-and-layers.md) | Text notes and layers (schema 4) |
 | [0016](0016-names-and-terminals.md) | A name parameter, terminal blocks that always conduct and the terminal plan; names that join nets (signal arrows) |
 | [0017](0017-window-language.md) | The language of the window: English source, Brazilian Portuguese catalog, chosen from the environment and the Help menu |
+| [0018](0018-schema-5-documentation-views.md) | Schema 5: client, wire data, shapes, revision clouds, QR codes, comments, groups, mirrored symbols, datasheets, sheet kinds with device views, and PLC modules; documentation only |

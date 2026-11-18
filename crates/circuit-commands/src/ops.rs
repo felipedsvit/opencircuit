@@ -241,6 +241,7 @@ pub fn place(
         position: at,
         rotation,
         layer: None,
+        mirrored: false,
     }));
     Ok(tx)
 }
@@ -370,6 +371,7 @@ pub fn place_on_wire(
         position: at,
         rotation: turn,
         layer: None,
+        mirrored: false,
     }));
     let pin = |terminal: &circuit_model::TerminalDefinition| {
         Endpoint::Terminal(circuit_model::PinRef {
@@ -384,6 +386,7 @@ pub fn place_on_wire(
         route: waypoints(1..index.saturating_add(1)),
         number: old.number.clone(),
         layer: None,
+        spec: old.spec.clone(),
     }));
     tx.edits.push(Edit::InsertWire(Wire {
         id: second_half,
@@ -392,6 +395,7 @@ pub fn place_on_wire(
         route: waypoints(index.saturating_add(1)..last),
         number: None,
         layer: None,
+        spec: old.spec.clone(),
     }));
     Ok(tx)
 }
@@ -569,6 +573,7 @@ pub fn add_symbol(
         position: at,
         rotation,
         layer: None,
+        mirrored: false,
     }));
     Ok(tx)
 }
@@ -643,6 +648,7 @@ pub(crate) fn resolve(
                 route: before,
                 number: split.number.clone(),
                 layer: None,
+                spec: split.spec.clone(),
             }));
             edits.push(Edit::InsertWire(Wire {
                 id: second,
@@ -651,6 +657,7 @@ pub(crate) fn resolve(
                 route: after,
                 number: split.number.clone(),
                 layer: None,
+                spec: split.spec.clone(),
             }));
             Ok((Endpoint::Junction(junction), *at))
         }
@@ -704,6 +711,7 @@ pub fn connect(
         route,
         number: None,
         layer: None,
+        spec: None,
     }));
     let mut tx = Transaction::new("Connect", ids.next_id());
     tx.edits = edits;
@@ -745,6 +753,8 @@ pub fn delete(
     let mut junctions = BTreeSet::new();
     let mut wires = BTreeSet::new();
     let mut texts = BTreeSet::new();
+    // The documentation of ADR-0018 that a person can select.
+    let mut others: BTreeSet<Subject> = BTreeSet::new();
     for subject in subjects {
         let missing = || CommandError::Missing(subject.clone());
         match subject {
@@ -776,6 +786,16 @@ pub fn delete(
             Subject::Text(id) => {
                 doc.texts.iter().find(|t| t.id == *id).ok_or_else(missing)?;
                 texts.insert(*id);
+            }
+            Subject::Shape(_)
+            | Subject::Comment(_)
+            | Subject::Group(_)
+            | Subject::View(_)
+            | Subject::Plc(_) => {
+                if !crate::annotations::exists(doc, subject) {
+                    return Err(missing());
+                }
+                others.insert(subject.clone());
             }
             Subject::Pin(_)
             | Subject::Supply(_)
@@ -848,22 +868,41 @@ pub fn delete(
         .map(|id| Subject::Wire(*id))
         .chain(symbols.iter().map(|id| Subject::Symbol(*id)))
         .chain(texts.iter().map(|id| Subject::Text(*id)))
+        .chain(others.iter().cloned())
         .collect();
     layers::ensure_unlocked(doc, doomed.iter())?;
+
+    // What refers to a deleted element goes with it or lets it go (ADR-0018):
+    // its comments, its place in a group, the views of a deleted device and
+    // the channels that named it.
+    let removed: BTreeSet<Subject> = wires
+        .iter()
+        .map(|id| Subject::Wire(*id))
+        .chain(junctions.iter().map(|id| Subject::Junction(*id)))
+        .chain(symbols.iter().map(|id| Subject::Symbol(*id)))
+        .chain(devices.iter().map(|id| Subject::Device(*id)))
+        .chain(texts.iter().map(|id| Subject::Text(*id)))
+        .chain(others.iter().cloned())
+        .collect();
+    let follow = crate::annotations::follow_removal(doc, &removed);
 
     let count = wires
         .len()
         .saturating_add(junctions.len())
         .saturating_add(symbols.len())
         .saturating_add(devices.len())
-        .saturating_add(texts.len());
+        .saturating_add(texts.len())
+        .saturating_add(others.len());
     let mut tx = Transaction::new(format!("Delete {count} items"), doc.next_id);
+    tx.edits.extend(follow);
     tx.edits.extend(wires.into_iter().map(Edit::RemoveWire));
     tx.edits
         .extend(junctions.into_iter().map(Edit::RemoveJunction));
     tx.edits.extend(symbols.into_iter().map(Edit::RemoveSymbol));
     tx.edits.extend(devices.into_iter().map(Edit::RemoveDevice));
     tx.edits.extend(texts.into_iter().map(Edit::RemoveText));
+    tx.edits
+        .extend(others.iter().filter_map(crate::annotations::remove_edit));
     Ok(tx)
 }
 
@@ -895,6 +934,11 @@ pub(crate) fn movable(
             | Subject::Sheet(_)
             | Subject::Text(_)
             | Subject::Layer(_)
+            | Subject::Shape(_)
+            | Subject::Comment(_)
+            | Subject::Group(_)
+            | Subject::View(_)
+            | Subject::Plc(_)
             | Subject::Document => {}
         }
     }
@@ -1029,6 +1073,8 @@ pub fn move_by(
                 .ok_or(CommandError::OutOfRange)?,
         });
     }
+    tx.edits
+        .extend(crate::annotations::move_edits(doc, subjects, delta)?);
     let (moved, _) = tx.apply_edits(doc)?;
     let routes = reroute(doc, &moved, catalog, &symbols, &junctions, Some(delta))?;
     tx.edits.extend(routes);
@@ -1068,6 +1114,41 @@ pub fn rotate(
     }
     let (turned, _) = tx.apply_edits(doc)?;
     let routes = reroute(doc, &turned, catalog, symbols, &BTreeSet::new(), None)?;
+    tx.edits.extend(routes);
+    Ok(tx)
+}
+
+/// Mirror symbols about their vertical axis, or undo it (ADR-0018): each
+/// symbol of `symbols` flips. Their wires are routed again; terminal keys and
+/// connections do not change.
+///
+/// # Errors
+///
+/// Returns [`CommandError::Missing`] for a symbol that does not exist and
+/// [`CommandError::Locked`] for one on a locked layer.
+pub fn mirror(
+    doc: &Schematic,
+    catalog: &ComponentCatalog,
+    symbols: &BTreeSet<SymbolId>,
+) -> Result<Transaction, CommandError> {
+    layers::ensure_symbols_unlocked(doc, symbols)?;
+    let mut tx = Transaction::new("Mirror", doc.next_id);
+    for id in symbols {
+        let symbol = doc
+            .symbols
+            .iter()
+            .find(|s| s.id == *id)
+            .ok_or(CommandError::Missing(Subject::Symbol(*id)))?;
+        tx.edits.push(Edit::SetMirror {
+            symbol: *id,
+            mirrored: !symbol.mirrored,
+        });
+    }
+    if tx.is_empty() {
+        return Ok(tx);
+    }
+    let (flipped, _) = tx.apply_edits(doc)?;
+    let routes = reroute(doc, &flipped, catalog, symbols, &BTreeSet::new(), None)?;
     tx.edits.extend(routes);
     Ok(tx)
 }

@@ -581,8 +581,21 @@ pub(crate) const fn rotate(rotation: QuarterTurn, p: ScenePoint) -> Option<Scene
 
 /// A local shape rotated about the origin and moved to `origin`. Texts move
 /// with their anchor and stay horizontal. `None` on overflow.
-pub(crate) fn place(shape: &Shape, rotation: QuarterTurn, origin: ScenePoint) -> Option<Shape> {
-    let map = |p: ScenePoint| rotate(rotation, p)?.checked_add(origin);
+pub(crate) fn place(
+    shape: &Shape,
+    mirrored: bool,
+    rotation: QuarterTurn,
+    origin: ScenePoint,
+) -> Option<Shape> {
+    // A mirrored symbol (ADR-0018) is flipped about its vertical axis first.
+    let flip = |p: ScenePoint| {
+        if mirrored {
+            Some(ScenePoint::new(p.x.checked_neg()?, p.y))
+        } else {
+            Some(p)
+        }
+    };
+    let map = |p: ScenePoint| rotate(rotation, flip(p)?)?.checked_add(origin);
     Some(match shape {
         Shape::Line { from, to } => Shape::Line {
             from: map(*from)?,
@@ -592,6 +605,7 @@ pub(crate) fn place(shape: &Shape, rotation: QuarterTurn, origin: ScenePoint) ->
             Shape::Polyline(points.iter().map(|p| map(*p)).collect::<Option<Vec<_>>>()?)
         }
         Shape::Rect(rect) => Shape::Rect(SceneRect::from_corners(map(rect.min)?, map(rect.max)?)),
+        Shape::Block(rect) => Shape::Block(SceneRect::from_corners(map(rect.min)?, map(rect.max)?)),
         Shape::Circle { center, radius } => Shape::Circle {
             center: map(*center)?,
             radius: *radius,
@@ -792,7 +806,12 @@ mod tests {
         let shape = line((0, 0), (0, 20));
 
         assert_eq!(
-            place(&shape, QuarterTurn::Deg0, ScenePoint::new(0, i64::MAX)),
+            place(
+                &shape,
+                false,
+                QuarterTurn::Deg0,
+                ScenePoint::new(0, i64::MAX)
+            ),
             None
         );
     }
@@ -802,7 +821,7 @@ mod tests {
         let shape = text((10, 0), "M");
 
         assert_eq!(
-            place(&shape, QuarterTurn::Deg90, ScenePoint::new(100, 100)),
+            place(&shape, false, QuarterTurn::Deg90, ScenePoint::new(100, 100)),
             Some(Shape::Text {
                 at: ScenePoint::new(100, 110),
                 text: "M".to_owned(),

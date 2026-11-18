@@ -30,6 +30,16 @@ pub fn pick_project() -> Option<PathBuf> {
     }
 }
 
+/// Ask for a CSV file of manufacturer data to import (ADR-0018). `None` when
+/// the user cancels.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn pick_csv() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter(tr("Comma-separated values"), &["csv"])
+        .pick_file()
+}
+
 /// Ask for a macro (an edit file, `.json`) to play. `None` when the user
 /// cancels or no file dialog is available.
 #[cfg(not(target_arch = "wasm32"))]

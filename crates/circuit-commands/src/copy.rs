@@ -256,6 +256,7 @@ pub fn paste(
             position,
             rotation: symbol.rotation,
             layer: keep_layer(doc, symbol.layer),
+            mirrored: symbol.mirrored,
         }));
     }
 
@@ -299,6 +300,7 @@ pub fn paste(
             route,
             number: None,
             layer: keep_layer(doc, wire.layer),
+            spec: wire.spec.clone(),
         }));
     }
 

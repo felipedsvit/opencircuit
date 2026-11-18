@@ -154,6 +154,7 @@ fn sheet(id: u64, number: u32, origin: GridPoint) -> circuit_model::Sheet {
             columns: 8,
             rows: 6,
         },
+        kind: Default::default(),
     }
 }
 
@@ -993,8 +994,7 @@ proptest! {
                 from: a.get(&ends).clone(),
                 to: b.get(&ends).clone(),
                 route: Vec::new(),
-                number: None, layer: None,
-            });
+                number: None, layer: None, spec: None, });
         }
 
         // A document that does not compile proves nothing; too many of them
@@ -1306,6 +1306,7 @@ mod hostile {
                 position: GridPoint::new(x, y),
                 rotation,
                 layer: None,
+                mirrored: false,
             })
     }
 
@@ -1340,7 +1341,7 @@ mod hostile {
                     author: None,
                     company: None,
                     revision: None,
-                    date: None, wire_numbering: None,
+                    date: None, wire_numbering: None, client: None,
                 },
                 sheets: Vec::new(),
                 supplies,
@@ -1356,10 +1357,8 @@ mod hostile {
                         id: WireId(id),
                         from,
                         to,
-                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(), number: None, layer: None,
-                    })
-                    .collect(), waivers: Vec::new(), texts: Vec::new(), layers: Vec::new(),
-            }
+                        route: route.into_iter().map(|(x, y)| GridPoint::new(x, y)).collect(), number: None, layer: None, spec: None, })
+                    .collect(), waivers: Vec::new(), texts: Vec::new(), layers: Vec::new(), comments: Vec::new(), groups: Vec::new(), plcs: Vec::new(), shapes: Vec::new(), views: Vec::new(), }
         }
     }
 

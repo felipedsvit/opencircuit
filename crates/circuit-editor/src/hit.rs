@@ -3,7 +3,7 @@
 use circuit_commands::Anchor;
 use circuit_model::{
     ComponentCatalog, Endpoint, GridPoint, JunctionId, LayerStates, LayoutIndex, PinRef, Schematic,
-    Subject, SymbolId, TextId, WireId, hidden_junctions, segment_at, text_bounds,
+    ShapeId, Subject, SymbolId, TextId, ViewId, WireId, hidden_junctions, segment_at, text_bounds,
 };
 
 /// The element under a grid point.
@@ -24,6 +24,10 @@ pub enum Hit {
     Text(TextId),
     /// The body of a symbol.
     Symbol(SymbolId),
+    /// A line of a shape, or a QR code (ADR-0018).
+    Shape(ShapeId),
+    /// A device view (ADR-0018).
+    View(ViewId),
 }
 
 impl Hit {
@@ -36,6 +40,8 @@ impl Hit {
             Self::Wire { wire, .. } => Subject::Wire(*wire),
             Self::Symbol(id) => Subject::Symbol(*id),
             Self::Text(id) => Subject::Text(*id),
+            Self::Shape(id) => Subject::Shape(*id),
+            Self::View(id) => Subject::View(*id),
         }
     }
 
@@ -50,7 +56,7 @@ impl Hit {
                 wire: *wire,
                 at: *at,
             }),
-            Self::Symbol(_) | Self::Text(_) => None,
+            Self::Symbol(_) | Self::Text(_) | Self::Shape(_) | Self::View(_) => None,
         }
     }
 }
@@ -127,6 +133,30 @@ pub fn hit_test(doc: &Schematic, catalog: &ComponentCatalog, point: GridPoint) -
             wire: id,
             at: point,
         });
+    }
+
+    // A shape is hit on its lines (ADR-0018), above symbol bodies, so that a
+    // frame drawn around symbols can be picked on its edge; a view in its
+    // whole rectangle.
+    let shape = doc
+        .shapes
+        .iter()
+        .filter(|shape| layers.is_visible(shape.layer) && shape.kind.touches(point))
+        .map(|shape| shape.id)
+        .max();
+    if let Some(id) = shape {
+        return Some(Hit::Shape(id));
+    }
+    let view = doc
+        .views
+        .iter()
+        .filter(|view| {
+            layers.is_visible(view.layer) && view.bounds().is_some_and(|area| area.contains(point))
+        })
+        .map(|view| view.id)
+        .max();
+    if let Some(id) = view {
+        return Some(Hit::View(id));
     }
 
     symbols

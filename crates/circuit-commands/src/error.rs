@@ -74,6 +74,9 @@ pub enum CommandError {
     /// A position would leave the coordinate range.
     #[error("the result is beyond the coordinate range")]
     OutOfRange,
+    /// A value breaks a rule of the format (ADR-0018), said in the message.
+    #[error("{0}")]
+    Invalid(String),
     /// The document would exceed a size limit and could not be saved.
     #[error(transparent)]
     Limit(#[from] LimitExceeded),

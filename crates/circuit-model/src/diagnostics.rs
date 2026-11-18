@@ -11,7 +11,10 @@ use std::fmt;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{DeviceId, JunctionId, LayerId, SheetId, SupplyId, SymbolId, TextId, WireId};
+use crate::ids::{
+    CommentId, DeviceId, GroupId, JunctionId, LayerId, PlcId, ShapeId, SheetId, SupplyId, SymbolId,
+    TextId, ViewId, WireId,
+};
 use crate::schematic::PinRef;
 
 /// How serious a diagnostic is.
@@ -161,6 +164,15 @@ diagnostic_codes! {
     /// edge space, or is the name of another layer (ADR-0015). A warning: the
     /// layers have no electrical meaning.
     InvalidLayer = "OC-STR-022", Structural, Warning, latches = false;
+    /// A documentation element of ADR-0018 breaks a bound, or an element is
+    /// in two groups.
+    InvalidAnnotation = "OC-STR-023", Structural, Warning, latches = false;
+    /// A device view outside a single-line or panel-layout sheet, or a
+    /// symbol inside one (ADR-0018).
+    ViewOffItsSheet = "OC-STR-024", Structural, Warning, latches = false;
+    /// Two channels of a PLC module with one address, or one device on two
+    /// channels of the same direction (ADR-0018).
+    PlcChannelConflict = "OC-STR-025", Structural, Warning, latches = false;
     /// The same reference designator is used by distinct devices.
     DuplicateReference = "OC-SEM-001", Semantic, Error, latches = false;
     /// A reference designator that does not match the allowed pattern.
@@ -273,6 +285,16 @@ pub enum Subject {
     Text(TextId),
     /// A layer.
     Layer(LayerId),
+    /// A shape, revision cloud or QR code (ADR-0018).
+    Shape(ShapeId),
+    /// A comment (ADR-0018).
+    Comment(CommentId),
+    /// A group of elements (ADR-0018).
+    Group(GroupId),
+    /// A device view (ADR-0018).
+    View(ViewId),
+    /// A PLC module (ADR-0018).
+    Plc(PlcId),
 }
 
 impl fmt::Display for Subject {
@@ -288,6 +310,11 @@ impl fmt::Display for Subject {
             Self::Sheet(id) => write!(f, "sheet {id}"),
             Self::Text(id) => write!(f, "text {id}"),
             Self::Layer(id) => write!(f, "layer {id}"),
+            Self::Shape(id) => write!(f, "shape {id}"),
+            Self::Comment(id) => write!(f, "comment {id}"),
+            Self::Group(id) => write!(f, "group {id}"),
+            Self::View(id) => write!(f, "view {id}"),
+            Self::Plc(id) => write!(f, "PLC module {id}"),
         }
     }
 }
@@ -446,6 +473,9 @@ mod tests {
         ("OC-STR-020", "InvalidWaiver", "warning", false),
         ("OC-STR-021", "InvalidText", "warning", false),
         ("OC-STR-022", "InvalidLayer", "warning", false),
+        ("OC-STR-023", "InvalidAnnotation", "warning", false),
+        ("OC-STR-024", "ViewOffItsSheet", "warning", false),
+        ("OC-STR-025", "PlcChannelConflict", "warning", false),
         ("OC-SEM-001", "DuplicateReference", "error", false),
         ("OC-SEM-002", "InvalidReference", "error", false),
         ("OC-SEM-003", "MissingRequiredTerminal", "error", false),

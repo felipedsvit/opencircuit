@@ -142,6 +142,7 @@ mod tests {
                 columns: 4,
                 rows: 2,
             },
+            kind: Default::default(),
         }
     }
 

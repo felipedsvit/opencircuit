@@ -1235,7 +1235,7 @@ impl DesktopApp {
             return true;
         }
         if self.tab_count() >= MAX_TABS {
-            self.error = Some(trf("At most {} projects are open at once.", &[&MAX_TABS]));
+            self.error = Some(trf("At most {0} projects are open at once.", &[&MAX_TABS]));
             return false;
         }
         let mut shown = Tab::default();
@@ -2310,6 +2310,9 @@ impl DesktopApp {
         if keys.pressed(ui, Action::Rotate) {
             actions.push(Key::Rotate);
         }
+        if keys.pressed(ui, Action::Mirror) {
+            actions.push(Key::Mirror);
+        }
         for (key, action) in [
             (egui::Key::Delete, Key::Delete),
             (egui::Key::Backspace, Key::Delete),
@@ -2705,6 +2708,51 @@ impl DesktopApp {
                         ui.close();
                         self.edit_label();
                     }
+                    ui.separator();
+                    let selected = editing && !self.editor.selection().is_empty();
+                    if ui
+                        .add_enabled(selected, egui::Button::new(tr("Mirror selection")))
+                        .on_hover_text("M")
+                        .clicked()
+                    {
+                        ui.close();
+                        self.run_command("mirror");
+                    }
+                    if ui
+                        .add_enabled(selected, egui::Button::new(tr("Group selection")))
+                        .clicked()
+                    {
+                        ui.close();
+                        let number = self
+                            .session
+                            .as_ref()
+                            .map_or(0, |session| session.document().groups.len())
+                            .saturating_add(1);
+                        self.run_command(&format!("group Group {number}"));
+                    }
+                    if ui
+                        .add_enabled(selected, egui::Button::new(tr("Ungroup selection")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.run_command("ungroup");
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Import catalog data (CSV)…")))
+                        .on_hover_text(tr(
+                            "Manufacturer, part number, description, location and datasheet of each device, by designator",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        if let Some(path) = dialogs::pick_csv() {
+                            match crate::files::read_text(&path, circuit_commands::script::MAX_EDIT_BYTES) {
+                                Ok(text) => self.import_catalog_text(&text),
+                                Err(error) => self.error = Some(error.to_string()),
+                            }
+                        }
+                    }
                 });
                 ui.menu_button(tr("View"), |ui| {
                     if ui
@@ -2960,10 +3008,10 @@ impl DesktopApp {
                     message = match self.settings.keys.set(action, chord) {
                         Ok(()) => String::new(),
                         Err(crate::workspace::KeymapError::Reserved(chord)) => {
-                            trf("{} is kept for its usual use.", &[&chord.text()])
+                            trf("{0} is kept for its usual use.", &[&chord.text()])
                         }
                         Err(crate::workspace::KeymapError::Taken(chord, other)) => trf(
-                            "{} already does: {}.",
+                            "{0} already does: {1}.",
                             &[&chord.text(), &tr(other.description())],
                         ),
                     };
@@ -3235,7 +3283,7 @@ impl DesktopApp {
                 {
                     show = Some(index);
                 }
-                let label = trf("Close {}", &[name]);
+                let label = trf("Close {0}", &[name]);
                 let response = ui.small_button("×").on_hover_text(label.as_str());
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
@@ -4111,7 +4159,31 @@ impl DesktopApp {
         ))
     }
 
-    fn select(&mut self, subject: Subject) {
+    /// Set the catalog data of the devices from CSV text (Modify > Import
+    /// catalog data), in one undoable step; the command line says how many
+    /// devices changed and which designators the project does not have.
+    pub fn import_catalog_text(&mut self, text: &str) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        match circuit_commands::catalog_csv::import(session.document(), text) {
+            Ok((tx, imported)) => {
+                self.commit(Ok(tx));
+                self.command_line.say(&trf(
+                    "Catalog data of {0} device(s) imported.",
+                    &[&imported.changed],
+                ));
+                if !imported.unknown.is_empty() {
+                    self.command_line
+                        .say(&trf("No device for: {0}", &[&imported.unknown.join(", ")]));
+                }
+            }
+            Err(error) => self.error = Some(error.to_string()),
+        }
+    }
+
+    /// Select one element and centre the view on it.
+    pub fn select(&mut self, subject: Subject) {
         self.editor.set_selection(BTreeSet::from([subject.clone()]));
         self.focus = Some(subject);
     }

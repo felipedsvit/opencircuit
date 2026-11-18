@@ -82,6 +82,9 @@ pub enum Key {
     /// Turn the next bends of the wire tool the other way: vertical first or
     /// horizontal first.
     FlipBend,
+    /// Mirror the selected symbols about their vertical axis, or undo it
+    /// (ADR-0018).
+    Mirror,
 }
 
 /// The result of an event.
@@ -269,6 +272,11 @@ impl Editor {
             Subject::Sheet(id) => doc.sheets.iter().any(|s| s.id == *id),
             Subject::Text(id) => doc.texts.iter().any(|t| t.id == *id),
             Subject::Layer(id) => doc.layers.iter().any(|l| l.id == *id),
+            Subject::Shape(id) => doc.shapes.iter().any(|s| s.id == *id),
+            Subject::Comment(id) => doc.comments.iter().any(|c| c.id == *id),
+            Subject::Group(id) => doc.groups.iter().any(|g| g.id == *id),
+            Subject::View(id) => doc.views.iter().any(|v| v.id == *id),
+            Subject::Plc(id) => doc.plcs.iter().any(|p| p.id == *id),
             Subject::Document => true,
         };
         let selected = self.selection.len();
@@ -329,7 +337,7 @@ impl Editor {
         self.hover = hit.clone();
         match &self.tool {
             Tool::Select => {
-                self.select_at(hit, at, modifiers);
+                self.select_at(doc, hit, at, modifiers);
                 Outcome::default()
             }
             Tool::Place {
@@ -354,19 +362,32 @@ impl Editor {
         }
     }
 
-    fn select_at(&mut self, hit: Option<Hit>, at: GridPoint, modifiers: Modifiers) {
+    fn select_at(
+        &mut self,
+        doc: &Schematic,
+        hit: Option<Hit>,
+        at: GridPoint,
+        modifiers: Modifiers,
+    ) {
+        // A member of a group brings the whole group (ADR-0018).
+        let with_group = |subject: Subject| {
+            circuit_commands::annotations::with_groups(doc, &BTreeSet::from([subject]))
+        };
         match (hit, modifiers.shift) {
             (Some(hit), true) => {
                 let subject = hit.subject();
-                if !self.selection.remove(&subject) {
-                    self.selection.insert(subject);
+                let whole = with_group(subject.clone());
+                if self.selection.contains(&subject) {
+                    self.selection.retain(|selected| !whole.contains(selected));
+                } else {
+                    self.selection.extend(whole);
                 }
                 self.gesture = Gesture::Idle;
             }
             (Some(hit), false) => {
                 let subject = hit.subject();
                 if !self.selection.contains(&subject) {
-                    self.selection = BTreeSet::from([subject]);
+                    self.selection = with_group(subject);
                 }
                 self.gesture = Gesture::Pressed { at };
             }
@@ -466,6 +487,7 @@ impl Editor {
                 } else {
                     Self::inside(doc, catalog, area)
                 };
+                let inside = circuit_commands::annotations::with_groups(doc, &inside);
                 if additive {
                     self.selection.extend(inside);
                 } else {
@@ -481,6 +503,21 @@ impl Editor {
             }
             Gesture::Pressed { .. } | Gesture::Idle => Outcome::default(),
         }
+    }
+
+    /// The visible shapes and device views with their areas (ADR-0018).
+    fn annotation_areas(doc: &Schematic, layers: &LayerStates) -> Vec<(Subject, GridRect)> {
+        let shapes = doc
+            .shapes
+            .iter()
+            .filter(|shape| layers.is_visible(shape.layer))
+            .filter_map(|shape| Some((Subject::Shape(shape.id), shape.kind.bounds()?)));
+        let views = doc
+            .views
+            .iter()
+            .filter(|view| layers.is_visible(view.layer))
+            .filter_map(|view| Some((Subject::View(view.id), view.bounds()?)));
+        shapes.chain(views).collect()
     }
 
     /// The symbols, junctions and wires that a rectangle touches.
@@ -505,6 +542,11 @@ impl Editor {
         for note in doc.texts.iter().filter(|t| layers.is_visible(t.layer)) {
             if text_bounds(note).is_some_and(|b| area.overlaps(&b)) {
                 found.insert(Subject::Text(note.id));
+            }
+        }
+        for (subject, bounds) in Self::annotation_areas(doc, &layers) {
+            if area.overlaps(&bounds) {
+                found.insert(subject);
             }
         }
         for wire in doc.wires.iter().filter(|w| layers.is_visible(w.layer)) {
@@ -548,6 +590,11 @@ impl Editor {
                 found.insert(Subject::Text(note.id));
             }
         }
+        for (subject, bounds) in Self::annotation_areas(doc, &layers) {
+            if area.contains(bounds.min) && area.contains(bounds.max) {
+                found.insert(subject);
+            }
+        }
         for wire in doc.wires.iter().filter(|w| layers.is_visible(w.layer)) {
             let within = layout
                 .wire_polyline(wire)
@@ -586,6 +633,20 @@ impl Editor {
                     })
                     .collect();
                 Outcome::from_result(ops::rotate(doc, catalog, &symbols))
+            }
+            Key::Mirror => {
+                let symbols: BTreeSet<SymbolId> = self
+                    .selection
+                    .iter()
+                    .filter_map(|subject| match subject {
+                        Subject::Symbol(id) => Some(*id),
+                        _ => None,
+                    })
+                    .collect();
+                if symbols.is_empty() || self.is_busy() {
+                    return Outcome::default();
+                }
+                Outcome::from_result(ops::mirror(doc, catalog, &symbols))
             }
             Key::Delete => {
                 if self.selection.is_empty() || self.is_busy() {
@@ -674,6 +735,11 @@ impl Editor {
                                 .iter()
                                 .filter(|t| layers.is_visible(t.layer))
                                 .map(|note| Subject::Text(note.id)),
+                        )
+                        .chain(
+                            Self::annotation_areas(doc, &layers)
+                                .into_iter()
+                                .map(|(subject, _)| subject),
                         )
                         .collect();
                 }

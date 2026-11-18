@@ -127,6 +127,50 @@ pub enum Edit {
         /// The new waypoints.
         route: Vec<GridPoint>,
     },
+    /// Add a shape (ADR-0018).
+    InsertShape(circuit_model::Shape),
+    /// Remove a shape (ADR-0018).
+    RemoveShape(circuit_model::ShapeId),
+    /// Replace a shape (ADR-0018).
+    SetShape(circuit_model::Shape),
+    /// Add a comment (ADR-0018).
+    InsertComment(circuit_model::Comment),
+    /// Remove a comment (ADR-0018).
+    RemoveComment(circuit_model::CommentId),
+    /// Replace a comment (ADR-0018).
+    SetComment(circuit_model::Comment),
+    /// Add a group (ADR-0018).
+    InsertGroup(circuit_model::Group),
+    /// Remove a group (ADR-0018).
+    RemoveGroup(circuit_model::GroupId),
+    /// Replace a group (ADR-0018).
+    SetGroup(circuit_model::Group),
+    /// Add a device view (ADR-0018).
+    InsertView(circuit_model::DeviceView),
+    /// Remove a device view (ADR-0018).
+    RemoveView(circuit_model::ViewId),
+    /// Replace a device view (ADR-0018).
+    SetView(circuit_model::DeviceView),
+    /// Add a PLC module (ADR-0018).
+    InsertPlc(circuit_model::PlcModule),
+    /// Remove a PLC module (ADR-0018).
+    RemovePlc(circuit_model::PlcId),
+    /// Replace a PLC module (ADR-0018).
+    SetPlc(circuit_model::PlcModule),
+    /// Mirror (`true`) or unmirror a symbol (ADR-0018).
+    SetMirror {
+        /// The symbol.
+        symbol: SymbolId,
+        /// Whether it is mirrored.
+        mirrored: bool,
+    },
+    /// Set (`Some`) or clear (`None`) what a wire is made of (ADR-0018).
+    SetWireSpec {
+        /// The wire.
+        wire: WireId,
+        /// What it is made of; `None` clears it.
+        spec: Option<circuit_model::WireSpec>,
+    },
     /// Set (`Some`) or clear (`None`) the override of the generated number of
     /// a wire.
     SetWireNumber {
@@ -235,6 +279,18 @@ impl Edit {
                             .iter()
                             .find(|t| t.layer == Some(id))
                             .map(|t| Subject::Text(t.id))
+                    })
+                    .or_else(|| {
+                        doc.shapes
+                            .iter()
+                            .find(|s| s.layer == Some(id))
+                            .map(|s| Subject::Shape(s.id))
+                    })
+                    .or_else(|| {
+                        doc.views
+                            .iter()
+                            .find(|v| v.layer == Some(id))
+                            .map(|v| Subject::View(v.id))
                     });
                 if let Some(by) = user {
                     return Err(CommandError::InUse {
@@ -262,6 +318,12 @@ impl Edit {
                     }
                     Subject::Text(id) => {
                         sorted::find_mut(&mut doc.texts, id, |t| t.id).map(|t| &mut t.layer)
+                    }
+                    Subject::Shape(id) => {
+                        sorted::find_mut(&mut doc.shapes, id, |s| s.id).map(|s| &mut s.layer)
+                    }
+                    Subject::View(id) => {
+                        sorted::find_mut(&mut doc.views, id, |v| v.id).map(|v| &mut v.layer)
                     }
                     _ => None,
                 }
@@ -461,6 +523,107 @@ impl Edit {
                     route: previous,
                 })
             }
+            Self::InsertShape(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.shapes, item, |x| x.id) {
+                    Ok(Self::RemoveShape(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Shape(id)))
+                }
+            }
+            Self::RemoveShape(id) => sorted::remove(&mut doc.shapes, &id, |x| x.id)
+                .map(Self::InsertShape)
+                .ok_or_else(|| missing(Subject::Shape(id))),
+            Self::SetShape(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.shapes, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Shape(id)))?;
+                Ok(Self::SetShape(std::mem::replace(slot, item)))
+            }
+            Self::InsertComment(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.comments, item, |x| x.id) {
+                    Ok(Self::RemoveComment(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Comment(id)))
+                }
+            }
+            Self::RemoveComment(id) => sorted::remove(&mut doc.comments, &id, |x| x.id)
+                .map(Self::InsertComment)
+                .ok_or_else(|| missing(Subject::Comment(id))),
+            Self::SetComment(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.comments, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Comment(id)))?;
+                Ok(Self::SetComment(std::mem::replace(slot, item)))
+            }
+            Self::InsertGroup(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.groups, item, |x| x.id) {
+                    Ok(Self::RemoveGroup(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Group(id)))
+                }
+            }
+            Self::RemoveGroup(id) => sorted::remove(&mut doc.groups, &id, |x| x.id)
+                .map(Self::InsertGroup)
+                .ok_or_else(|| missing(Subject::Group(id))),
+            Self::SetGroup(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.groups, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Group(id)))?;
+                Ok(Self::SetGroup(std::mem::replace(slot, item)))
+            }
+            Self::InsertView(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.views, item, |x| x.id) {
+                    Ok(Self::RemoveView(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::View(id)))
+                }
+            }
+            Self::RemoveView(id) => sorted::remove(&mut doc.views, &id, |x| x.id)
+                .map(Self::InsertView)
+                .ok_or_else(|| missing(Subject::View(id))),
+            Self::SetView(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.views, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::View(id)))?;
+                Ok(Self::SetView(std::mem::replace(slot, item)))
+            }
+            Self::InsertPlc(item) => {
+                let id = item.id;
+                if sorted::insert(&mut doc.plcs, item, |x| x.id) {
+                    Ok(Self::RemovePlc(id))
+                } else {
+                    Err(CommandError::AlreadyExists(Subject::Plc(id)))
+                }
+            }
+            Self::RemovePlc(id) => sorted::remove(&mut doc.plcs, &id, |x| x.id)
+                .map(Self::InsertPlc)
+                .ok_or_else(|| missing(Subject::Plc(id))),
+            Self::SetPlc(item) => {
+                let id = item.id;
+                let slot = sorted::find_mut(&mut doc.plcs, &id, |x| x.id)
+                    .ok_or_else(|| missing(Subject::Plc(id)))?;
+                Ok(Self::SetPlc(std::mem::replace(slot, item)))
+            }
+            Self::SetMirror { symbol, mirrored } => {
+                let found = sorted::find_mut(&mut doc.symbols, &symbol, |s| s.id)
+                    .ok_or_else(|| missing(Subject::Symbol(symbol)))?;
+                Ok(Self::SetMirror {
+                    symbol,
+                    mirrored: std::mem::replace(&mut found.mirrored, mirrored),
+                })
+            }
+            Self::SetWireSpec { wire, spec } => {
+                let found = sorted::find_mut(&mut doc.wires, &wire, |w| w.id)
+                    .ok_or_else(|| missing(Subject::Wire(wire)))?;
+                Ok(Self::SetWireSpec {
+                    wire,
+                    spec: std::mem::replace(&mut found.spec, spec),
+                })
+            }
             Self::SetWireNumber { wire, number } => {
                 let found = sorted::find_mut(&mut doc.wires, &wire, |w| w.id)
                     .ok_or_else(|| missing(Subject::Wire(wire)))?;
@@ -562,6 +725,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         };
         for edit in [
             Edit::SetProject(ProjectMeta {
@@ -615,6 +779,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             }),
             Edit::RemoveWire(wire.id),
             Edit::SetRoute {
@@ -624,6 +789,13 @@ mod tests {
             Edit::SetWireNumber {
                 wire: wire.id,
                 number: Some("17".to_owned()),
+            },
+            Edit::SetWireSpec {
+                wire: wire.id,
+                spec: Some(circuit_model::WireSpec {
+                    colour: Some("BU".to_owned()),
+                    ..circuit_model::WireSpec::default()
+                }),
             },
             Edit::SetDeviceInfo {
                 device: device.id,
@@ -734,6 +906,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         };
         let original = edited.clone();
         let mut inverses = vec![Edit::InsertSheet(sheet.clone()).apply(&mut edited).unwrap()];
@@ -862,6 +1035,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             })
             .apply(&mut edited),
             Err(CommandError::SelfLoop)
@@ -881,6 +1055,7 @@ mod tests {
                 route: Vec::new(),
                 number: None,
                 layer: None,
+                spec: None,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Symbol(SymbolId(77))))
@@ -900,6 +1075,7 @@ mod tests {
                 position: GridPoint::default(),
                 rotation: QuarterTurn::Deg0,
                 layer: None,
+                mirrored: false,
             })
             .apply(&mut edited),
             Err(CommandError::Missing(Subject::Device(DeviceId(77))))

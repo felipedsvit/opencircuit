@@ -15,7 +15,7 @@ use super::*;
 /// The canonical text of [`sample`]. It fixes field order, indentation,
 /// explicit nulls, line endings and the final newline.
 const SAMPLE: &str = r#"{
-  "schema_version": 4,
+  "schema_version": 5,
   "next_id": 6,
   "project": {
     "name": "demo",
@@ -205,7 +205,7 @@ fn sample_with(from: &str, to: &str) -> String {
 fn schema_message(result: Result<Schematic, ProjectError>) -> String {
     match result {
         Err(ProjectError::Schema {
-            version: 4,
+            version: 5,
             message,
         }) => message,
         other => panic!("expected a schema error, got {other:?}"),
@@ -213,7 +213,7 @@ fn schema_message(result: Result<Schematic, ProjectError>) -> String {
 }
 
 #[test]
-fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_4() {
+fn a_version_1_file_migrates_to_the_same_document_and_saves_as_version_5() {
     let loaded = from_str(SAMPLE_V1).unwrap();
 
     assert_eq!(loaded, sample());
@@ -239,8 +239,8 @@ fn a_version_1_file_that_already_has_version_2_fields_is_refused() {
 }
 
 #[test]
-fn a_version_2_file_loads_and_saves_as_version_4_with_only_the_version_changed() {
-    let v2 = sample_with("\"schema_version\": 4", "\"schema_version\": 2");
+fn a_version_2_file_loads_and_saves_as_version_5_with_only_the_version_changed() {
+    let v2 = sample_with("\"schema_version\": 5", "\"schema_version\": 2");
 
     let loaded = from_str(&v2).unwrap();
 
@@ -249,8 +249,18 @@ fn a_version_2_file_loads_and_saves_as_version_4_with_only_the_version_changed()
 }
 
 #[test]
-fn a_version_3_file_loads_and_saves_as_version_4_with_only_the_version_changed() {
-    let v3 = sample_with("\"schema_version\": 4", "\"schema_version\": 3");
+fn a_version_4_file_loads_and_saves_as_version_5_with_only_the_version_changed() {
+    let v4 = sample_with("\"schema_version\": 5", "\"schema_version\": 4");
+
+    let loaded = from_str(&v4).unwrap();
+
+    assert_eq!(loaded, sample());
+    assert_eq!(to_string(&loaded).unwrap(), SAMPLE);
+}
+
+#[test]
+fn a_version_3_file_loads_and_saves_as_version_5_with_only_the_version_changed() {
+    let v3 = sample_with("\"schema_version\": 5", "\"schema_version\": 3");
 
     let loaded = from_str(&v3).unwrap();
 
@@ -614,13 +624,13 @@ fn negative_or_oversized_id_is_rejected() {
 
 #[test]
 fn newer_schema_is_refused_without_reading_the_rest() {
-    let text = r#"{ "schema_version": 5, "something": { "new": true } }"#;
+    let text = r#"{ "schema_version": 6, "something": { "new": true } }"#;
 
     assert_eq!(
         from_str(text),
         Err(ProjectError::NewerSchema {
-            found: 5,
-            supported: 4
+            found: 6,
+            supported: 5
         })
     );
 }
@@ -832,6 +842,7 @@ fn symbol() -> impl Strategy<Value = SymbolInstance> {
                 position,
                 rotation,
                 layer: None,
+                mirrored: false,
             },
         )
 }
@@ -850,6 +861,7 @@ fn wire() -> impl Strategy<Value = Wire> {
             route,
             number: None,
             layer: None,
+            spec: None,
         })
 }
 
@@ -890,8 +902,9 @@ fn schematic() -> impl Strategy<Value = Schematic> {
                         author: author.clone(),
                         company: author.clone(),
                         revision: author.clone(),
-                        date: author,
+                        date: author.clone(),
                         wire_numbering: None,
+                        client: author,
                     },
                     sheets,
                     supplies,
@@ -902,6 +915,11 @@ fn schematic() -> impl Strategy<Value = Schematic> {
                     waivers: Vec::new(),
                     texts: Vec::new(),
                     layers: Vec::new(),
+                    comments: Vec::new(),
+                    groups: Vec::new(),
+                    plcs: Vec::new(),
+                    shapes: Vec::new(),
+                    views: Vec::new(),
                 }
             },
         )
@@ -937,6 +955,7 @@ fn sheet() -> impl Strategy<Value = circuit_model::Sheet> {
                     circuit_model::Orientation::Landscape
                 },
                 zones: circuit_model::Zones { columns, rows },
+                kind: Default::default(),
             },
         )
 }

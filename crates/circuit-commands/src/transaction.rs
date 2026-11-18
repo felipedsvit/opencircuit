@@ -59,6 +59,8 @@ impl Transaction {
                 Edit::InsertJunction(junction) => Some(Subject::Junction(junction.id)),
                 Edit::InsertWire(wire) => Some(Subject::Wire(wire.id)),
                 Edit::InsertText(note) => Some(Subject::Text(note.id)),
+                Edit::InsertShape(shape) => Some(Subject::Shape(shape.id)),
+                Edit::InsertView(view) => Some(Subject::View(view.id)),
                 Edit::SetProject(_)
                 | Edit::InsertSheet(_)
                 | Edit::RemoveSheet(_)
@@ -85,6 +87,21 @@ impl Transaction {
                 | Edit::MoveText { .. }
                 | Edit::SetRoute { .. }
                 | Edit::SetWireNumber { .. }
+                | Edit::SetWireSpec { .. }
+                | Edit::RemoveShape(_)
+                | Edit::SetShape(_)
+                | Edit::InsertComment(_)
+                | Edit::RemoveComment(_)
+                | Edit::SetComment(_)
+                | Edit::InsertGroup(_)
+                | Edit::RemoveGroup(_)
+                | Edit::SetGroup(_)
+                | Edit::RemoveView(_)
+                | Edit::SetView(_)
+                | Edit::InsertPlc(_)
+                | Edit::RemovePlc(_)
+                | Edit::SetPlc(_)
+                | Edit::SetMirror { .. }
                 | Edit::SetDeviceInfo { .. }
                 | Edit::InsertWaiver(_)
                 | Edit::RemoveWaiver { .. } => None,
@@ -283,6 +300,7 @@ mod tests {
             route: Vec::new(),
             number: None,
             layer: None,
+            spec: None,
         });
         broken.next_id += 1;
         let mut tx = Transaction::new("move", broken.next_id);

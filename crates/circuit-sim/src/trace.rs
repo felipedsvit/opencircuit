@@ -271,5 +271,10 @@ fn subject_name(circuit: &CompiledCircuit, subject: &Subject) -> String {
         Subject::Sheet(sheet) => format!("sheet#{sheet}"),
         Subject::Text(text) => format!("text#{text}"),
         Subject::Layer(layer) => format!("layer#{layer}"),
+        Subject::Shape(shape) => format!("shape#{shape}"),
+        Subject::Comment(comment) => format!("comment#{comment}"),
+        Subject::Group(group) => format!("group#{group}"),
+        Subject::View(view) => format!("view#{view}"),
+        Subject::Plc(plc) => format!("plc#{plc}"),
     }
 }

@@ -96,6 +96,14 @@ fn element(out: &mut String, shape: &Shape, look: Look) {
             center.y,
             radius.saturating_abs()
         ),
+        Shape::Block(rect) => format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\"/>",
+            rect.min.x,
+            rect.min.y,
+            rect.max.x.saturating_sub(rect.min.x),
+            rect.max.y.saturating_sub(rect.min.y),
+            color(look.color)
+        ),
         Shape::Dot { center, radius } => format!(
             "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
             center.x,

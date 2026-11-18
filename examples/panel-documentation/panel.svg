@@ -1,0 +1,1045 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="-160 -100 4480 630" width="4480" height="630" stroke-linecap="round" stroke-linejoin="round">
+<rect x="-160" y="-100" width="4480" height="630" fill="#ffffff"/>
+<rect x="-140" y="-80" width="840" height="590" fill="none" stroke="#000000" stroke-width="0.8"/>
+<rect x="-128" y="-68" width="816" height="566" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-87" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="-87" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<line x1="-35" y1="-80" x2="-35" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="-35" y1="498" x2="-35" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="17" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="17" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<line x1="70" y1="-80" x2="70" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="70" y1="498" x2="70" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="122" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="122" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<line x1="175" y1="-80" x2="175" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="175" y1="498" x2="175" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="227" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="227" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<line x1="280" y1="-80" x2="280" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="280" y1="498" x2="280" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="332" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="332" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<line x1="385" y1="-80" x2="385" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="385" y1="498" x2="385" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="437" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="437" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<line x1="490" y1="-80" x2="490" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="490" y1="498" x2="490" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="542" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<text x="542" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<line x1="595" y1="-80" x2="595" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="595" y1="498" x2="595" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="647" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="647" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="-134" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<text x="694" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<line x1="-140" y1="18" x2="-128" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="18" x2="700" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<text x="694" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<line x1="-140" y1="116" x2="-128" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="116" x2="700" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<text x="694" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<line x1="-140" y1="215" x2="-128" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="215" x2="700" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<text x="694" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<line x1="-140" y1="313" x2="-128" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="313" x2="700" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<text x="694" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<line x1="-140" y1="411" x2="-128" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="688" y1="411" x2="700" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="-134" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<text x="694" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<rect x="388" y="418" width="300" height="16" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="538" y1="418" x2="538" y2="434" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="392" y="426" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Client Cliente Exemplo</text>
+<rect x="388" y="434" width="300" height="64" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="388" y1="450" x2="688" y2="450" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="388" y1="466" x2="688" y2="466" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="388" y1="482" x2="688" y2="482" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="538" y1="450" x2="538" y2="498" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="392" y="442" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Circuito de comando</text>
+<text x="392" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Partida direta documentada</text>
+<text x="542" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Exemplo</text>
+<text x="392" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Author OpenCircuit</text>
+<text x="542" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Date 2026-11-15</text>
+<text x="392" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Rev A</text>
+<text x="542" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Sheet 1/4</text>
+<rect x="1060" y="-80" width="840" height="590" fill="none" stroke="#000000" stroke-width="0.8"/>
+<rect x="1072" y="-68" width="816" height="566" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1112" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1112" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<line x1="1165" y1="-80" x2="1165" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1165" y1="498" x2="1165" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1217" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1217" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<line x1="1270" y1="-80" x2="1270" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1270" y1="498" x2="1270" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1322" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1322" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<line x1="1375" y1="-80" x2="1375" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1375" y1="498" x2="1375" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1427" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1427" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<line x1="1480" y1="-80" x2="1480" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1480" y1="498" x2="1480" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1532" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1532" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<line x1="1585" y1="-80" x2="1585" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1585" y1="498" x2="1585" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1637" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="1637" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<line x1="1690" y1="-80" x2="1690" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1690" y1="498" x2="1690" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1742" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<text x="1742" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<line x1="1795" y1="-80" x2="1795" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1795" y1="498" x2="1795" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1847" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="1847" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="1066" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<text x="1894" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<line x1="1060" y1="18" x2="1072" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="18" x2="1900" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<text x="1894" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<line x1="1060" y1="116" x2="1072" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="116" x2="1900" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<text x="1894" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<line x1="1060" y1="215" x2="1072" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="215" x2="1900" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<text x="1894" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<line x1="1060" y1="313" x2="1072" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="313" x2="1900" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<text x="1894" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<line x1="1060" y1="411" x2="1072" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1888" y1="411" x2="1900" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1066" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<text x="1894" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<rect x="1588" y="418" width="300" height="16" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1738" y1="418" x2="1738" y2="434" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1592" y="426" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Client Cliente Exemplo</text>
+<rect x="1588" y="434" width="300" height="64" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1588" y1="450" x2="1888" y2="450" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1588" y1="466" x2="1888" y2="466" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1588" y1="482" x2="1888" y2="482" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="1738" y1="450" x2="1738" y2="498" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="1592" y="442" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Circuito de força</text>
+<text x="1592" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Partida direta documentada</text>
+<text x="1742" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Exemplo</text>
+<text x="1592" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Author OpenCircuit</text>
+<text x="1742" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Date 2026-11-15</text>
+<text x="1592" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Rev A</text>
+<text x="1742" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Sheet 2/4</text>
+<rect x="2260" y="-80" width="840" height="590" fill="none" stroke="#000000" stroke-width="0.8"/>
+<rect x="2272" y="-68" width="816" height="566" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2312" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="2312" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<line x1="2365" y1="-80" x2="2365" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2365" y1="498" x2="2365" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2417" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="2417" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<line x1="2470" y1="-80" x2="2470" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2470" y1="498" x2="2470" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2522" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="2522" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<line x1="2575" y1="-80" x2="2575" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2575" y1="498" x2="2575" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2627" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="2627" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<line x1="2680" y1="-80" x2="2680" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2680" y1="498" x2="2680" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2732" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="2732" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<line x1="2785" y1="-80" x2="2785" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2785" y1="498" x2="2785" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2837" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="2837" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<line x1="2890" y1="-80" x2="2890" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2890" y1="498" x2="2890" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2942" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<text x="2942" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<line x1="2995" y1="-80" x2="2995" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2995" y1="498" x2="2995" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3047" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="3047" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="2266" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<text x="3094" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<line x1="2260" y1="18" x2="2272" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3088" y1="18" x2="3100" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2266" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<text x="3094" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<line x1="2260" y1="116" x2="2272" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3088" y1="116" x2="3100" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2266" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<text x="3094" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<line x1="2260" y1="215" x2="2272" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3088" y1="215" x2="3100" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2266" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<text x="3094" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<line x1="2260" y1="313" x2="2272" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3088" y1="313" x2="3100" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2266" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<text x="3094" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<line x1="2260" y1="411" x2="2272" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3088" y1="411" x2="3100" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2266" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<text x="3094" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<rect x="2788" y="418" width="300" height="16" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2938" y1="418" x2="2938" y2="434" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2792" y="426" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Client Cliente Exemplo</text>
+<text x="2942" y="426" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Single-line diagram</text>
+<rect x="2788" y="434" width="300" height="64" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2788" y1="450" x2="3088" y2="450" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2788" y1="466" x2="3088" y2="466" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2788" y1="482" x2="3088" y2="482" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="2938" y1="450" x2="2938" y2="498" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="2792" y="442" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Diagrama unifilar</text>
+<text x="2792" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Partida direta documentada</text>
+<text x="2942" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Exemplo</text>
+<text x="2792" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Author OpenCircuit</text>
+<text x="2942" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Date 2026-11-15</text>
+<text x="2792" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Rev A</text>
+<text x="2942" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Sheet 3/4</text>
+<rect x="3460" y="-80" width="840" height="590" fill="none" stroke="#000000" stroke-width="0.8"/>
+<rect x="3472" y="-68" width="816" height="566" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3512" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="3512" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<line x1="3565" y1="-80" x2="3565" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3565" y1="498" x2="3565" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3617" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="3617" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<line x1="3670" y1="-80" x2="3670" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3670" y1="498" x2="3670" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3722" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="3722" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<line x1="3775" y1="-80" x2="3775" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3775" y1="498" x2="3775" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3827" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="3827" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<line x1="3880" y1="-80" x2="3880" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3880" y1="498" x2="3880" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3932" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="3932" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<line x1="3985" y1="-80" x2="3985" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3985" y1="498" x2="3985" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="4037" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="4037" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<line x1="4090" y1="-80" x2="4090" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4090" y1="498" x2="4090" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="4142" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<text x="4142" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">7</text>
+<line x1="4195" y1="-80" x2="4195" y2="-68" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4195" y1="498" x2="4195" y2="510" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="4247" y="-74" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="4247" y="504" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">8</text>
+<text x="3466" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<text x="4294" y="-31" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A</text>
+<line x1="3460" y1="18" x2="3472" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4288" y1="18" x2="4300" y2="18" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3466" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<text x="4294" y="67" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<line x1="3460" y1="116" x2="3472" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4288" y1="116" x2="4300" y2="116" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3466" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<text x="4294" y="165" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">C</text>
+<line x1="3460" y1="215" x2="3472" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4288" y1="215" x2="4300" y2="215" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3466" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<text x="4294" y="264" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">D</text>
+<line x1="3460" y1="313" x2="3472" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4288" y1="313" x2="4300" y2="313" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3466" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<text x="4294" y="362" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">E</text>
+<line x1="3460" y1="411" x2="3472" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4288" y1="411" x2="4300" y2="411" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3466" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<text x="4294" y="460" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F</text>
+<rect x="3988" y="418" width="300" height="16" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4138" y1="418" x2="4138" y2="434" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3992" y="426" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Client Cliente Exemplo</text>
+<text x="4142" y="426" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Panel layout</text>
+<rect x="3988" y="434" width="300" height="64" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3988" y1="450" x2="4288" y2="450" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3988" y1="466" x2="4288" y2="466" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="3988" y1="482" x2="4288" y2="482" fill="none" stroke="#000000" stroke-width="0.8"/>
+<line x1="4138" y1="450" x2="4138" y2="498" fill="none" stroke="#000000" stroke-width="0.8"/>
+<text x="3992" y="442" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Leiaute do painel</text>
+<text x="3992" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Partida direta documentada</text>
+<text x="4142" y="458" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Exemplo</text>
+<text x="3992" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Author OpenCircuit</text>
+<text x="4142" y="474" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Date 2026-11-15</text>
+<text x="3992" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Rev A</text>
+<text x="4142" y="490" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Sheet 4/4</text>
+<polyline points="0,0 0,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,60 0,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,120 0,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,140 -40,140 -40,150" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,140 40,140 40,150" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="-40,190 -40,200 0,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="40,190 40,200 0,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,200 0,220" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="0,260 0,360" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,0 1200,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,60 1200,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,120 1200,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1200,180 1200,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,0 1240,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,60 1240,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,120 1240,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1240,180 1240,200" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,0 1280,20" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,60 1280,80" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,120 1280,140" fill="none" stroke="#000000" stroke-width="1"/>
+<polyline points="1280,180 1280,200" fill="none" stroke="#000000" stroke-width="1"/>
+<circle cx="0" cy="140" r="3" fill="#000000"/>
+<circle cx="0" cy="200" r="3" fill="#000000"/>
+<line x1="-8" y1="-12" x2="8" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="-12" x2="0" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-8" y1="348" x2="8" y2="348" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="348" x2="0" y2="360" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1192" y1="-12" x2="1208" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="-12" x2="1200" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1232" y1="-12" x2="1248" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="-12" x2="1240" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1272" y1="-12" x2="1288" y2="-12" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="-12" x2="1280" y2="0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="20" x2="1200" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="48" x2="1200" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="48" x2="1192" y2="34" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="20" x2="1240" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="48" x2="1240" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="48" x2="1232" y2="34" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="20" x2="1280" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="48" x2="1280" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="48" x2="1272" y2="34" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1196" y1="41" x2="1280" y2="41" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1196" y1="40" x2="1186" y2="40" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1189,35 1186,35 1186,45 1189,45" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="140" x2="1200" y2="152" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="168" x2="1200" y2="180" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="1195" y="152" width="10" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1200,152 1200,157 1203,157 1203,163 1200,163 1200,168" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="140" x2="1240" y2="152" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="168" x2="1240" y2="180" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="1235" y="152" width="10" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1240,152 1240,157 1243,157 1243,163 1240,163 1240,168" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="140" x2="1280" y2="152" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="168" x2="1280" y2="180" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="1275" y="152" width="10" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1280,152 1280,157 1283,157 1283,163 1280,163 1280,168" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="20" x2="0" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="48" x2="0" y2="60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="32" x2="6" y2="32" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="48" x2="6" y2="32" fill="none" stroke="#000000" stroke-width="2"/>
+<line x1="0" y1="80" x2="0" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="108" x2="0" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="92" x2="6" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="108" x2="6" y2="92" fill="none" stroke="#000000" stroke-width="2"/>
+<line x1="-4" y1="100" x2="-14" y2="100" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-14" y1="95" x2="-14" y2="105" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-40" y1="150" x2="-40" y2="162" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-40" y1="178" x2="-40" y2="190" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-40" y1="178" x2="-48" y2="164" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-44" y1="170" x2="-54" y2="170" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="-54" y1="165" x2="-54" y2="175" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="220" x2="0" y2="232" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="0" y1="248" x2="0" y2="260" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="-10" y="232" width="20" height="16" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="80" x2="1200" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="108" x2="1200" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1200" y1="108" x2="1192" y2="94" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="80" x2="1240" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="108" x2="1240" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="108" x2="1232" y2="94" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="80" x2="1280" y2="92" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="108" x2="1280" y2="120" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1280" y1="108" x2="1272" y2="94" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1196" y1="101" x2="1280" y2="101" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="40" y1="150" x2="40" y2="162" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="40" y1="178" x2="40" y2="190" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="40" y1="178" x2="32" y2="164" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1200,200 1200,220 1225,230" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="1240" y1="200" x2="1240" y2="225" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="1280,200 1280,220 1255,230" fill="none" stroke="#000000" stroke-width="1.2"/>
+<circle cx="1240" cy="250" r="25" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="1240" y="246" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">M</text>
+<text x="1240" y="260" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3~</text>
+<text x="14" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">P24</text>
+<text x="14" y="350" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">P0</text>
+<text x="1214" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">L1</text>
+<text x="1254" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">L2</text>
+<text x="1294" y="-10" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">L3</text>
+<text x="1304" y="40" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Q1</text>
+<text x="1203" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1203" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1243" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1243" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1283" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1283" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="1304" y="160" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F1</text>
+<text x="1203" y="140" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1203" y="180" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1243" y="140" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1243" y="180" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1283" y="140" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1283" y="180" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="24" y="40" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F1</text>
+<text x="3" y="20" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">95</text>
+<text x="3" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">96</text>
+<text x="24" y="100" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">S2</text>
+<text x="3" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">11</text>
+<text x="3" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">12</text>
+<text x="-16" y="170" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">S1</text>
+<text x="-37" y="150" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">13</text>
+<text x="-37" y="190" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">14</text>
+<text x="24" y="240" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="3" y="220" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A1</text>
+<text x="3" y="260" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A2</text>
+<text x="24" y="252" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">13-14 1/2C</text>
+<text x="24" y="264" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1-6 2/2B</text>
+<text x="1304" y="100" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="1203" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1</text>
+<text x="1203" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">2</text>
+<text x="1243" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">3</text>
+<text x="1243" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">4</text>
+<text x="1283" y="80" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">5</text>
+<text x="1283" y="120" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">6</text>
+<text x="1304" y="112" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1/2D</text>
+<text x="64" y="170" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="43" y="150" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">13</text>
+<text x="43" y="190" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">14</text>
+<text x="64" y="182" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">1/2D</text>
+<text x="1284" y="240" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">M1</text>
+<text x="1203" y="200" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">U1</text>
+<text x="1243" y="200" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">V1</text>
+<text x="1283" y="200" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1</text>
+<text x="-20" y="134" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.3</text>
+<text x="20" y="134" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.3</text>
+<text x="-20" y="194" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.4</text>
+<text x="20" y="194" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.4</text>
+<text x="6" y="310" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">W1.5</text>
+<text x="60" y="40" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Stop: normally closed</text>
+<text x="140" y="340" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Control circuit: 24 V DC</text>
+<polyline points="2420,-40 2420,40" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="2420,80 2420,140" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="2420,180 2420,240" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="2420,280 2420,340" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="3500" y="0" width="500" height="340" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="3520,60 3980,60" fill="none" stroke="#000000" stroke-width="1.2"/>
+<rect x="4049" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4054" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4057" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4059" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4061" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4069" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4074" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4083" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4096" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4105" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4113" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4115" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4118" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4125" y="9" width="2" height="3" fill="#000000"/>
+<rect x="4127" y="9" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="12" width="3" height="2" fill="#000000"/>
+<rect x="4064" y="12" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="12" width="2" height="2" fill="#000000"/>
+<rect x="4083" y="12" width="3" height="2" fill="#000000"/>
+<rect x="4086" y="12" width="2" height="2" fill="#000000"/>
+<rect x="4093" y="12" width="3" height="2" fill="#000000"/>
+<rect x="4100" y="12" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="12" width="2" height="2" fill="#000000"/>
+<rect x="4108" y="12" width="2" height="2" fill="#000000"/>
+<rect x="4113" y="12" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="12" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="14" width="3" height="3" fill="#000000"/>
+<rect x="4054" y="14" width="3" height="3" fill="#000000"/>
+<rect x="4057" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4059" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4064" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4074" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4086" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="14" width="3" height="3" fill="#000000"/>
+<rect x="4103" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4108" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4113" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4118" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="14" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="14" width="3" height="3" fill="#000000"/>
+<rect x="4127" y="14" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4071" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4074" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4076" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4079" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4093" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4108" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4113" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4118" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="17" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4127" y="17" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="19" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="19" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4076" y="19" width="3" height="2" fill="#000000"/>
+<rect x="4098" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4105" y="19" width="3" height="2" fill="#000000"/>
+<rect x="4108" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4113" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4118" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="19" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="19" width="3" height="2" fill="#000000"/>
+<rect x="4127" y="19" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="21" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4069" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4074" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4076" y="21" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="21" width="3" height="3" fill="#000000"/>
+<rect x="4091" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="21" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="21" width="3" height="3" fill="#000000"/>
+<rect x="4103" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4113" y="21" width="2" height="3" fill="#000000"/>
+<rect x="4127" y="21" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4052" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4054" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4061" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4064" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4083" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4088" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4093" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4098" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4103" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4108" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4113" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4125" y="24" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="24" width="3" height="2" fill="#000000"/>
+<rect x="4071" y="26" width="3" height="3" fill="#000000"/>
+<rect x="4074" y="26" width="2" height="3" fill="#000000"/>
+<rect x="4079" y="26" width="2" height="3" fill="#000000"/>
+<rect x="4086" y="26" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="26" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="26" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="26" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="26" width="3" height="3" fill="#000000"/>
+<rect x="4108" y="26" width="2" height="3" fill="#000000"/>
+<rect x="4052" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4054" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4061" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4064" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4066" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4071" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4076" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4081" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4091" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4096" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4098" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4103" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="29" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="29" width="3" height="2" fill="#000000"/>
+<rect x="4061" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4069" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4076" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4091" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4105" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4113" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4115" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4120" y="31" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4127" y="31" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4066" y="34" width="3" height="2" fill="#000000"/>
+<rect x="4071" y="34" width="3" height="2" fill="#000000"/>
+<rect x="4074" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4086" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="34" width="3" height="2" fill="#000000"/>
+<rect x="4091" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4098" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4100" y="34" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4118" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="34" width="3" height="2" fill="#000000"/>
+<rect x="4125" y="34" width="2" height="2" fill="#000000"/>
+<rect x="4049" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4057" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4059" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4061" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4069" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4079" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4083" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4091" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4110" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4118" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="36" width="3" height="3" fill="#000000"/>
+<rect x="4125" y="36" width="2" height="3" fill="#000000"/>
+<rect x="4054" y="39" width="3" height="2" fill="#000000"/>
+<rect x="4059" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4066" y="39" width="3" height="2" fill="#000000"/>
+<rect x="4069" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4086" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="39" width="3" height="2" fill="#000000"/>
+<rect x="4096" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4103" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4105" y="39" width="3" height="2" fill="#000000"/>
+<rect x="4108" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="39" width="3" height="2" fill="#000000"/>
+<rect x="4115" y="39" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4125" y="39" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="41" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="41" width="2" height="2" fill="#000000"/>
+<rect x="4083" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4093" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4100" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4105" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4110" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4113" y="41" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4125" y="41" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="41" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4054" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4074" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4076" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4083" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4091" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4098" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4103" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4108" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4110" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4113" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4115" y="43" width="3" height="3" fill="#000000"/>
+<rect x="4120" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4125" y="43" width="2" height="3" fill="#000000"/>
+<rect x="4052" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4054" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4066" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4071" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4079" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4086" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4091" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4093" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4100" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4113" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4120" y="46" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="46" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4054" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4059" y="48" width="2" height="3" fill="#000000"/>
+<rect x="4061" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="48" width="2" height="3" fill="#000000"/>
+<rect x="4076" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4108" y="48" width="2" height="3" fill="#000000"/>
+<rect x="4110" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4115" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4118" y="48" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="48" width="2" height="3" fill="#000000"/>
+<rect x="4127" y="48" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4054" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4061" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4066" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4071" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4074" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4081" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4083" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4086" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4096" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4105" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4113" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4120" y="51" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4127" y="51" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4057" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4061" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4066" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4074" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4079" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4086" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4091" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4098" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4115" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4118" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="53" width="3" height="3" fill="#000000"/>
+<rect x="4125" y="53" width="2" height="3" fill="#000000"/>
+<rect x="4059" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4071" y="56" width="3" height="2" fill="#000000"/>
+<rect x="4079" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4081" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4091" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4098" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4100" y="56" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4108" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4113" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="56" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="56" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="56" width="3" height="2" fill="#000000"/>
+<rect x="4127" y="56" width="3" height="2" fill="#000000"/>
+<rect x="4059" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4076" y="58" width="3" height="2" fill="#000000"/>
+<rect x="4079" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4081" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="58" width="3" height="2" fill="#000000"/>
+<rect x="4096" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4103" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4108" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="58" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="58" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="58" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4054" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4057" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4061" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4069" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4074" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4076" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4086" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4091" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4103" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4105" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4110" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4113" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="60" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4127" y="60" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4066" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4069" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4086" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4091" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4093" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="63" width="3" height="2" fill="#000000"/>
+<rect x="4125" y="63" width="2" height="2" fill="#000000"/>
+<rect x="4049" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4066" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4069" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4083" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4098" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4108" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4110" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4118" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4125" y="65" width="2" height="3" fill="#000000"/>
+<rect x="4127" y="65" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4064" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4066" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4074" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4081" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4083" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4086" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4093" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4105" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4108" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4113" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="68" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="68" width="3" height="2" fill="#000000"/>
+<rect x="4069" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4074" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4076" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4083" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4108" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4118" y="70" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4127" y="70" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="73" width="3" height="2" fill="#000000"/>
+<rect x="4052" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4054" y="73" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4061" y="73" width="3" height="2" fill="#000000"/>
+<rect x="4064" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4074" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4091" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4093" y="73" width="3" height="2" fill="#000000"/>
+<rect x="4098" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4105" y="73" width="3" height="2" fill="#000000"/>
+<rect x="4108" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4113" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4118" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="73" width="3" height="2" fill="#000000"/>
+<rect x="4125" y="73" width="2" height="2" fill="#000000"/>
+<rect x="4049" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4069" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4076" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4083" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4091" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4093" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4096" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4100" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4105" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4108" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4118" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4120" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4122" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4125" y="75" width="2" height="3" fill="#000000"/>
+<rect x="4127" y="75" width="3" height="3" fill="#000000"/>
+<rect x="4049" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4071" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4074" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4076" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4083" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4086" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4091" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4093" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4096" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4098" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4103" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4108" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4113" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4115" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4120" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4125" y="78" width="2" height="2" fill="#000000"/>
+<rect x="4127" y="78" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4054" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4057" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4059" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4064" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4079" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4081" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4083" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4088" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4091" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4096" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4098" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4100" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4108" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="80" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4127" y="80" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="82" width="3" height="3" fill="#000000"/>
+<rect x="4054" y="82" width="3" height="3" fill="#000000"/>
+<rect x="4057" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4059" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4064" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4069" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="82" width="3" height="3" fill="#000000"/>
+<rect x="4079" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4081" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4086" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="82" width="3" height="3" fill="#000000"/>
+<rect x="4091" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4098" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4110" y="82" width="3" height="3" fill="#000000"/>
+<rect x="4113" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4115" y="82" width="3" height="3" fill="#000000"/>
+<rect x="4120" y="82" width="2" height="3" fill="#000000"/>
+<rect x="4049" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4064" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4069" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4071" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4074" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4076" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4079" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4088" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4098" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4100" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4103" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4110" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4118" y="85" width="2" height="2" fill="#000000"/>
+<rect x="4122" y="85" width="3" height="2" fill="#000000"/>
+<rect x="4049" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4052" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4054" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4057" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4059" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4061" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4064" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4071" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4076" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4083" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4086" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4088" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4103" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4105" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4108" y="87" width="2" height="3" fill="#000000"/>
+<rect x="4115" y="87" width="3" height="3" fill="#000000"/>
+<rect x="4125" y="87" width="2" height="3" fill="#000000"/>
+<polyline points="20,0 20,0 22,-5 25,-8 30,-10 35,-8 38,-5 40,0 40,0 42,-5 45,-8 50,-10 55,-8 58,-5 60,0 60,0 62,-5 65,-8 70,-10 75,-8 78,-5 80,0 80,0 82,-5 85,-8 90,-10 95,-8 98,-5 100,0 100,0 102,-5 105,-8 110,-10 115,-8 118,-5 120,0 120,0 125,2 128,5 130,10 128,15 125,18 120,20 120,20 125,22 128,25 130,30 128,35 125,38 120,40 120,40 125,42 128,45 130,50 128,55 125,58 120,60 120,60 125,62 128,65 130,70 128,75 125,78 120,80 120,80 118,85 115,88 110,90 105,88 102,85 100,80 100,80 98,85 95,88 90,90 85,88 82,85 80,80 80,80 78,85 75,88 70,90 65,88 62,85 60,80 60,80 58,85 55,88 50,90 45,88 42,85 40,80 40,80 38,85 35,88 30,90 25,88 22,85 20,80 20,80 15,78 12,75 10,70 12,65 15,62 20,60 20,60 15,58 12,55 10,50 12,45 15,42 20,40 20,40 15,38 12,35 10,30 12,25 15,22 20,20 20,20 15,18 12,15 10,10 12,5 15,2 20,0" fill="none" stroke="#000000" stroke-width="1.2"/>
+<polyline points="120,-30 150,-30 135,0 120,-30" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="135" y="-20" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">B</text>
+<rect x="2400" y="40" width="40" height="40" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="2445" y="60" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Q1</text>
+<text x="2445" y="70" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/2/2B</text>
+<rect x="2400" y="140" width="40" height="40" fill="none" stroke="#000000" stroke-width="1.2"/>
+<line x1="2400" y1="180" x2="2440" y2="140" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="2445" y="160" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="2445" y="170" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/1/2D</text>
+<rect x="2400" y="240" width="40" height="40" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="2445" y="260" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F1</text>
+<text x="2445" y="270" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/2/2C</text>
+<circle cx="2420" cy="360" r="20" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="2420" y="360" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">M</text>
+<text x="2445" y="360" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">M1</text>
+<text x="2445" y="370" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/2/2D</text>
+<rect x="3560" y="40" width="60" height="100" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3590" y="90" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Q1</text>
+<text x="3590" y="100" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/2/2B</text>
+<rect x="3660" y="40" width="60" height="100" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3690" y="90" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">K1</text>
+<text x="3690" y="100" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/1/2D</text>
+<rect x="3760" y="40" width="60" height="100" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3790" y="90" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">F1</text>
+<text x="3790" y="100" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">/2/2C</text>
+<rect x="3560" y="180" width="95" height="80" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3570" y="190" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">A1 Digital I/O</text>
+<line x1="3560" y1="200" x2="3655" y2="200" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3570" y="210" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">I0.0 &lt; S1 start</text>
+<line x1="3560" y1="220" x2="3655" y2="220" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3570" y="230" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">I0.1 &lt; S2 stop</text>
+<line x1="3560" y1="240" x2="3655" y2="240" fill="none" stroke="#000000" stroke-width="1.2"/>
+<text x="3570" y="250" text-anchor="start" dominant-baseline="central" font-family="sans-serif" font-size="8" fill="#000000">Q0.0 &gt; K1 run</text>
+</svg>

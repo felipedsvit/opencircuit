@@ -70,6 +70,26 @@ entity_id!(
     /// A layer of the drawing (ADR-0015).
     LayerId
 );
+entity_id!(
+    /// A drawn shape, revision cloud or QR code (ADR-0018).
+    ShapeId
+);
+entity_id!(
+    /// A comment about an element (ADR-0018).
+    CommentId
+);
+entity_id!(
+    /// A group of elements (ADR-0018).
+    GroupId
+);
+entity_id!(
+    /// A view of a device on a panel layout or single-line sheet (ADR-0018).
+    ViewId
+);
+entity_id!(
+    /// A PLC module (ADR-0018).
+    PlcId
+);
 
 /// The document ran out of identifiers below [`MAX_ENTITY_ID`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]

@@ -251,6 +251,7 @@ pub fn build_scene(
     draw_wire_numbers(&mut scene, doc, catalog, &layout, &wires);
     draw_signal_names(&mut scene, doc, catalog, &layout, &symbols);
     draw_texts(&mut scene, &texts);
+    crate::annotations::draw_annotations(&mut scene, doc, catalog, &layers);
 
     if let Some(snapshot) = snapshot {
         let subjects: BTreeSet<&Subject> = snapshot
@@ -268,6 +269,7 @@ pub fn build_scene(
                 subject,
                 StyleKey::Fault,
             );
+            outline_annotation(&mut scene, doc, subject, StyleKey::Fault);
         }
     }
 
@@ -281,6 +283,7 @@ pub fn build_scene(
             subject,
             StyleKey::Traced,
         );
+        outline_annotation(&mut scene, doc, subject, StyleKey::Traced);
     }
 
     for subject in &options.selected {
@@ -293,6 +296,7 @@ pub fn build_scene(
             subject,
             StyleKey::Selected,
         );
+        outline_annotation(&mut scene, doc, subject, StyleKey::Selected);
     }
 
     scene
@@ -381,7 +385,7 @@ fn draw_symbol(
     for (shape, style) in drawing {
         // A shape that cannot be placed is beyond the coordinate range; it
         // is left out rather than drawn somewhere else.
-        if let Some(placed) = symbols::place(&shape, symbol.rotation, at) {
+        if let Some(placed) = symbols::place(&shape, symbol.mirrored, symbol.rotation, at) {
             scene.push(placed, style, subject.clone());
         }
     }
@@ -697,6 +701,13 @@ fn draw_terminal_labels(
     }
 }
 
+/// Outline a shape or a device view (ADR-0018) with an overlay style.
+fn outline_annotation(scene: &mut Scene, doc: &Schematic, subject: &Subject, style: StyleKey) {
+    if let Some(area) = crate::annotations::area_of(doc, subject) {
+        scene.push(Shape::Rect(area), style, Some(subject.clone()));
+    }
+}
+
 /// Outline one document element with an overlay style. Elements without a
 /// place on the sheet (the document, a supply) are not outlined.
 fn outline(
@@ -725,7 +736,15 @@ fn outline(
         );
     };
     match subject {
-        Subject::Document | Subject::Supply(_) | Subject::Sheet(_) | Subject::Layer(_) => {}
+        Subject::Document
+        | Subject::Supply(_)
+        | Subject::Sheet(_)
+        | Subject::Layer(_)
+        | Subject::Shape(_)
+        | Subject::Comment(_)
+        | Subject::Group(_)
+        | Subject::View(_)
+        | Subject::Plc(_) => {}
         Subject::Device(device) => {
             for symbol in symbols.values().filter(|s| s.device_id == *device) {
                 around_symbol(scene, symbol.id);

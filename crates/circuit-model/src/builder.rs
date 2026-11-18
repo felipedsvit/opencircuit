@@ -165,6 +165,7 @@ impl SchematicBuilder {
             position,
             rotation,
             layer: None,
+            mirrored: false,
         });
         Ok(id)
     }
@@ -213,6 +214,7 @@ impl SchematicBuilder {
             route: route.to_vec(),
             number: None,
             layer: None,
+            spec: None,
         });
         Ok(id)
     }

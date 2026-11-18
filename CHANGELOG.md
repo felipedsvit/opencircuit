@@ -102,6 +102,49 @@ here when it lands.
   open already is shown instead of opened twice. Closing the window asks
   about each tab with unsaved changes in turn; at most 16 projects are open
   at once.
+- **The client** of a project (Project tree > Project data in the inspector,
+  `"client"` in the `project` operation of edit files), printed in a row
+  above the title block of every sheet; a project without a client draws the
+  title block as before.
+- **Wire data** (ADR-0018): the colour, cross-section, type, material and
+  insulation of a wire, in the closed section Wire data of the inspector and
+  in `{ "op": "set_wire_spec" }` of edit files. The `wires` report gets five
+  columns for them in a project that has any; the report of any other
+  project is as before.
+- **Annotations** (ADR-0018): rectangles, circles, arcs, lines, revision
+  clouds with a revision mark, and QR codes, drawn in SVG and PDF and picked
+  on their lines, moved, deleted and put on layers like notes. They are added
+  on the command line of the window (`shape rect|circle|arc|line|cloud`, `qr`)
+  and with `{ "op": "add_shape" }` in edit files.
+- **Comments on an element** (Project tree > Comments in the inspector,
+  `comment` on the command line, `add_comment` in edit files). A comment is
+  not drawn; deleting the element deletes its comments.
+- **Groups** (Modify > Group selection, Ungroup selection; `group` and
+  `ungroup`): a click on a member selects the whole group.
+- **Mirrored symbols** (M, Modify > Mirror selection, `mirror`): a symbol is
+  flipped about its vertical axis; its wires follow and its connections do
+  not change.
+- **Datasheets**: a link per device in its catalog data (`datasheet`), opened
+  with the system from the inspector.
+- **Sheet kinds, device views and PLC modules** (ADR-0018): a sheet can be a
+  single-line diagram or a panel layout (`sheets kind`, `set_sheet_kind`); a
+  device of the schematic is shown there again as a view (`view`,
+  `add_view`) with its designator and where it is on the schematic, as a
+  footprint or a single-line glyph. PLC modules list their channels and the
+  devices they read or drive (`add_plc`, `set_plc`). `OC-STR-024` warns about
+  a view off those sheets or a symbol on them, and `OC-STR-025` about two
+  channels on one address or one device.
+- **Reports `comments` and `plc`** (`opencircuit report --kind comments|plc`):
+  the comments of a project, and one row per PLC channel with its device and
+  where that device is in the Modbus map. The `devices` report gets the
+  columns Datasheet and Views. A new example,
+  `examples/panel-documentation`, has a single-line diagram, a panel layout,
+  a PLC module, wire data, a revision cloud, a comment and a QR code, with its
+  reports.
+- **Import of catalog data from CSV** (Modify > Import catalog data;
+  `{ "op": "import_catalog" }` in edit files): manufacturer, part number,
+  description, location and datasheet of each device, by designator, in one
+  undoable step.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.
@@ -112,6 +155,14 @@ here when it lands.
   ("Open in another window"): saving in both overwrites each other's changes.
   The lock lives in the user's data folder, never next to the project, and is
   released when the first window lets the project go or ends.
+
+### Changed
+
+- **Project files are schema version 5** (ADR-0018). A version 4 file opens and
+  is saved as version 5; the migration only raises the version, because every
+  new field is optional and left out when empty. A version 5 file does not
+  open in an older build. The new fields are documentation only: the compiled
+  circuit, the simulation and every golden trace are the same.
 
 ### Fixed
 

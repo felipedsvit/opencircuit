@@ -38,6 +38,10 @@ pub struct DeviceInfo {
     /// Where the device is installed, such as `Panel 1` or `Field`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    /// A link to the datasheet (ADR-0018): an `http`, `https` or `file` URL
+    /// or a relative path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub datasheet: Option<String>,
 }
 
 impl DeviceInfo {
@@ -48,6 +52,7 @@ impl DeviceInfo {
             && self.part_no.is_none()
             && self.description.is_none()
             && self.location.is_none()
+            && self.datasheet.is_none()
     }
 }
 

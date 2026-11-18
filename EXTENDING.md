@@ -135,7 +135,7 @@ elements with their kind and ID.
 
 | `op` | Fields | Does |
 | --- | --- | --- |
-| `project` | `name`, `author`, `company`, `revision`, `date` | sets what is present; `null` clears an optional field; absent keeps it |
+| `project` | `name`, `author`, `company`, `revision`, `date`, `client` | sets what is present; `null` clears an optional field; absent keeps it |
 | `add_supply` | `preset` (`dc_24v`, `single_phase_230v`, `three_phase_400v`), `as` | adds a supply profile |
 | `place` | `model`, `version`, `symbol`, `at`, `rotation`, `reference`, `as` | a new device drawn as one symbol; the newest `version` unless given; `rotation` 0, 90, 180 or 270 |
 | `add_symbol` | `device`, `symbol`, `at`, `rotation`, `as` | another symbol of a device (an auxiliary contact) |
@@ -145,11 +145,12 @@ elements with their kind and ID.
 | `connect` | `from`, `to`, `via`, `as` | a wire; an end is `{ "symbol": ..., "terminal": "a1" }`, `{ "junction": name or ID }` or `{ "wire": name or ID, "at": [x, y] }` (a branch); `via` are waypoints; without them the route has at most one bend |
 | `move` | `elements`, `by` | moves symbols, junctions or `{ "device": "K1" }` by `[dx, dy]`; wires follow |
 | `rotate` | `symbols` | a quarter turn clockwise |
-| `delete` | `elements` | deletes elements and the wires that hang on them; a note is `{ "text": name or ID }` here and in `move` |
+| `delete` | `elements` | deletes elements and the wires that hang on them; a note is `{ "text": name or ID }` here and in `move`; a shape is `{ "shape": ... }` and a view `{ "view": ... }` |
 | `add_sheet` | `number`, `title`, `origin`, `size`, `orientation`, `zones` | a sheet; the next number unless given; `size` is `a4` (default), `a3`, `a2` or `{ "custom": { "width": w, "height": h } }`; `zones` is `[columns, rows]`, `[8, 6]` by default |
 | `remove_sheet` | `number` | removes a sheet; what was drawn on it stays |
-| `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it |
+| `set_device_info` | `device`, `manufacturer`, `part_no`, `description`, `location`, `datasheet` | the catalog data of a device (ADR-0014); a field left out is kept and `null` clears it; `datasheet` is an `http`, `https` or `file` link or a relative path (ADR-0018) |
 | `set_wire_number` | `wire` (name or ID), `number` | the number that replaces the generated one on a wire; `null` or no `number` clears it |
+| `set_wire_spec` | `wire` (name or ID), `colour`, `cross_section`, `kind`, `material`, `insulation` | what a wire is made of (ADR-0018), each field at most 32 characters; a field left out is kept and `null` clears it |
 | `numbering` | `prefix`, `start`, `step`, `per_sheet`, `enabled` | the rule that numbers the wires: what is left out keeps its value (an empty prefix, 1, 1 and one counter for a new rule); `"enabled": false` removes it |
 | `waive` | `code`, `subject`, `reason` | accepts a warning or informational diagnostic with a reason; `subject` is a name, `{ "device": "K1" }`, `{ "wire": ... }`, `{ "junction": ... }`, `{ "symbol": ..., "terminal": "p2" }` for a terminal, or `"document"`; an error cannot be waived |
 | `unwaive` | `code`, `subject` | takes a waiver away |
@@ -163,6 +164,16 @@ elements with their kind and ID.
 | `set_layer` | `layer` (name or ID), `name`, `visible`, `locked` | renames, shows, hides, locks or unlocks a layer; what is left out stays |
 | `remove_layer` | `layer` | removes a layer that nothing is on |
 | `assign_layer` | `layer` (name or ID, or `null` for the default layer), `elements` | puts symbols, wires, notes and the symbols of `{ "device": ... }` on a layer; junctions have no layer |
+| `add_shape` | `shape`, `layer`, `as` | a shape of ADR-0018 written as the project file writes it: `{ "rectangle": { "from": { "x", "y" }, "to": ... } }`, `circle`, `arc`, `polyline`, `cloud` or `qr` |
+| `add_comment` | `subject`, `text`, `author`, `as` | a comment about an element; `subject` as `waive` takes it |
+| `group` | `name`, `elements`, `as` | a group: a click on a member selects them all; an element is in one group at most |
+| `ungroup` | `group` (name or ID) | takes a group apart; its elements stay |
+| `mirror` | `symbols` | mirrors symbols about their vertical axis, or undoes it |
+| `set_sheet_kind` | `number`, `kind` | `schematic`, `single_line` or `panel_layout` |
+| `add_view` | `device`, `at`, `size`, `as` | shows a device again on a panel layout or single-line sheet; `size` is `[width, height]`, `[6, 8]` by default |
+| `add_plc` | `name`, `description`, `at`, `channels` | a PLC module; a channel is `{ "address", "direction": "input" or "output", "device", "label" }`; `at` places the box that lists them |
+| `set_plc` | `plc` (its name), `description`, `at`, `channels` | changes a PLC module: what is given replaces what it has; `"at": null` takes the box off the drawing |
+| `import_catalog` | `csv` | the catalog data of devices from CSV text: a header with `reference` and any of `manufacturer`, `part_no`, `description`, `location` and `datasheet` (RFC 4180 quoting), one row per device; an empty cell keeps the field, and a row for a designator the project does not have refuses the file |
 
 A name given with `as` lasts for the one file; a later file refers to a note or
 a wire by its ID (the layers also by their own name). An operation that changes
@@ -288,7 +299,7 @@ canvas. Text is set in Liberation Mono, embedded in the PDF as a subset
 
 ## Reports
 
-`opencircuit report <project> --kind bom|wires|terminals|strips|xref|io|problems|devices|all`
+`opencircuit report <project> --kind bom|wires|terminals|strips|xref|io|problems|devices|comments|plc|all`
 derives tables from the project, and writes them as text, JSON (`--format`)
 or, for one table, CSV. With `--output <file>` the extension picks the format
 (`.csv`, `.json`, `.txt` or `.pdf`) and `--format` says how the
@@ -298,13 +309,15 @@ confirmation is written. Nothing is stored in the project: the tables are a func
 | Kind | One row per |
 | --- | --- |
 | `bom` | kind of part: model and version, manufacturer, part number and description; supply taps are not parts |
-| `wires` | net with a wire, in numbering order: number, sheet, `From`, `To` and the other terminals under `Also` |
+| `wires` | net with a wire, in numbering order: number, sheet, `From`, `To` and the other terminals under `Also`; in a project where a wire has data (ADR-0018), also its colour, cross-section, type, material and insulation, each distinct value of the net once |
 | `terminals` | terminal of every symbol, with the number of its wire and the terminals it meets |
 | `strips` | terminal of a terminal strip (class `terminal_block`, parameters `strip` and `number`), by strip and number: the wire and the terminals on each side. It is the terminal plan, and its CSV is the table for a manufacturer's import |
 | `xref` | exception: a coil with no contact, contacts whose coil is not drawn, a symbol outside every sheet |
 | `io` | address of the Modbus map |
 | `problems` | diagnostic of the project, compiled |
-| `devices` | device, in natural order of designators: model and version, how many symbols draw it, the sheets they are on, manufacturer, part number and description; supply taps and signal arrows are not devices here. Unlike `bom`, two devices of one part are two rows |
+| `devices` | device, in natural order of designators: model and version, how many symbols draw it, the sheets they are on, manufacturer, part number, description, datasheet and the sheets of its views (ADR-0018); supply taps and signal arrows are not devices here. Unlike `bom`, two devices of one part are two rows |
+| `comments` | comment (ADR-0018): what it is about, a name for it, the author and the text. In `all` only for a project with comments |
+| `plc` | channel of a PLC module (ADR-0018): module, address, direction, device, label and where the device is in the Modbus map (`coil 3`, `discrete input 0`). In `all` only for a project with PLC modules |
 
 A PDF sets each table on A4 landscape pages in the embedded font (ADR-0012):
 the title, the headings (repeated on every page), a rule, one line per row and

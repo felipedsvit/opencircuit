@@ -91,6 +91,9 @@ enum Operation {
         revision: Field,
         #[serde(default)]
         date: Field,
+        /// The client of the title block (ADR-0018).
+        #[serde(default)]
+        client: Field,
     },
     /// Add a supply profile: `dc_24v`, `single_phase_230v` or
     /// `three_phase_400v`.
@@ -171,10 +174,28 @@ enum Operation {
         description: Field,
         #[serde(default)]
         location: Field,
+        /// A link to the datasheet (ADR-0018).
+        #[serde(default)]
+        datasheet: Field,
     },
     /// Set the number that replaces the generated one on a wire; `null`, or
     /// leaving it out, clears it.
     SetWireNumber { wire: Value, number: Option<String> },
+    /// Set what a wire is made of (ADR-0018). A field left out keeps its
+    /// value; `null` clears it.
+    SetWireSpec {
+        wire: Value,
+        #[serde(default)]
+        colour: Field,
+        #[serde(default)]
+        cross_section: Field,
+        #[serde(default)]
+        kind: Field,
+        #[serde(default)]
+        material: Field,
+        #[serde(default)]
+        insulation: Field,
+    },
     /// Set the rule that numbers the wires. What is left out keeps its value
     /// (an empty prefix, 1, 1 and a single counter for a new rule);
     /// `"enabled": false` removes the rule.
@@ -242,6 +263,85 @@ enum Operation {
     /// Put symbols, wires, text notes and the symbols of devices on a layer;
     /// `null` is the default layer.
     AssignLayer { layer: Value, elements: Vec<Value> },
+    /// Add a shape, revision cloud or QR code (ADR-0018), written as the
+    /// project file writes it.
+    AddShape {
+        shape: circuit_model::ShapeKind,
+        layer: Option<Value>,
+        #[serde(rename = "as")]
+        name: Option<String>,
+    },
+    /// Add a comment about an element: a subject as `waive` takes it.
+    AddComment {
+        subject: Value,
+        text: String,
+        author: Option<String>,
+        #[serde(rename = "as")]
+        name: Option<String>,
+    },
+    /// Set the catalog data of devices from CSV text (ADR-0018): a header
+    /// with `reference` and any of `manufacturer`, `part_no`, `description`,
+    /// `location` and `datasheet`, then one row per device.
+    ImportCatalog { csv: String },
+    /// Make a group of elements.
+    Group {
+        name: String,
+        elements: Vec<Value>,
+        #[serde(rename = "as")]
+        alias: Option<String>,
+    },
+    /// Take a group apart, by its name or ID; its elements stay.
+    Ungroup { group: Value },
+    /// Mirror symbols, or undo it.
+    Mirror { symbols: Vec<Value> },
+    /// Set the kind of a sheet, by its number: `schematic`, `single_line` or
+    /// `panel_layout`.
+    SetSheetKind { number: u32, kind: String },
+    /// Show a device again on a panel layout or single-line sheet.
+    AddView {
+        device: String,
+        at: [i32; 2],
+        size: Option<[u32; 2]>,
+        #[serde(rename = "as")]
+        name: Option<String>,
+    },
+    /// Add a PLC module with its channels.
+    AddPlc {
+        name: String,
+        description: Option<String>,
+        at: Option<[i32; 2]>,
+        #[serde(default)]
+        channels: Vec<ChannelSpec>,
+    },
+    /// Change a PLC module, by its name: what is given replaces what it has;
+    /// `"at": null` takes the box off the drawing.
+    SetPlc {
+        plc: String,
+        #[serde(default)]
+        description: Field,
+        #[serde(default, deserialize_with = "present")]
+        at: Option<Option<[i32; 2]>>,
+        channels: Option<Vec<ChannelSpec>>,
+    },
+}
+
+/// A channel of a PLC module in an edit file.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChannelSpec {
+    address: String,
+    direction: circuit_model::PlcDirection,
+    device: Option<String>,
+    label: Option<String>,
+}
+
+/// A field that may be absent (`None`), `null` (`Some(None)`) or set.
+fn present<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 impl Operation {
@@ -262,6 +362,7 @@ impl Operation {
             Self::RemoveSheet { .. } => "remove_sheet",
             Self::SetDeviceInfo { .. } => "set_device_info",
             Self::SetWireNumber { .. } => "set_wire_number",
+            Self::SetWireSpec { .. } => "set_wire_spec",
             Self::Numbering { .. } => "numbering",
             Self::Waive { .. } => "waive",
             Self::Unwaive { .. } => "unwaive",
@@ -275,6 +376,16 @@ impl Operation {
             Self::SetLayer { .. } => "set_layer",
             Self::RemoveLayer { .. } => "remove_layer",
             Self::AssignLayer { .. } => "assign_layer",
+            Self::AddShape { .. } => "add_shape",
+            Self::AddComment { .. } => "add_comment",
+            Self::ImportCatalog { .. } => "import_catalog",
+            Self::Group { .. } => "group",
+            Self::Ungroup { .. } => "ungroup",
+            Self::Mirror { .. } => "mirror",
+            Self::SetSheetKind { .. } => "set_sheet_kind",
+            Self::AddView { .. } => "add_view",
+            Self::AddPlc { .. } => "add_plc",
+            Self::SetPlc { .. } => "set_plc",
         }
     }
 }
@@ -294,6 +405,14 @@ pub enum Created {
     Text(TextId),
     /// A layer.
     Layer(LayerId),
+    /// A shape (ADR-0018).
+    Shape(circuit_model::ShapeId),
+    /// A comment (ADR-0018).
+    Comment(circuit_model::CommentId),
+    /// A group (ADR-0018).
+    Group(circuit_model::GroupId),
+    /// A device view (ADR-0018).
+    View(circuit_model::ViewId),
 }
 
 impl Created {
@@ -307,6 +426,10 @@ impl Created {
             Self::Wire(_) => "wire",
             Self::Text(_) => "text",
             Self::Layer(_) => "layer",
+            Self::Shape(_) => "shape",
+            Self::Comment(_) => "comment",
+            Self::Group(_) => "group",
+            Self::View(_) => "view",
         }
     }
 
@@ -320,6 +443,10 @@ impl Created {
             Self::Wire(id) => id.0,
             Self::Text(id) => id.0,
             Self::Layer(id) => id.0,
+            Self::Shape(id) => id.0,
+            Self::Comment(id) => id.0,
+            Self::Group(id) => id.0,
+            Self::View(id) => id.0,
         }
     }
 }
@@ -534,7 +661,13 @@ impl Run<'_> {
                 company,
                 revision,
                 date,
+                client,
             } => {
+                if !matches!(client, Field::Keep) {
+                    let value = client.apply(self.doc.project.client.as_ref());
+                    let tx = sheets::set_client(&self.doc, value.as_deref()).map_err(refused)?;
+                    self.commit(&tx)?;
+                }
                 let project = &self.doc.project;
                 let tx = sheets::set_project_info(
                     &self.doc,
@@ -736,6 +869,7 @@ impl Run<'_> {
                 part_no,
                 description,
                 location,
+                datasheet,
             } => {
                 let device = self.device(device)?;
                 let current = self
@@ -750,6 +884,7 @@ impl Run<'_> {
                     part_no: part_no.apply(current.part_no.as_ref()),
                     description: description.apply(current.description.as_ref()),
                     location: location.apply(current.location.as_ref()),
+                    datasheet: datasheet.apply(current.datasheet.as_ref()),
                 };
                 let tx =
                     documentation::set_device_info(&self.doc, device, info).map_err(refused)?;
@@ -759,6 +894,32 @@ impl Run<'_> {
                 let wire = WireId(self.named_or_id(wire, "wire")?);
                 let tx = documentation::set_wire_number(&self.doc, wire, number.as_deref())
                     .map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::SetWireSpec {
+                wire,
+                colour,
+                cross_section,
+                kind,
+                material,
+                insulation,
+            } => {
+                let wire = WireId(self.named_or_id(wire, "wire")?);
+                let current = self
+                    .doc
+                    .wires
+                    .iter()
+                    .find(|candidate| candidate.id == wire)
+                    .and_then(|candidate| candidate.spec.clone())
+                    .unwrap_or_default();
+                let spec = circuit_model::WireSpec {
+                    colour: colour.apply(current.colour.as_ref()),
+                    cross_section: cross_section.apply(current.cross_section.as_ref()),
+                    kind: kind.apply(current.kind.as_ref()),
+                    material: material.apply(current.material.as_ref()),
+                    insulation: insulation.apply(current.insulation.as_ref()),
+                };
+                let tx = documentation::set_wire_spec(&self.doc, wire, spec).map_err(refused)?;
                 self.commit(&tx)
             }
             Operation::Numbering {
@@ -881,6 +1042,152 @@ impl Run<'_> {
                 let tx = layers::assign_layer(&self.doc, &subjects, target).map_err(refused)?;
                 self.commit(&tx)
             }
+            Operation::AddShape { shape, layer, name } => {
+                let layer = match layer {
+                    None | Some(Value::Null) => None,
+                    Some(other) => Some(self.layer(other)?),
+                };
+                let (tx, id) = crate::annotations::add_shape(&self.doc, shape.clone(), layer)
+                    .map_err(refused)?;
+                self.commit(&tx)?;
+                self.remember(name.as_deref(), Some(Created::Shape(id)))
+            }
+            Operation::AddComment {
+                subject,
+                text,
+                author,
+                name,
+            } => {
+                let subject = self.waiver_subject(subject)?;
+                let (tx, id) =
+                    crate::annotations::add_comment(&self.doc, subject, text, author.as_deref())
+                        .map_err(refused)?;
+                self.commit(&tx)?;
+                self.remember(name.as_deref(), Some(Created::Comment(id)))
+            }
+            Operation::ImportCatalog { csv } => {
+                let (tx, imported) = crate::catalog_csv::import(&self.doc, csv).map_err(refused)?;
+                if let Some(first) = imported.unknown.first() {
+                    return Err(format!(
+                        "the project has no device `{first}` ({} row(s) name no device)",
+                        imported.unknown.len()
+                    ));
+                }
+                self.commit(&tx)
+            }
+            Operation::Group {
+                name,
+                elements,
+                alias,
+            } => {
+                let members = self.subjects(elements)?;
+                let (tx, id) =
+                    crate::annotations::group(&self.doc, name, &members).map_err(refused)?;
+                self.commit(&tx)?;
+                self.remember(alias.as_deref(), Some(Created::Group(id)))
+            }
+            Operation::Ungroup { group } => {
+                let id = match group {
+                    Value::String(name) if !self.names.contains_key(name) => self
+                        .doc
+                        .groups
+                        .iter()
+                        .find(|group| &group.name == name)
+                        .map(|group| group.id)
+                        .ok_or_else(|| format!("the project has no group `{name}`"))?,
+                    other => circuit_model::GroupId(self.named_or_id(other, "group")?),
+                };
+                let tx = crate::annotations::ungroup(&self.doc, id).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::Mirror { symbols } => {
+                let symbols = symbols
+                    .iter()
+                    .map(|symbol| self.symbol(symbol))
+                    .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+                let tx = ops::mirror(&self.doc, self.catalog, &symbols).map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::SetSheetKind { number, kind } => {
+                let kind = circuit_model::SheetKind::from_name(kind).ok_or_else(|| {
+                    format!("unknown sheet kind `{kind}`; use `schematic`, `single_line` or `panel_layout`")
+                })?;
+                let sheet = self
+                    .doc
+                    .sheets
+                    .iter()
+                    .find(|sheet| sheet.number == *number)
+                    .ok_or_else(|| format!("the project has no sheet {number}"))?;
+                let tx = sheets::set_sheet(
+                    &self.doc,
+                    circuit_model::Sheet {
+                        kind,
+                        ..sheet.clone()
+                    },
+                )
+                .map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::AddView {
+                device,
+                at,
+                size,
+                name,
+            } => {
+                let device = self.device(device)?;
+                let [width, height] = size.unwrap_or([6, 8]);
+                let (tx, id) =
+                    crate::annotations::add_view(&self.doc, device, point(*at), width, height)
+                        .map_err(refused)?;
+                self.commit(&tx)?;
+                self.remember(name.as_deref(), Some(Created::View(id)))
+            }
+            Operation::AddPlc {
+                name,
+                description,
+                at,
+                channels,
+            } => {
+                let channels = self.channels(channels)?;
+                let (tx, _) = crate::annotations::add_plc(
+                    &self.doc,
+                    name,
+                    description.as_deref(),
+                    at.map(point),
+                    channels,
+                )
+                .map_err(refused)?;
+                self.commit(&tx)
+            }
+            Operation::SetPlc {
+                plc,
+                description,
+                at,
+                channels,
+            } => {
+                let current = self
+                    .doc
+                    .plcs
+                    .iter()
+                    .find(|module| &module.name == plc)
+                    .cloned()
+                    .ok_or_else(|| format!("the project has no PLC module `{plc}`"))?;
+                let channels = match channels {
+                    Some(channels) => self.channels(channels)?,
+                    None => current.channels.clone(),
+                };
+                let module = circuit_model::PlcModule {
+                    description: description.apply(current.description.as_ref()),
+                    position: match at {
+                        Some(at) => at.map(point),
+                        None => current.position,
+                    },
+                    channels,
+                    ..current
+                };
+                let tx = crate::annotations::set_plc(&self.doc, module).map_err(refused)?;
+                self.commit(&tx)
+            }
             Operation::Renumber { sheet } => {
                 let scope = sheet.map_or(designators::Scope::All, designators::Scope::Sheet);
                 let tx = designators::renumber(&self.doc, scope).map_err(refused)?;
@@ -982,6 +1289,25 @@ impl Run<'_> {
     }
 
     /// A device by designator.
+    /// The channels of a PLC module, their devices by designator.
+    fn channels(&self, specs: &[ChannelSpec]) -> Result<Vec<circuit_model::PlcChannel>, String> {
+        specs
+            .iter()
+            .map(|spec| {
+                Ok(circuit_model::PlcChannel {
+                    address: spec.address.clone(),
+                    direction: spec.direction,
+                    device: spec
+                        .device
+                        .as_deref()
+                        .map(|reference| self.device(reference))
+                        .transpose()?,
+                    label: spec.label.clone(),
+                })
+            })
+            .collect()
+    }
+
     fn device(&self, reference: &str) -> Result<DeviceId, String> {
         self.doc
             .devices
@@ -1051,6 +1377,9 @@ impl Run<'_> {
                 (Some(Created::Junction(id)), "junction") => Ok(id.0),
                 (Some(Created::Wire(id)), "wire") => Ok(id.0),
                 (Some(Created::Text(id)), "text") => Ok(id.0),
+                (Some(Created::Shape(id)), "shape") => Ok(id.0),
+                (Some(Created::Group(id)), "group") => Ok(id.0),
+                (Some(Created::View(id)), "view") => Ok(id.0),
                 (Some(other), _) => Err(format!("`{name}` is a {}, not a {expect}", other.kind())),
                 (None, _) => Err(format!("no element is named `{name}`")),
             },
@@ -1108,6 +1437,10 @@ impl Run<'_> {
                     Some(Created::Junction(id)) => Subject::Junction(*id),
                     Some(Created::Wire(id)) => Subject::Wire(*id),
                     Some(Created::Text(id)) => Subject::Text(*id),
+                    Some(Created::Shape(id)) => Subject::Shape(*id),
+                    Some(Created::View(id)) => Subject::View(*id),
+                    Some(Created::Comment(id)) => Subject::Comment(*id),
+                    Some(Created::Group(id)) => Subject::Group(*id),
                     Some(Created::Layer(_)) => {
                         return Err(format!("`{name}` is a layer, which cannot be selected"));
                     }
@@ -1130,6 +1463,16 @@ impl Run<'_> {
                 Value::Object(object) if object.len() == 1 && object.contains_key("text") => {
                     Subject::Text(TextId(
                         self.named_or_id(object.get("text").unwrap_or(&Value::Null), "text")?,
+                    ))
+                }
+                Value::Object(object) if object.len() == 1 && object.contains_key("shape") => {
+                    Subject::Shape(circuit_model::ShapeId(
+                        self.named_or_id(object.get("shape").unwrap_or(&Value::Null), "shape")?,
+                    ))
+                }
+                Value::Object(object) if object.len() == 1 && object.contains_key("view") => {
+                    Subject::View(circuit_model::ViewId(
+                        self.named_or_id(object.get("view").unwrap_or(&Value::Null), "view")?,
                     ))
                 }
                 Value::Object(object) if object.len() == 1 && object.contains_key("device") => {
@@ -1257,6 +1600,93 @@ mod tests {
     fn documented(more: &str) -> Result<Applied, EditError> {
         let operations = format!("{}, {more}]", DOCUMENTED.trim_end_matches(']'));
         run(fresh(), &operations)
+    }
+
+    #[test]
+    fn the_operations_of_schema_5_add_shapes_comments_groups_views_and_plc_modules() {
+        let applied = documented(
+            r#"
+            { "op": "add_sheet", "origin": [200, 0] },
+            { "op": "set_sheet_kind", "number": 1, "kind": "panel_layout" },
+            { "op": "add_shape", "shape": { "rectangle": { "from": { "x": 0, "y": 40 }, "to": { "x": 8, "y": 44 } } }, "as": "box" },
+            { "op": "add_shape", "shape": { "qr": { "position": { "x": 20, "y": 40 }, "size": 6, "text": "S7" } } },
+            { "op": "add_comment", "subject": { "device": "S7" }, "text": "check", "author": "Ana", "as": "note" },
+            { "op": "group", "name": "Inputs", "elements": ["first", "second", "box"], "as": "inputs" },
+            { "op": "mirror", "symbols": ["late"] },
+            { "op": "add_view", "device": "S7", "at": [210, 10], "as": "panel_s7" },
+            { "op": "add_plc", "name": "A1", "description": "DI", "at": [210, 30],
+              "channels": [ { "address": "I0.0", "direction": "input", "device": "S7", "label": "start" } ] },
+            { "op": "set_plc", "plc": "A1", "at": null },
+            { "op": "move", "elements": [ { "shape": "box" }, { "view": "panel_s7" } ], "by": [1, 1] },
+            { "op": "ungroup", "group": "Inputs" }
+            "#,
+        )
+        .expect("the operations apply");
+        let doc = applied.doc;
+        assert_eq!(doc.sheets[0].kind, circuit_model::SheetKind::PanelLayout);
+        assert_eq!(doc.shapes.len(), 2);
+        assert_eq!(doc.shapes[0].kind.anchor(), Some(GridPoint::new(1, 41)));
+        assert_eq!(doc.comments[0].author.as_deref(), Some("Ana"));
+        assert!(doc.groups.is_empty());
+        assert!(doc.symbols.iter().any(|symbol| symbol.mirrored));
+        assert_eq!(doc.views[0].position, GridPoint::new(211, 11));
+        assert_eq!(doc.plcs[0].position, None);
+        assert_eq!(doc.plcs[0].channels[0].label.as_deref(), Some("start"));
+        assert!(doc.integrity_errors().is_empty());
+        assert!(matches!(applied.created["note"], Created::Comment(_)));
+
+        let (_, message) = refused(documented(
+            r#"{ "op": "add_plc", "name": "A1", "channels": [ { "address": "I0.0", "direction": "input", "device": "K99" } ] }"#,
+        ));
+        assert!(message.contains("K99"), "{message}");
+        let message = invalid(documented(
+            r#"{ "op": "add_shape", "shape": { "star": {} } }"#,
+        ));
+        assert!(message.contains("star"), "{message}");
+    }
+
+    #[test]
+    fn import_catalog_sets_the_data_of_the_devices_and_refuses_an_unknown_one() {
+        let doc = documented(
+            r#"{ "op": "import_catalog", "csv": "reference,part_no,datasheet\nS7,3SB3,docs/s7.pdf\nS8,3SB4,\n" }"#,
+        )
+        .expect("the import applies")
+        .doc;
+        let info = |reference: &str| {
+            doc.devices
+                .iter()
+                .find(|device| device.reference.0 == reference)
+                .and_then(|device| device.info.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(info("S7").part_no.as_deref(), Some("3SB3"));
+        assert_eq!(info("S7").datasheet.as_deref(), Some("docs/s7.pdf"));
+        assert_eq!(info("S8").part_no.as_deref(), Some("3SB4"));
+        let (_, message) = refused(documented(
+            r#"{ "op": "import_catalog", "csv": "reference,part_no\nK42,1\n" }"#,
+        ));
+        assert!(message.contains("K42"), "{message}");
+    }
+
+    #[test]
+    fn set_wire_spec_keeps_the_fields_left_out_and_clears_null_ones() {
+        let doc = documented(
+            r#"
+            { "op": "set_wire_spec", "wire": "link", "colour": "BU", "material": "Cu" },
+            { "op": "set_wire_spec", "wire": "link", "material": null, "insulation": "PVC" }
+            "#,
+        )
+        .expect("the operations apply")
+        .doc;
+        let spec = doc.wires[0].spec.clone().expect("data");
+        assert_eq!(spec.colour.as_deref(), Some("BU"));
+        assert_eq!(spec.material, None);
+        assert_eq!(spec.insulation.as_deref(), Some("PVC"));
+
+        let (_, message) = refused(documented(
+            r#"{ "op": "set_wire_spec", "wire": "link", "kind": "0123456789012345678901234567890123" }"#,
+        ));
+        assert!(message.contains("32 characters"), "{message}");
     }
 
     #[test]
@@ -1592,7 +2022,7 @@ mod tests {
         let doc = run(
             doc,
             r#"[
-              { "op": "project", "author": null, "company": "Acme" },
+              { "op": "project", "author": null, "company": "Acme", "client": "Plant 4" },
               { "op": "remove_sheet", "number": 2 }
             ]"#,
         )
@@ -1600,6 +2030,7 @@ mod tests {
         .doc;
         assert_eq!(doc.project.author, None);
         assert_eq!(doc.project.company.as_deref(), Some("Acme"));
+        assert_eq!(doc.project.client.as_deref(), Some("Plant 4"));
         assert_eq!(doc.project.revision.as_deref(), Some("B"));
         assert_eq!(doc.sheets.len(), 2);
     }

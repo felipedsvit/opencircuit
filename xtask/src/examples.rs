@@ -111,6 +111,15 @@ pub(crate) fn outputs() -> Vec<Result<(String, Vec<u8>), String>> {
 /// reports: the goldens of `circuit-report` and of `opencircuit report`.
 const REPORTED: &[(&str, &[circuit_report::Kind])] = &[
     (
+        "examples/panel-documentation/panel.ocircuit",
+        &[
+            circuit_report::Kind::Wires,
+            circuit_report::Kind::Devices,
+            circuit_report::Kind::Comments,
+            circuit_report::Kind::Plc,
+        ],
+    ),
+    (
         "examples/documentation/documentation.ocircuit",
         &[
             circuit_report::Kind::Bom,
@@ -159,6 +168,8 @@ fn reports() -> Vec<Result<(String, Vec<u8>), String>> {
                 circuit_report::Kind::Io => circuit_report::io(&doc, &catalog),
                 circuit_report::Kind::Problems => circuit_report::problems(&doc, &[]),
                 circuit_report::Kind::Devices => circuit_report::devices(&doc, &catalog),
+                circuit_report::Kind::Comments => circuit_report::comments(&doc),
+                circuit_report::Kind::Plc => circuit_report::plc(&doc, &catalog),
             };
             out.push(Ok((
                 format!("{directory}/{}.csv", kind.name()),
@@ -199,6 +210,11 @@ pub(crate) const EXAMPLES: &[Example] = &[
     Example {
         path: "examples/documentation/documentation.ocircuit",
         build: documentation,
+        library: None,
+    },
+    Example {
+        path: "examples/panel-documentation/panel.ocircuit",
+        build: panel_documentation,
         library: None,
     },
     Example {
@@ -523,6 +539,7 @@ fn signal_arrows() -> Built<Schematic> {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         });
     }
     Ok(doc)
@@ -605,6 +622,7 @@ fn starter_sheets() -> Built<Schematic> {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         });
     }
     Ok(doc)
@@ -650,6 +668,7 @@ fn documentation() -> Built<Schematic> {
                 part_no: Some(part_no.to_owned()),
                 description: Some(description.to_owned()),
                 location: Some(location.to_owned()),
+                datasheet: None,
             });
         }
     }
@@ -669,6 +688,191 @@ fn documentation() -> Built<Schematic> {
             layer: None,
         });
     }
+    Ok(doc)
+}
+
+/// The documented starter with what schema version 5 adds (ADR-0018): a
+/// client, the data of the control wires, a revision cloud, a comment, a
+/// datasheet, a single-line diagram and a panel layout that show the
+/// devices of the schematic again, a QR code, and a PLC module that reads
+/// the pushbuttons and drives the contactor. None of it changes the circuit:
+/// it simulates as the starter does.
+fn panel_documentation() -> Built<Schematic> {
+    use circuit_model::{
+        Comment, CommentId, DeviceView, PlcChannel, PlcDirection, PlcId, PlcModule, Shape, ShapeId,
+        ShapeKind, SheetKind, Subject, ViewId, WireSpec,
+    };
+    let mut doc = documentation()?;
+    doc.project.name = "Partida direta documentada".to_owned();
+    doc.project.client = Some("Cliente Exemplo".to_owned());
+    let mut next = || -> Result<u64, IdExhausted> {
+        let id = doc.next_id;
+        doc.next_id = id.checked_add(1).ok_or(IdExhausted)?;
+        Ok(id)
+    };
+    let mut ids = Vec::new();
+    for _ in 0..24 {
+        ids.push(next()?);
+    }
+    let mut id = ids.into_iter();
+    let mut take = || id.next().ok_or(IdExhausted);
+    let device = |doc: &Schematic, reference: &str| {
+        doc.devices
+            .iter()
+            .find(|device| device.reference.0 == reference)
+            .map(|device| device.id)
+            .ok_or(IdExhausted)
+    };
+    let (q1, k1, f1, m1, s1, s2) = (
+        device(&doc, "Q1")?,
+        device(&doc, "K1")?,
+        device(&doc, "F1")?,
+        device(&doc, "M1")?,
+        device(&doc, "S1")?,
+        device(&doc, "S2")?,
+    );
+    if let Some(info) = doc
+        .devices
+        .iter_mut()
+        .find(|device| device.id == k1)
+        .and_then(|device| device.info.as_mut())
+    {
+        info.datasheet = Some("https://example.com/datasheets/ctr-9.pdf".to_owned());
+    }
+    // The control wires: black, 1 mm², PVC.
+    for wire in doc.wires.iter_mut().take(4) {
+        wire.spec = Some(WireSpec {
+            colour: Some("BK".to_owned()),
+            cross_section: Some("1 mm\u{b2}".to_owned()),
+            insulation: Some("PVC".to_owned()),
+            ..WireSpec::default()
+        });
+    }
+    for (number, title, x, kind) in [
+        (3, "Diagrama unifilar", 226, SheetKind::SingleLine),
+        (4, "Leiaute do painel", 346, SheetKind::PanelLayout),
+    ] {
+        doc.sheets.push(circuit_model::Sheet {
+            id: circuit_model::SheetId(take()?),
+            number,
+            title: title.to_owned(),
+            origin: GridPoint::new(x, -8),
+            size: circuit_model::SheetSize::A4,
+            orientation: circuit_model::Orientation::Landscape,
+            zones: circuit_model::Zones {
+                columns: 8,
+                rows: 6,
+            },
+            kind,
+        });
+    }
+    let mut view = |doc: &mut Schematic, device, x, y, width, height| -> Result<(), IdExhausted> {
+        doc.views.push(DeviceView {
+            id: ViewId(take()?),
+            device_id: device,
+            position: GridPoint::new(x, y),
+            width,
+            height,
+            layer: None,
+        });
+        Ok(())
+    };
+    // The single-line diagram: the power path from the supply to the motor.
+    for (device, y) in [(q1, 4), (k1, 14), (f1, 24), (m1, 34)] {
+        view(&mut doc, device, 240, y, 4, 4)?;
+    }
+    // The panel: the main switch, the contactor and the relay on a rail.
+    for (device, x) in [(q1, 356), (k1, 366), (f1, 376)] {
+        view(&mut doc, device, x, 4, 6, 10)?;
+    }
+    let mut shape = |doc: &mut Schematic, kind: ShapeKind| -> Result<(), IdExhausted> {
+        doc.shapes.push(Shape {
+            id: ShapeId(take()?),
+            kind,
+            layer: None,
+        });
+        Ok(())
+    };
+    shape(
+        &mut doc,
+        ShapeKind::Polyline {
+            points: vec![GridPoint::new(242, -4), GridPoint::new(242, 4)],
+            closed: false,
+        },
+    )?;
+    for y in [8, 18, 28] {
+        shape(
+            &mut doc,
+            ShapeKind::Polyline {
+                points: vec![GridPoint::new(242, y), GridPoint::new(242, y + 6)],
+                closed: false,
+            },
+        )?;
+    }
+    // The enclosure and the rail of the panel.
+    shape(
+        &mut doc,
+        ShapeKind::Rectangle {
+            from: GridPoint::new(350, 0),
+            to: GridPoint::new(400, 34),
+        },
+    )?;
+    shape(
+        &mut doc,
+        ShapeKind::Polyline {
+            points: vec![GridPoint::new(352, 6), GridPoint::new(398, 6)],
+            closed: false,
+        },
+    )?;
+    shape(
+        &mut doc,
+        ShapeKind::Qr {
+            position: GridPoint::new(404, 0),
+            size: 10,
+            text: "https://example.com/projects/partida-direta".to_owned(),
+        },
+    )?;
+    // Revision B changed the stop circuit.
+    shape(
+        &mut doc,
+        ShapeKind::Cloud {
+            from: GridPoint::new(2, 0),
+            to: GridPoint::new(12, 8),
+            revision: Some("B".to_owned()),
+        },
+    )?;
+    doc.comments.push(Comment {
+        id: CommentId(take()?),
+        subject: Subject::Device(k1),
+        text: "Coil 24 V DC; check the voltage on site".to_owned(),
+        author: Some("OpenCircuit".to_owned()),
+    });
+    doc.plcs.push(PlcModule {
+        id: PlcId(take()?),
+        name: "A1".to_owned(),
+        description: Some("Digital I/O".to_owned()),
+        position: Some(GridPoint::new(356, 18)),
+        channels: vec![
+            PlcChannel {
+                address: "I0.0".to_owned(),
+                direction: PlcDirection::Input,
+                device: Some(s1),
+                label: Some("start".to_owned()),
+            },
+            PlcChannel {
+                address: "I0.1".to_owned(),
+                direction: PlcDirection::Input,
+                device: Some(s2),
+                label: Some("stop".to_owned()),
+            },
+            PlcChannel {
+                address: "Q0.0".to_owned(),
+                direction: PlcDirection::Output,
+                device: Some(k1),
+                label: Some("run".to_owned()),
+            },
+        ],
+    });
     Ok(doc)
 }
 

@@ -38,7 +38,9 @@
     deny(clippy::indexing_slicing, clippy::arithmetic_side_effects)
 )]
 
+pub mod annotations;
 pub mod arrange;
+pub mod catalog_csv;
 pub mod commandline;
 pub mod copy;
 pub mod designators;

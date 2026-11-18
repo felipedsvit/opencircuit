@@ -38,7 +38,18 @@ pub fn set_device_info(
         part_no: clean(info.part_no),
         description: clean(info.description),
         location: clean(info.location),
+        datasheet: clean(info.datasheet),
     };
+    if info
+        .datasheet
+        .as_deref()
+        .is_some_and(|link| !circuit_model::annotations::is_valid_datasheet(link))
+    {
+        return Err(CommandError::Invalid(
+            "a datasheet is an http, https or file link, or a relative path, with no space"
+                .to_owned(),
+        ));
+    }
     let info = (!info.is_empty()).then_some(info);
     let mut tx = Transaction::new("Edit catalog data", doc.next_id);
     if info != found.info {
@@ -144,6 +155,47 @@ pub fn set_wire_number(
     Ok(tx)
 }
 
+/// Set what a wire is made of (ADR-0018): each field of `spec` that is
+/// empty is left out, and a specification with no field clears it.
+///
+/// # Errors
+///
+/// [`CommandError::Missing`] for a wire that does not exist,
+/// [`CommandError::Locked`] for one on a locked layer, and
+/// [`CommandError::Invalid`] for a field longer than
+/// [`MAX_SPEC_CHARS`](circuit_model::annotations::MAX_SPEC_CHARS) characters
+/// or with a control character.
+pub fn set_wire_spec(
+    doc: &Schematic,
+    wire: WireId,
+    spec: circuit_model::WireSpec,
+) -> Result<Transaction, CommandError> {
+    let found = doc
+        .wires
+        .iter()
+        .find(|candidate| candidate.id == wire)
+        .ok_or(CommandError::Missing(circuit_model::Subject::Wire(wire)))?;
+    crate::layers::ensure_wire_unlocked(doc, wire)?;
+    let mut spec = spec;
+    for name in circuit_model::WireSpec::FIELDS {
+        if let Some(field) = spec.field_mut(name) {
+            *field = clean(field.take());
+        }
+    }
+    if !spec.is_valid() {
+        return Err(CommandError::Invalid(format!(
+            "each field of a wire specification is 1 to {} characters with no control character",
+            circuit_model::annotations::MAX_SPEC_CHARS
+        )));
+    }
+    let spec = (!spec.is_empty()).then_some(spec);
+    let mut tx = Transaction::new("Set wire data", doc.next_id);
+    if spec != found.spec {
+        tx.edits.push(Edit::SetWireSpec { wire, spec });
+    }
+    Ok(tx)
+}
+
 /// Change the words of a text note; see [`crate::ops::set_text`].
 ///
 /// # Errors
@@ -196,6 +248,42 @@ mod tests {
         b.wire(circuit_model::builder::pin(symbol, "p2"), junction)
             .unwrap();
         b.finish()
+    }
+
+    #[test]
+    fn the_data_of_a_wire_is_cleaned_bounded_undone_and_cleared() {
+        let mut doc = doc();
+        let wire = doc.wires[0].id;
+        let mut history = History::new();
+        let spec = circuit_model::WireSpec {
+            colour: Some(" BU ".to_owned()),
+            kind: Some("  ".to_owned()),
+            ..circuit_model::WireSpec::default()
+        };
+        let tx = set_wire_spec(&doc, wire, spec).unwrap();
+        history.execute(&mut doc, tx).unwrap();
+        assert_eq!(
+            doc.wires[0].spec,
+            Some(circuit_model::WireSpec {
+                colour: Some("BU".to_owned()),
+                ..circuit_model::WireSpec::default()
+            })
+        );
+        let long = circuit_model::WireSpec {
+            material: Some("x".repeat(33)),
+            ..circuit_model::WireSpec::default()
+        };
+        assert!(matches!(
+            set_wire_spec(&doc, wire, long),
+            Err(CommandError::Invalid(_))
+        ));
+        assert!(set_wire_spec(&doc, WireId(999), circuit_model::WireSpec::default()).is_err());
+        // Nothing left: the wire has no data.
+        let tx = set_wire_spec(&doc, wire, circuit_model::WireSpec::default()).unwrap();
+        history.execute(&mut doc, tx).unwrap();
+        assert_eq!(doc.wires[0].spec, None);
+        history.undo(&mut doc).unwrap();
+        assert!(doc.wires[0].spec.is_some());
     }
 
     #[test]

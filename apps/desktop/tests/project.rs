@@ -185,6 +185,7 @@ fn the_project_tree_lists_the_sheets_and_a_click_on_a_device_selects_its_symbol(
                 columns: 4,
                 rows: 2,
             },
+            kind: Default::default(),
         });
     }
     let mut harness = drawing(&doc);

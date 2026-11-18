@@ -57,10 +57,21 @@ fn is_locked(doc: &Schematic, states: &LayerStates, subject: &Subject) -> bool {
             .texts
             .iter()
             .any(|t| t.id == *id && states.is_locked(t.layer)),
+        Subject::Shape(id) => doc
+            .shapes
+            .iter()
+            .any(|s| s.id == *id && states.is_locked(s.layer)),
+        Subject::View(id) => doc
+            .views
+            .iter()
+            .any(|v| v.id == *id && states.is_locked(v.layer)),
         Subject::Junction(_)
         | Subject::Supply(_)
         | Subject::Sheet(_)
         | Subject::Layer(_)
+        | Subject::Comment(_)
+        | Subject::Group(_)
+        | Subject::Plc(_)
         | Subject::Document => false,
     }
 }
@@ -107,7 +118,11 @@ pub(crate) fn ensure_movable_unlocked(
         subjects.iter().filter(|subject| {
             matches!(
                 subject,
-                Subject::Symbol(_) | Subject::Device(_) | Subject::Text(_)
+                Subject::Symbol(_)
+                    | Subject::Device(_)
+                    | Subject::Text(_)
+                    | Subject::Shape(_)
+                    | Subject::View(_)
             )
         }),
     )
@@ -277,11 +292,30 @@ pub fn assign_layer(
                         .map(|s| (Subject::Symbol(s.id), s.layer)),
                 );
             }
+            Subject::Shape(id) => targets.push((
+                subject.clone(),
+                doc.shapes
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .ok_or_else(|| CommandError::Missing(subject.clone()))?
+                    .layer,
+            )),
+            Subject::View(id) => targets.push((
+                subject.clone(),
+                doc.views
+                    .iter()
+                    .find(|v| v.id == *id)
+                    .ok_or_else(|| CommandError::Missing(subject.clone()))?
+                    .layer,
+            )),
             Subject::Junction(_)
             | Subject::Pin(_)
             | Subject::Supply(_)
             | Subject::Sheet(_)
             | Subject::Layer(_)
+            | Subject::Comment(_)
+            | Subject::Group(_)
+            | Subject::Plc(_)
             | Subject::Document => {}
         }
     }

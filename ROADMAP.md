@@ -424,19 +424,30 @@ Decisions, to be confirmed in #118:
 
 ### M9.3 — Schema version 5 (ADR-0018)
 
-- [ ] The client in the project data.
-- [ ] Wires: a stored colour, cross-section, type, material and insulation, in
-  the wires report.
-- [ ] Revision clouds, comments on an element, and shapes (polyline,
-  rectangle, circle, arc) as annotations.
-- [ ] Groups of elements, and mirrored symbols.
-- [ ] QR codes as annotations.
-- [ ] Manufacturer data imported from CSV into the catalog data of devices, and
-  a datasheet link per device opened by the system.
-- [ ] Sheet kinds: single-line diagram and panel layout, with cross-references
-  to the schematic.
-- [ ] PLC modules with channels and an I/O mapping report (with the Modbus
-  map).
+- [x] ADR-0018 and schema version 5, with the migration from version 4
+  (`crates/circuit-project/src/migrate.rs`) and the model of every item below
+  (`crates/circuit-model/src/annotations.rs`, warnings `OC-STR-023` to
+  `OC-STR-025`).
+- [x] The client in the project data (title block; inspector Project tree >
+  Project data; `apps/desktop/tests/schema5.rs`).
+- [x] Wires: a stored colour, cross-section, type, material and insulation, in
+  the wires report (`set_wire_spec`; inspector Wire data;
+  `apps/desktop/tests/schema5.rs`).
+- [x] Revision clouds, comments on an element, and shapes (polyline,
+  rectangle, circle, arc) as annotations (`circuit_commands::annotations`,
+  `shape` and `comment` commands, inspector Project tree > Comments).
+- [x] Groups of elements, and mirrored symbols (Modify menu, M,
+  `group`/`ungroup`/`mirror`).
+- [x] QR codes as annotations (`qrcodegen`, `qr` command).
+- [x] Manufacturer data imported from CSV into the catalog data of devices, and
+  a datasheet link per device opened by the system
+  (`circuit_commands::catalog_csv`, Modify > Import catalog data,
+  `import_catalog`; inspector Catalog data > Open datasheet).
+- [x] Sheet kinds: single-line diagram and panel layout, with cross-references
+  to the schematic (device views with the schematic place of their device;
+  `OC-STR-024`; `examples/panel-documentation`).
+- [x] PLC modules with channels and an I/O mapping report (with the Modbus
+  map): `opencircuit report --kind plc`, `OC-STR-025`.
 
 ### M9.4 — Symbols and exchange
 

@@ -207,6 +207,7 @@ mod tests {
                 columns: 8,
                 rows: 6,
             },
+            kind: Default::default(),
         }
     }
 
