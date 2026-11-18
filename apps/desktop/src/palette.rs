@@ -28,6 +28,11 @@ pub(crate) const KEYS: &[(&str, &str)] = &[
     ("0", "fit the drawing"),
     ("F", "fit the selection"),
     ("T", "trace the net of the selection"),
+    ("Ctrl+K", "command palette: run a command, find an element"),
+    ("Ctrl+H", "find and replace"),
+    ("F2", "edit the label of the selection"),
+    ("G", "type the point of the next click"),
+    ("Alt+Left", "previous view"),
 ];
 
 /// Width and height of the cell of one symbol, in points.

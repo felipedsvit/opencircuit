@@ -44,6 +44,7 @@ pub mod designators;
 pub mod documentation;
 mod edit;
 mod error;
+pub mod find;
 mod history;
 pub mod layers;
 pub mod ops;

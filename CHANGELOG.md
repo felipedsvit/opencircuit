@@ -37,6 +37,34 @@ here when it lands.
   a project, one row per element added, removed or changed with the fields
   that differ, as text, JSON or CSV. It exits with 1 when they differ. A project
   saved by an older build compares as the same document after its migration.
+- **File menu:** New from template (four starters built from the examples),
+  Open recent (the last ten projects opened or saved, kept in the user's data
+  folder; a file that is gone is taken off the list) and Save a copy (writes
+  the project to another file and keeps working on this one, unsaved changes
+  included).
+- **Command palette** (Ctrl+K, or Help > Command palette, in both modes): a
+  field that runs a command of the window by name (new, open, save, save a
+  copy, undo, redo, fit, edit, simulate, export, load library, keys) or finds
+  an element of the project (devices by designator, model, catalog data or
+  parameter; wires by number; sheets; text notes) and selects it. Arrows move,
+  Enter chooses, Esc closes.
+- **Find and replace** (Modify > Find and replace, Ctrl+H, in edit mode;
+  `{ "op": "replace" }` in edit files): replaces a text in the designators,
+  text notes and text parameters in one undoable step, shows how many changes
+  it makes, and refuses a result with an invalid or repeated designator.
+- **Catalog data of several devices**: with two or more devices selected, of
+  any models, the inspector has a closed section "Catalog data of N devices"
+  whose fields set the manufacturer, part number, description or location of
+  all of them.
+- **A label typed over the drawing** (F2, Modify > Edit label, or the context
+  menu): the designator of the selected symbol's device, the words of a text
+  note or the number of a wire. Enter commits, Esc drops it.
+- **Navigation:** View > Previous view (Alt+Left) goes back through the last
+  32 views left by a zoom, a pan or a jump; G opens a field at the pointer for
+  the point of the next click (`x,y`, or `@dx,dy` from the pointer); and three
+  View options, off unless turned on: snap the wire tool to the ends, bends,
+  middles and crossings of wires (`circuit_editor::snap_with`), outline the
+  element under the pointer, and rulers along the drawing.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

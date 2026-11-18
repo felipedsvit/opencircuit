@@ -47,6 +47,78 @@ pub fn set_device_info(
     Ok(tx)
 }
 
+/// One field of the catalog data of a device.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InfoField {
+    /// The manufacturer.
+    Manufacturer,
+    /// The part number.
+    PartNo,
+    /// The description.
+    Description,
+    /// Where the device is mounted.
+    Location,
+}
+
+impl InfoField {
+    /// Every field, in the order the window shows them.
+    pub const ALL: [Self; 4] = [
+        Self::Manufacturer,
+        Self::PartNo,
+        Self::Description,
+        Self::Location,
+    ];
+
+    /// The field of `info`.
+    #[must_use]
+    pub fn of(self, info: &DeviceInfo) -> Option<&str> {
+        match self {
+            Self::Manufacturer => info.manufacturer.as_deref(),
+            Self::PartNo => info.part_no.as_deref(),
+            Self::Description => info.description.as_deref(),
+            Self::Location => info.location.as_deref(),
+        }
+    }
+
+    fn set(self, info: &mut DeviceInfo, value: Option<String>) {
+        match self {
+            Self::Manufacturer => info.manufacturer = value,
+            Self::PartNo => info.part_no = value,
+            Self::Description => info.description = value,
+            Self::Location => info.location = value,
+        }
+    }
+}
+
+/// Set one field of the catalog data of several devices to the same text
+/// (an empty text clears it), keeping their other fields, in one
+/// transaction.
+///
+/// # Errors
+///
+/// As [`set_device_info`], for the first device that refuses.
+pub fn set_common_info(
+    doc: &Schematic,
+    devices: &std::collections::BTreeSet<DeviceId>,
+    field: InfoField,
+    value: &str,
+) -> Result<Transaction, CommandError> {
+    let mut tx = Transaction::new("Edit catalog data", doc.next_id);
+    for device in devices {
+        let current = doc
+            .devices
+            .iter()
+            .find(|candidate| candidate.id == *device)
+            .ok_or(CommandError::Missing(circuit_model::Subject::Device(
+                *device,
+            )))?;
+        let mut info = current.info.clone().unwrap_or_default();
+        field.set(&mut info, Some(value.to_owned()));
+        tx.edits.extend(set_device_info(doc, *device, info)?.edits);
+    }
+    Ok(tx)
+}
+
 /// Set (`Some`) or clear (`None`, or an empty text) the number that replaces
 /// the generated one on a wire.
 ///
@@ -124,6 +196,51 @@ mod tests {
         b.wire(circuit_model::builder::pin(symbol, "p2"), junction)
             .unwrap();
         b.finish()
+    }
+
+    #[test]
+    fn one_field_is_set_on_several_devices_keeping_the_others_in_one_step() {
+        let mut b = SchematicBuilder::new("common");
+        let k1 = b.device("K1", "contactor.generic", &[]).unwrap();
+        let k2 = b.device("K2", "contactor.generic", &[]).unwrap();
+        let mut doc = b.finish();
+        doc.devices[0].info = Some(DeviceInfo {
+            part_no: Some("C-9".to_owned()),
+            ..DeviceInfo::default()
+        });
+        let mut history = History::new();
+        let both = std::collections::BTreeSet::from([k1, k2]);
+
+        let tx = set_common_info(&doc, &both, InfoField::Manufacturer, " Acme ").unwrap();
+        history.execute(&mut doc, tx).unwrap();
+
+        let infos: Vec<_> = doc
+            .devices
+            .iter()
+            .map(|d| d.info.clone().unwrap())
+            .collect();
+        assert!(
+            infos
+                .iter()
+                .all(|info| info.manufacturer.as_deref() == Some("Acme"))
+        );
+        assert_eq!(infos[0].part_no.as_deref(), Some("C-9"));
+        assert_eq!(history.undo_label(), Some("Edit catalog data"));
+        history.undo(&mut doc).unwrap();
+        assert!(doc.devices[1].info.is_none());
+
+        let clear = set_common_info(&doc, &both, InfoField::PartNo, "").unwrap();
+        history.execute(&mut doc, clear).unwrap();
+        assert!(doc.devices.iter().all(|d| d.info.is_none()));
+        assert!(matches!(
+            set_common_info(
+                &doc,
+                &std::collections::BTreeSet::from([DeviceId(999)]),
+                InfoField::Location,
+                "X"
+            ),
+            Err(CommandError::Missing(Subject::Device(_)))
+        ));
     }
 
     #[test]

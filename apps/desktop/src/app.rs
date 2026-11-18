@@ -10,7 +10,9 @@ use circuit_commands::commandline::{
 };
 use circuit_commands::designators::{self, Scope};
 use circuit_commands::{ops, waivers};
-use circuit_editor::{Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapTarget, Tool, snap};
+use circuit_editor::{
+    Editor, Hit, Key, Modifiers, Outcome, Pointer, Snap, SnapOptions, SnapTarget, Tool, snap_with,
+};
 use circuit_model::library::{Library, MAX_LIBRARY_BYTES};
 use circuit_model::{
     CatalogError, Category, ComponentCatalog, Control, DeviceId, Diagnostic, DiagnosticCode,
@@ -45,6 +47,8 @@ const SNAP_POINTS: f32 = 12.0;
 const SNAP_MAX: i64 = 2 * SUBUNITS_PER_GRID;
 /// Zoom factor of one press of `+`.
 const KEY_ZOOM: f32 = 1.25;
+/// Most views Previous view remembers.
+const MAX_VIEWS_BACK: usize = 32;
 
 /// An action that would drop unsaved changes, waiting for the user to save,
 /// discard or cancel.
@@ -58,6 +62,9 @@ enum Pending {
     OpenDialog,
     /// Close the window.
     Close,
+    /// Start a new project from the template at this place of
+    /// [`crate::templates::TEMPLATES`].
+    Template(usize),
     /// Open a saved version as a new, unsaved project.
     #[cfg(not(target_arch = "wasm32"))]
     Restore(crate::versions::Version),
@@ -233,6 +240,31 @@ pub struct DesktopApp {
     /// elements differ from the project as it was when the window opened.
     #[cfg(not(target_arch = "wasm32"))]
     history: Option<Vec<(crate::versions::Version, usize)>>,
+    /// The projects opened or saved last; off unless `main` turns it on.
+    #[cfg(not(target_arch = "wasm32"))]
+    recent: Option<crate::recent::RecentProjects>,
+    /// The command palette (Ctrl+K).
+    command_palette: crate::command_palette::PaletteState,
+    /// The find and replace window (Ctrl+H).
+    find_replace: crate::find_replace::FindReplace,
+    /// The label being typed over the drawing (F2): the element, its text,
+    /// and whether the field still has to take the keyboard.
+    label_edit: Option<(Subject, String, bool)>,
+    /// The views left with a zoom, a pan or a jump, newest last (View >
+    /// Previous view, Alt+Left).
+    view_back: Vec<Camera>,
+    /// The view as it was when the pointer and the wheel last rested.
+    view_settled: Option<Camera>,
+    /// The wire tool also snaps to the ends, middles and crossings of wires.
+    wire_points: bool,
+    /// The element under the pointer is outlined.
+    hover_highlight: bool,
+    /// Rulers along the top and left edges of the drawing.
+    rulers: bool,
+    /// A point being typed for the next click (G): the text, the grid point
+    /// a relative point starts from, where the field is on screen, and
+    /// whether the field still has to take the keyboard.
+    point_entry: Option<(String, GridPoint, egui::Pos2, bool)>,
 }
 
 impl DesktopApp {
@@ -289,6 +321,404 @@ impl DesktopApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enable_version_history(&mut self, store: crate::versions::VersionStore) {
         self.versions = Some(store);
+    }
+
+    /// Keep the list of the projects opened or saved last in `recent`, and
+    /// show it in File > Open recent.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_recent_projects(&mut self, recent: crate::recent::RecentProjects) {
+        self.recent = Some(recent);
+    }
+
+    /// The projects in File > Open recent, newest first; empty when the list
+    /// is off.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn recent_projects(&self) -> Vec<PathBuf> {
+        self.recent
+            .as_ref()
+            .map(crate::recent::RecentProjects::list)
+            .unwrap_or_default()
+    }
+
+    /// Put the file of the project first in the list of recent projects.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_recent(&mut self) {
+        let (Some(recent), Some(path)) =
+            (&self.recent, self.session.as_ref().and_then(Session::path))
+        else {
+            return;
+        };
+        // Best effort: a list that cannot be written only loses an entry.
+        let _ = recent.record(path);
+    }
+
+    /// Go back to the view before the last zoom, pan or jump, as Alt+Left
+    /// does. Returns whether there was one.
+    pub fn previous_view(&mut self) -> bool {
+        match self.view_back.pop() {
+            Some(camera) => {
+                self.camera = camera;
+                self.view_settled = Some(camera);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// How many views Previous view can go back.
+    #[must_use]
+    pub fn views_back(&self) -> usize {
+        self.view_back.len()
+    }
+
+    /// Snap the wire tool to the ends, middles and crossings of wires too.
+    pub fn set_wire_point_snap(&mut self, on: bool) {
+        self.wire_points = on;
+    }
+
+    /// Start typing the grid point of the next click, as G does in edit
+    /// mode: `x,y`, or `@dx,dy` from the point under the pointer.
+    pub fn type_point(&mut self) {
+        if self.mode != Mode::Edit || self.session.is_none() {
+            return;
+        }
+        let from = self.cursor.unwrap_or(GridPoint::new(0, 0));
+        let at = self
+            .grid_to_screen(from)
+            .map_or(egui::pos2(200.0, 200.0), |[x, y]| {
+                egui::pos2(x + 12.0, y + 12.0)
+            });
+        self.point_entry = Some((String::new(), from, at, true));
+    }
+
+    /// Whether a point is being typed.
+    #[must_use]
+    pub const fn typing_point(&self) -> bool {
+        self.point_entry.is_some()
+    }
+
+    /// Press and release the primary button at `point` with the tool in
+    /// hand, as a click on the drawing does.
+    fn click_at(&mut self, point: GridPoint) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let (doc, catalog) = (session.document(), session.catalog());
+        self.editor.pointer_move(doc, catalog, point);
+        let down = self
+            .editor
+            .pointer_down(doc, catalog, point, Modifiers::default());
+        self.apply(down);
+        if let Some(session) = &self.session {
+            let up = self
+                .editor
+                .pointer_up(session.document(), session.catalog(), point);
+            self.apply(up);
+        }
+    }
+
+    /// The field of a typed point; Enter clicks there, Esc drops it.
+    fn point_entry(&mut self, ui: &Ui) {
+        if self.mode != Mode::Edit {
+            self.point_entry = None;
+        }
+        let Some((text, from, at, focus)) = &mut self.point_entry else {
+            return;
+        };
+        let mut finished = None;
+        egui::Area::new(ui.scope_id().with(egui::IdSalt::new("point entry")))
+            .order(egui::Order::Foreground)
+            .fixed_pos(*at)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let label = ui.label(tr("Point"));
+                    let field = ui
+                        .add(
+                            egui::TextEdit::singleline(text)
+                                .id_salt("point entry input")
+                                .hint_text(tr("x,y or @dx,dy"))
+                                .desired_width(110.0),
+                        )
+                        .labelled_by(label.id);
+                    if std::mem::take(focus) {
+                        field.request_focus();
+                    }
+                    if field.lost_focus() {
+                        let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
+                        finished = Some(enter.then(|| commandline::typed_point(text, *from)));
+                    }
+                });
+            });
+        match finished {
+            None => {}
+            Some(None) => self.point_entry = None,
+            Some(Some(None)) => {
+                self.error = Some(tr("Type a point as x,y or @dx,dy.").to_owned());
+                self.point_entry = None;
+            }
+            Some(Some(Some(point))) => {
+                self.point_entry = None;
+                self.click_at(point);
+            }
+        }
+    }
+
+    /// Open the find and replace window, as Ctrl+H does in edit mode.
+    pub fn open_find_replace(&mut self) {
+        self.find_replace.open();
+    }
+
+    /// Whether the find and replace window is open.
+    #[must_use]
+    pub const fn find_replace_open(&self) -> bool {
+        self.find_replace.is_open()
+    }
+
+    /// Start typing the label of the selected element over the drawing, as
+    /// F2 does: the designator of a symbol's device, the words of a text
+    /// note or the number of a wire. Nothing happens unless one such element
+    /// is selected in edit mode.
+    pub fn edit_label(&mut self) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        if self.mode != Mode::Edit {
+            return;
+        }
+        let mut selected = self.editor.selection().iter();
+        let (Some(subject), None) = (selected.next(), selected.next()) else {
+            return;
+        };
+        let doc = session.document();
+        let text = match subject {
+            Subject::Symbol(id) => doc
+                .symbols
+                .iter()
+                .find(|symbol| symbol.id == *id)
+                .and_then(|symbol| doc.devices.iter().find(|d| d.id == symbol.device_id))
+                .map(|device| device.reference.0.clone()),
+            Subject::Text(id) => doc
+                .texts
+                .iter()
+                .find(|note| note.id == *id)
+                .map(|note| note.text.clone()),
+            Subject::Wire(id) => {
+                let nets = StaticNets::build(doc, session.catalog());
+                let numbers = circuit_model::WireNumbers::build(doc, session.catalog(), &nets);
+                Some(numbers.of_wire(*id).unwrap_or_default().to_owned())
+            }
+            _ => None,
+        };
+        if let Some(text) = text {
+            self.label_edit = Some((subject.clone(), text, true));
+        }
+    }
+
+    /// Whether a label is being typed over the drawing.
+    #[must_use]
+    pub const fn label_editing(&self) -> bool {
+        self.label_edit.is_some()
+    }
+
+    /// The field of the label over its element; Enter commits it, anything
+    /// else that takes the focus away drops it.
+    fn label_editor(&mut self, ui: &Ui, scene: &Scene, events: &canvas::CanvasEvents) {
+        if self.mode != Mode::Edit {
+            self.label_edit = None;
+        }
+        let Some((subject, text, focus)) = &mut self.label_edit else {
+            return;
+        };
+        let Some(bounds) = scene.subject_bounds(subject) else {
+            self.label_edit = None;
+            return;
+        };
+        let [x, y] = self.camera.to_screen(bounds.min);
+        let at = egui::pos2(events.origin[0] + x, events.origin[1] + y - 28.0);
+        let mut finished = None;
+        egui::Area::new(ui.scope_id().with(egui::IdSalt::new("label editor")))
+            .order(egui::Order::Foreground)
+            .fixed_pos(at)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let label = ui.label(tr("Label"));
+                    let field = ui
+                        .add(
+                            egui::TextEdit::singleline(text)
+                                .id_salt("label editor input")
+                                .desired_width(160.0),
+                        )
+                        .labelled_by(label.id);
+                    if std::mem::take(focus) {
+                        field.request_focus();
+                    }
+                    if field.lost_focus() {
+                        finished = Some(ui.input(|input| input.key_pressed(egui::Key::Enter)));
+                    }
+                });
+            });
+        let Some(commit) = finished else {
+            return;
+        };
+        let Some((subject, text)) = self.label_edit.take().map(|(s, t, _)| (s, t)) else {
+            return;
+        };
+        let Some(session) = &self.session else {
+            return;
+        };
+        if !commit {
+            return;
+        }
+        let doc = session.document();
+        let text = text.trim();
+        let request = match subject {
+            Subject::Symbol(id) => doc
+                .symbols
+                .iter()
+                .find(|symbol| symbol.id == id)
+                .map(|symbol| ops::set_reference(doc, symbol.device_id, text)),
+            Subject::Text(id) => Some(ops::set_text(doc, id, text)),
+            Subject::Wire(id) => {
+                let nets = StaticNets::build(doc, session.catalog());
+                let numbers = circuit_model::WireNumbers::build(doc, session.catalog(), &nets);
+                // The number as it is generated needs no override.
+                (numbers.of_wire(id) != Some(text))
+                    .then(|| circuit_commands::documentation::set_wire_number(doc, id, Some(text)))
+            }
+            _ => None,
+        };
+        if let Some(request) = request {
+            self.commit(request);
+        }
+    }
+
+    /// Open the command palette, as Ctrl+K does.
+    pub fn open_command_palette(&mut self) {
+        self.command_palette.open();
+    }
+
+    /// Whether the command palette is open.
+    #[must_use]
+    pub const fn command_palette_open(&self) -> bool {
+        self.command_palette.is_open()
+    }
+
+    /// The palette over the drawing, and what was chosen in it.
+    fn command_palette(&mut self, ui: &Ui) {
+        let choice = self.command_palette.show(
+            ui,
+            self.session.as_ref().map(Session::document),
+            self.session.as_ref().map(Session::catalog),
+        );
+        match choice {
+            None => {}
+            Some(crate::command_palette::Choice::Element(subject)) => self.go_to(subject),
+            Some(crate::command_palette::Choice::Command(command)) => {
+                use crate::command_palette::Command;
+                match command {
+                    Command::New => self.new_project(),
+                    Command::Open => self.guard(Pending::OpenDialog),
+                    Command::Save => {
+                        self.save();
+                    }
+                    Command::SaveAs => {
+                        self.save_as_dialog();
+                    }
+                    Command::SaveCopy => self.save_copy_dialog(),
+                    Command::Undo => self.undo(),
+                    Command::Redo => self.redo(),
+                    Command::Fit => self.fit_pending = true,
+                    Command::Edit => self.set_mode(Mode::Edit),
+                    Command::Simulate => self.set_mode(Mode::Simulate),
+                    Command::ExportSvg => self.export_dialog("svg"),
+                    Command::ExportPdf => self.export_dialog("pdf"),
+                    Command::Library => self.library_dialog(),
+                    Command::Keys => self.show_keys = true,
+                }
+            }
+        }
+    }
+
+    /// Select an element and bring it into view: a device by its first
+    /// symbol, a sheet by its frame.
+    fn go_to(&mut self, subject: Subject) {
+        match subject {
+            Subject::Sheet(id) => self.fit_sheet = Some(id),
+            Subject::Device(id) => {
+                let first = self.session.as_ref().and_then(|session| {
+                    session
+                        .document()
+                        .symbols
+                        .iter()
+                        .filter(|symbol| symbol.device_id == id)
+                        .map(|symbol| symbol.id)
+                        .min()
+                });
+                self.editor.set_selection(BTreeSet::from([subject]));
+                self.focus = first.map(Subject::Symbol);
+            }
+            other => self.select(other),
+        }
+    }
+
+    /// Start a new project from a template, asking first when the open
+    /// project has unsaved changes.
+    pub fn new_from_template(&mut self, index: usize) {
+        self.guard(Pending::Template(index));
+    }
+
+    /// Write the project to `path` without making it its file: the project
+    /// keeps its file and its unsaved changes. Returns whether it was
+    /// written.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn save_copy_to(&mut self, path: &Path) -> bool {
+        let Some(session) = &self.session else {
+            return false;
+        };
+        match session
+            .text()
+            .map_err(|error| error.to_string())
+            .and_then(|text| {
+                crate::files::write_atomic(path, text).map_err(|error| error.to_string())
+            }) {
+            Ok(()) => {
+                self.error = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
+
+    /// Choose where to write a copy of the project; a browser downloads it.
+    fn save_copy_dialog(&mut self) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let name = format!("{} (copy)", session.document().project.name);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let downloaded = session
+                .text()
+                .map_err(|error| error.to_string())
+                .and_then(|text| {
+                    crate::web::download(
+                        &format!("{name}.{}", dialogs::PROJECT_EXTENSION),
+                        text.as_bytes(),
+                        "application/json",
+                    )
+                });
+            if let Err(error) = downloaded {
+                self.error = Some(error);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = dialogs::choose_save_path(&name) {
+            self.save_copy_to(&path);
+        }
     }
 
     /// Open the version history window of the project, newest first.
@@ -369,7 +799,11 @@ impl DesktopApp {
     pub fn open_path(&mut self, path: &Path) {
         self.path_input = path.display().to_string();
         match Session::open(path) {
-            Ok(session) => self.replace(session),
+            Ok(session) => {
+                self.replace(session);
+                #[cfg(not(target_arch = "wasm32"))]
+                self.record_recent();
+            }
             Err(error) => self.error = Some(error.to_string()),
         }
     }
@@ -501,7 +935,10 @@ impl DesktopApp {
             Ok(()) => {
                 self.error = None;
                 #[cfg(not(target_arch = "wasm32"))]
-                self.record_version();
+                {
+                    self.record_version();
+                    self.record_recent();
+                }
                 true
             }
             Err(error) => {
@@ -630,6 +1067,18 @@ impl DesktopApp {
                 self.set_mode(Mode::Edit);
             }
             Pending::Open(path) => self.open_path(&path),
+            Pending::Template(index) => {
+                let Some(template) = crate::templates::TEMPLATES.get(index) else {
+                    return;
+                };
+                match Session::load(template.text, None) {
+                    Ok(session) => {
+                        self.replace(session);
+                        self.path_input.clear();
+                    }
+                    Err(error) => self.error = Some(error.to_string()),
+                }
+            }
             Pending::OpenDialog => {
                 if let Some(path) = dialogs::pick_project() {
                     self.open_path(&path);
@@ -682,6 +1131,48 @@ impl DesktopApp {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+    }
+
+    /// File > Open recent: the projects opened or saved last, and a way to
+    /// empty the list.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recent_menu(&mut self, ui: &mut Ui) {
+        let projects = self.recent_projects();
+        ui.add_enabled_ui(!projects.is_empty(), |ui| {
+            ui.menu_button(tr("Open recent"), |ui| {
+                for path in &projects {
+                    let name = path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |name| name.to_string_lossy().into_owned(),
+                    );
+                    if ui
+                        .button(name)
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                    {
+                        ui.close();
+                        if !path.is_file() {
+                            if let Some(recent) = &self.recent {
+                                let _ = recent.forget(path);
+                            }
+                            self.error = Some(trf(
+                                "{0} is no longer there; it was taken off the list.",
+                                &[&path.display()],
+                            ));
+                        } else {
+                            self.request_open(path.clone());
+                        }
+                    }
+                }
+                ui.separator();
+                if ui.button(tr("Clear the list")).clicked() {
+                    ui.close();
+                    if let Some(recent) = &self.recent {
+                        let _ = recent.clear();
+                    }
+                }
+            });
+        });
     }
 
     /// The version history of the project, while it is open.
@@ -1097,6 +1588,14 @@ impl DesktopApp {
             self.save();
         }
         self.confirm_dialog(ui);
+        self.command_palette(ui);
+        if let Some(session) = &self.session
+            && let Some(request) = self
+                .find_replace
+                .show(ui, session.document(), session.catalog())
+        {
+            self.commit(request);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.recovery_dialog(ui);
@@ -1218,6 +1717,15 @@ impl DesktopApp {
         if pressed(ui, egui::Modifiers::NONE, egui::Key::W) {
             self.editor.set_tool(Tool::Wire);
         }
+        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::H) {
+            self.find_replace.open();
+        }
+        if pressed(ui, egui::Modifiers::NONE, egui::Key::F2) {
+            self.edit_label();
+        }
+        if pressed(ui, egui::Modifiers::NONE, egui::Key::G) {
+            self.type_point();
+        }
         let mut actions = Vec::new();
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::A) {
             actions.push(Key::SelectAll);
@@ -1286,6 +1794,23 @@ impl DesktopApp {
     fn view_keys(&mut self, ui: &mut Ui) {
         if ui.ctx().egui_wants_keyboard_input() {
             return;
+        }
+        // The command palette, in both modes.
+        if ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::COMMAND,
+                egui::Key::K,
+            ))
+        }) {
+            self.command_palette.open();
+        }
+        if ui.input_mut(|input| {
+            input.consume_shortcut(&KeyboardShortcut::new(
+                egui::Modifiers::ALT,
+                egui::Key::ArrowLeft,
+            ))
+        }) {
+            self.previous_view();
         }
         let pressed = |ui: &mut Ui, key: egui::Key| {
             ui.input_mut(|input| {
@@ -1415,6 +1940,18 @@ impl DesktopApp {
                         ui.close();
                         self.guard(Pending::OpenDialog);
                     }
+                    ui.menu_button(tr("New from template"), |ui| {
+                        for (index, template) in crate::templates::TEMPLATES.iter().enumerate() {
+                            if ui.button(tr(template.name)).clicked() {
+                                ui.close();
+                                self.new_from_template(index);
+                            }
+                        }
+                    });
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if self.recent.is_some() {
+                        self.recent_menu(ui);
+                    }
                     ui.separator();
                     if ui
                         .add_enabled(has_session, egui::Button::new(tr("Save project")))
@@ -1429,6 +1966,16 @@ impl DesktopApp {
                     {
                         ui.close();
                         self.save_as_dialog();
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new(tr("Save a copy…")))
+                        .on_hover_text(tr(
+                            "Write the project to another file and keep working on this one",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.save_copy_dialog();
                     }
                     #[cfg(not(target_arch = "wasm32"))]
                     if self.versions.is_some() {
@@ -1515,6 +2062,24 @@ impl DesktopApp {
                             self.commit(request);
                         }
                     }
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Find and replace…")))
+                        .on_hover_text("Ctrl+H")
+                        .clicked()
+                    {
+                        ui.close();
+                        self.find_replace.open();
+                    }
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Edit label")))
+                        .on_hover_text(tr(
+                            "F2: the designator, text or wire number of the selection",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.edit_label();
+                    }
                 });
                 ui.menu_button(tr("View"), |ui| {
                     if ui
@@ -1539,6 +2104,16 @@ impl DesktopApp {
                     {
                         self.zoom_request = Some(1.0 / KEY_ZOOM);
                     }
+                    if ui
+                        .add_enabled(
+                            !self.view_back.is_empty(),
+                            egui::Button::new(tr("Previous view")),
+                        )
+                        .on_hover_text("Alt+Left")
+                        .clicked()
+                    {
+                        self.previous_view();
+                    }
                     ui.separator();
                     let mut grid = !self.grid_off;
                     if ui.checkbox(&mut grid, tr("Show the grid")).changed() {
@@ -1548,6 +2123,15 @@ impl DesktopApp {
                     if ui.checkbox(&mut snap, tr("Snap wires to pins")).changed() {
                         self.snap_off = !snap;
                     }
+                    ui.checkbox(
+                        &mut self.wire_points,
+                        tr("Snap to wire ends, middles and crossings"),
+                    );
+                    ui.checkbox(
+                        &mut self.hover_highlight,
+                        tr("Outline the element under the pointer"),
+                    );
+                    ui.checkbox(&mut self.rulers, tr("Show rulers"));
                     let mut cross = !self.crosshair_off;
                     if ui.checkbox(&mut cross, tr("Cross-shaped cursor")).changed() {
                         self.crosshair_off = !cross;
@@ -1608,6 +2192,14 @@ impl DesktopApp {
                     if ui.button(tr("Keyboard shortcuts")).clicked() {
                         ui.close();
                         self.show_keys = true;
+                    }
+                    if ui
+                        .button(tr("Command palette"))
+                        .on_hover_text("Ctrl+K")
+                        .clicked()
+                    {
+                        ui.close();
+                        self.command_palette.open();
                     }
                     if ui.button(tr("About OpenCircuit")).clicked() {
                         ui.close();
@@ -1963,6 +2555,129 @@ impl DesktopApp {
         );
     }
 
+    /// Keep the view the drawing rested at, so that Previous view can go
+    /// back to it: a zoom with the wheel or a pan with the pointer counts once,
+    /// when it ends.
+    fn remember_view(&mut self, ui: &Ui) {
+        let busy = ui.input(|input| {
+            input.pointer.any_down()
+                || input.smooth_scroll_delta != egui::Vec2::ZERO
+                || (input.zoom_delta() - 1.0).abs() > f32::EPSILON
+        });
+        if busy {
+            return;
+        }
+        if let Some(settled) = self.view_settled
+            && settled != self.camera
+        {
+            self.view_back.push(settled);
+            if self.view_back.len() > MAX_VIEWS_BACK {
+                self.view_back.remove(0);
+            }
+        }
+        self.view_settled = Some(self.camera);
+    }
+
+    /// Rulers along the top and left edges of the drawing, in grid units,
+    /// with the place of the pointer marked.
+    fn paint_rulers(&self, ui: &Ui, events: &canvas::CanvasEvents) {
+        const BAND: f32 = 16.0;
+        let tokens = Tokens::of(ui);
+        let [left, top] = events.origin;
+        let [width, height] = events.size;
+        let painter = ui.painter().with_clip_rect(egui::Rect::from_min_size(
+            egui::pos2(left, top),
+            egui::vec2(width, height),
+        ));
+        let fill = ui.visuals().extreme_bg_color;
+        painter.rect_filled(
+            egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(width, BAND)),
+            0.0,
+            fill,
+        );
+        painter.rect_filled(
+            egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(BAND, height)),
+            0.0,
+            fill,
+        );
+        // Ticks at least 40 points apart, at 1, 2 or 5 times a power of ten.
+        let per_grid = self.camera.to_screen_length(SUBUNITS_PER_GRID);
+        if !(per_grid.is_finite() && per_grid > 0.0) {
+            return;
+        }
+        let step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000]
+            .into_iter()
+            .find(|step| per_grid * *step as f32 >= 40.0)
+            .unwrap_or(10_000);
+        let stroke = egui::Stroke::new(1.0, tokens.text_faint);
+        let font = egui::FontId::proportional(9.0);
+        let along = |vertical: bool| {
+            let length = if vertical { height } else { width };
+            let first = self
+                .camera
+                .to_grid([0.0, 0.0])
+                .map_or(0, |point| if vertical { point.y } else { point.x });
+            let mut n = (i64::from(first) / step - 1) * step;
+            for _ in 0..200 {
+                let point = if vertical {
+                    GridPoint::new(0, i32::try_from(n).unwrap_or(0))
+                } else {
+                    GridPoint::new(i32::try_from(n).unwrap_or(0), 0)
+                };
+                let [x, y] = self.camera.to_screen(ScenePoint::from_grid(point));
+                let place = if vertical { y } else { x };
+                if place > length {
+                    break;
+                }
+                if place >= BAND {
+                    let (from, to, label_at, align) = if vertical {
+                        (
+                            egui::pos2(left + BAND - 5.0, top + place),
+                            egui::pos2(left + BAND, top + place),
+                            egui::pos2(left + 2.0, top + place + 1.0),
+                            egui::Align2::LEFT_TOP,
+                        )
+                    } else {
+                        (
+                            egui::pos2(left + place, top + BAND - 5.0),
+                            egui::pos2(left + place, top + BAND),
+                            egui::pos2(left + place + 2.0, top + 1.0),
+                            egui::Align2::LEFT_TOP,
+                        )
+                    };
+                    painter.line_segment([from, to], stroke);
+                    painter.text(
+                        label_at,
+                        align,
+                        n.to_string(),
+                        font.clone(),
+                        tokens.text_faint,
+                    );
+                }
+                n += step;
+            }
+        };
+        along(false);
+        along(true);
+        if let Some(hover) = events.hover {
+            let mark = egui::Stroke::new(1.5, tokens.crosshair);
+            painter.line_segment(
+                [
+                    egui::pos2(left + hover[0], top),
+                    egui::pos2(left + hover[0], top + BAND),
+                ],
+                mark,
+            );
+            painter.line_segment(
+                [
+                    egui::pos2(left, top + hover[1]),
+                    egui::pos2(left + BAND, top + hover[1]),
+                ],
+                mark,
+            );
+        }
+    }
+
     /// The menu of a secondary click on the drawing: what can be done to the
     /// selection, and the view.
     fn context_menu(&mut self, ui: &mut Ui, events: &canvas::CanvasEvents) {
@@ -1987,6 +2702,7 @@ impl DesktopApp {
         let editing = self.mode == Mode::Edit && !self.editor.selection().is_empty();
         let mut chosen: Option<Key> = None;
         let mut fit = false;
+        let mut label = false;
         let area = egui::Area::new(ui.scope_id().with(egui::IdSalt::new("context menu")))
             .order(egui::Order::Foreground)
             .fixed_pos(at)
@@ -2009,6 +2725,12 @@ impl DesktopApp {
                     {
                         chosen = Some(Key::Paste);
                     }
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Edit label")))
+                        .clicked()
+                    {
+                        label = true;
+                    }
                     ui.separator();
                     if ui.button(tr("Zoom to the whole drawing")).clicked() {
                         fit = true;
@@ -2017,8 +2739,11 @@ impl DesktopApp {
             });
         // The click that opened the menu is not one that closes it.
         let outside = events.context.is_none() && area.response.clicked_elsewhere();
-        if chosen.is_some() || fit || outside {
+        if chosen.is_some() || fit || label || outside {
             self.context_menu = None;
+        }
+        if label {
+            self.edit_label();
         }
         if fit {
             self.fit_pending = true;
@@ -2543,7 +3268,39 @@ impl DesktopApp {
             );
             self.camera.fit(corners, events.size, canvas::FIT_MARGIN);
         }
+        let hovered = if self.hover_highlight {
+            events
+                .hover
+                .and_then(|at| self.camera.to_grid(at))
+                .and_then(|point| {
+                    circuit_editor::hit_test(session.document(), session.catalog(), point)
+                })
+                .map(|hit| hit.subject())
+        } else {
+            None
+        };
         self.paint_over_canvas(ui, &events, selecting);
+        if let Some(bounds) = hovered.and_then(|subject| scene.subject_bounds(&subject)) {
+            let [left, top] = events.origin;
+            let corner = |point: ScenePoint| {
+                let [x, y] = self.camera.to_screen(point);
+                egui::pos2(left + x, top + y)
+            };
+            let outline =
+                egui::Rect::from_two_pos(corner(bounds.min), corner(bounds.max)).expand(4.0);
+            ui.painter().rect_stroke(
+                outline,
+                3.0,
+                egui::Stroke::new(1.5, Tokens::of(ui).window_select),
+                egui::StrokeKind::Outside,
+            );
+        }
+        if self.rulers {
+            self.paint_rulers(ui, &events);
+        }
+        self.label_editor(ui, &scene, &events);
+        self.point_entry(ui);
+        self.remember_view(ui);
         self.navigation(ui, events.origin, events.size);
         self.command_line_overlay(ui, events.origin, events.size);
         self.context_menu(ui, &events);
@@ -2566,6 +3323,7 @@ impl DesktopApp {
         // The wire tool snaps to what a wire can end on; the other tools work
         // on the nearest grid point, so a drag never jumps to a pin.
         let wiring = matches!(self.editor.tool(), Tool::Wire) && !self.snap_off;
+        let wire_points = self.wire_points;
         let radius = self
             .camera
             .to_scene_length(SNAP_POINTS)
@@ -2579,7 +3337,7 @@ impl DesktopApp {
                     y: at.y,
                     per_grid: SUBUNITS_PER_GRID,
                 };
-                snap(doc, catalog, pointer, radius)
+                snap_with(doc, catalog, pointer, radius, SnapOptions { wire_points })
             } else {
                 camera.to_grid(screen).map(|point| Snap {
                     point,
@@ -2738,7 +3496,7 @@ fn snap_marker(found: &Snap) -> Vec<Shape> {
     match found.target {
         SnapTarget::Pin(_) => vec![Shape::Circle { center, radius: r }],
         SnapTarget::Junction(_) => vec![Shape::Rect(SceneRect::from_corners(at(-r, -r), at(r, r)))],
-        SnapTarget::Wire(_) => vec![
+        SnapTarget::Wire(_) | SnapTarget::Crossing(..) => vec![
             Shape::Line {
                 from: at(-r, -r),
                 to: at(r, r),
@@ -2748,6 +3506,21 @@ fn snap_marker(found: &Snap) -> Vec<Shape> {
                 to: at(r, -r),
             },
         ],
+        // A diamond on an end or a bend.
+        SnapTarget::WireEnd(_) => vec![Shape::Polyline(vec![
+            at(0, -r),
+            at(r, 0),
+            at(0, r),
+            at(-r, 0),
+            at(0, -r),
+        ])],
+        // A triangle on a middle.
+        SnapTarget::WireMiddle(_) => vec![Shape::Polyline(vec![
+            at(0, -r),
+            at(r, r),
+            at(-r, r),
+            at(0, -r),
+        ])],
         SnapTarget::Grid => Vec::new(),
     }
 }

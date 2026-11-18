@@ -22,9 +22,11 @@ pub mod camera;
 mod canvas;
 pub mod clock;
 mod cmdline;
+mod command_palette;
 mod dialogs;
 mod documentation;
 pub mod files;
+mod find_replace;
 mod i18n;
 mod icons;
 mod inspector;
@@ -32,8 +34,11 @@ mod palette;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod project_lock;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod recent;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod recovery;
 pub mod session;
+pub mod templates;
 mod theme;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod versions;

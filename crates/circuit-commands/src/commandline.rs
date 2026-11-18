@@ -412,6 +412,24 @@ fn simulation(rest: &[&str], command: &CommandSpec) -> Result<Vec<Request>, Comm
     Ok(vec![Request::Simulation(action)])
 }
 
+/// A point typed at the pointer: `x,y`, or `@dx,dy` from `from`. Spaces
+/// are ignored. `None` for anything else, or a point outside the coordinate
+/// range.
+#[must_use]
+pub fn typed_point(text: &str, from: GridPoint) -> Option<GridPoint> {
+    let word: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    match word.strip_prefix('@') {
+        None => point(&word).ok(),
+        Some(offset) => {
+            let delta = point(offset).ok()?;
+            let x = from.x.checked_add(delta.x)?;
+            let y = from.y.checked_add(delta.y)?;
+            let inside = |value: i32| (-MAX_COORDINATE..=MAX_COORDINATE).contains(&value);
+            (inside(x) && inside(y)).then_some(GridPoint::new(x, y))
+        }
+    }
+}
+
 /// A point such as `10,5` or `-3,0`.
 fn point(word: &str) -> Result<GridPoint, CommandLineError> {
     let bad = || CommandLineError::BadPoint(word.to_owned());
@@ -870,6 +888,18 @@ mod tests {
                 "{line}"
             );
         }
+    }
+
+    #[test]
+    fn a_typed_point_is_absolute_or_relative_to_the_pointer() {
+        let from = GridPoint::new(10, 5);
+        assert_eq!(typed_point("3, -4", from), Some(GridPoint::new(3, -4)));
+        assert_eq!(typed_point("@ 2,-1", from), Some(GridPoint::new(12, 4)));
+        for bad in ["", "3", "a,b", "@", "@1", "1,2,3"] {
+            assert_eq!(typed_point(bad, from), None, "{bad}");
+        }
+        let edge = GridPoint::new(MAX_COORDINATE, 0);
+        assert_eq!(typed_point("@1,0", edge), None);
     }
 
     #[test]
