@@ -307,6 +307,11 @@ pub struct DesktopApp {
         f64,
         crate::recovery::PanicCopy,
     )>,
+    /// The copy of a project with unsaved changes in browser storage (M9.1);
+    /// off unless the web entry point (or a test) turns it on.
+    slot_autosave: Option<crate::browser_recovery::SlotAutosave>,
+    /// The copy an earlier page left, offered once.
+    slot_offer: Option<crate::browser_recovery::Found>,
     /// The keys of the customizable shortcuts and the named workspaces.
     settings: crate::workspace::Settings,
     /// The colours chosen in View > Theme.
@@ -395,6 +400,91 @@ impl DesktopApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enable_recent_projects(&mut self, recent: crate::recent::RecentProjects) {
         self.recent = Some(recent);
+    }
+
+    /// Keep a copy of a project with unsaved changes in `slot` (browser
+    /// storage in the web build), written at most once per
+    /// `interval_seconds`, and offer the copy an earlier page left there.
+    pub fn enable_slot_autosave(
+        &mut self,
+        slot: Box<dyn crate::browser_recovery::Slot>,
+        interval_seconds: f64,
+    ) {
+        let autosave = crate::browser_recovery::SlotAutosave::new(slot, interval_seconds);
+        self.slot_offer = autosave.found();
+        self.slot_autosave = Some(autosave);
+    }
+
+    /// Whether a copy an earlier page left is being offered.
+    #[must_use]
+    pub const fn slot_recovery_offered(&self) -> bool {
+        self.slot_offer.is_some()
+    }
+
+    /// Write, renew or remove the copy in the slot, and wake the window when
+    /// the next one is due.
+    fn slot_tick(&mut self, ui: &Ui) {
+        // A copy waiting to be recovered is not written over first.
+        if self.slot_offer.is_some() || self.allow_close {
+            return;
+        }
+        let Some(autosave) = &mut self.slot_autosave else {
+            return;
+        };
+        let now = ui.input(|input| input.time);
+        autosave.tick(now, self.session.as_ref());
+        if self.session.as_ref().is_some_and(Session::is_dirty)
+            && !autosave.is_current(self.session.as_ref())
+        {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs(1));
+        }
+    }
+
+    /// The offer to recover the copy an earlier page left.
+    fn slot_recovery_dialog(&mut self, ui: &Ui) {
+        let Some(found) = self.slot_offer.clone() else {
+            return;
+        };
+        if self.confirm.is_some() {
+            return;
+        }
+        let mut answer = None;
+        egui::Modal::new(egui::Id::unique("recover the page copy")).show(ui.ctx(), |ui| {
+            ui.heading(tr("Recover unsaved work"));
+            ui.label(tr(
+                "The last page closed without saving this project. A copy was kept in the browser.",
+            ));
+            let place = found
+                .origin
+                .clone()
+                .unwrap_or_else(|| tr("never saved").to_owned());
+            ui.label(format!("{} — {place}", found.name));
+            ui.horizontal(|ui| {
+                if ui.button(tr("Recover")).clicked() {
+                    answer = Some(true);
+                }
+                if ui.button(tr("Discard")).clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        let Some(recover) = answer else {
+            return;
+        };
+        self.slot_offer = None;
+        if recover {
+            match Session::load(&found.text, found.origin.clone().map(PathBuf::from)) {
+                Ok(mut session) => {
+                    session.mark_unsaved();
+                    self.replace(session);
+                }
+                Err(error) => self.error = Some(error.to_string()),
+            }
+        }
+        if let Some(autosave) = &mut self.slot_autosave {
+            autosave.discard_found();
+        }
     }
 
     /// Keep the workspace (theme, panels, view switches), the keys of the
@@ -1404,6 +1494,13 @@ impl DesktopApp {
     /// Save the project to its file; a project never saved asks where.
     /// Returns whether it was saved.
     pub fn save(&mut self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        let backup = self
+            .session
+            .as_ref()
+            .and_then(Session::path)
+            .map(Path::to_path_buf)
+            .map(|path| self.keep_backups(&path));
         let Some(session) = &mut self.session else {
             return false;
         };
@@ -1411,7 +1508,10 @@ impl DesktopApp {
             Ok(()) => {
                 self.error = None;
                 #[cfg(not(target_arch = "wasm32"))]
-                self.record_version();
+                {
+                    self.record_version();
+                    self.error = backup.and_then(Result::err);
+                }
                 true
             }
             Err(SaveError::NoPath) => self.save_as_dialog(),
@@ -1425,10 +1525,15 @@ impl DesktopApp {
     /// Save the project to `path` and make it its file. Returns whether it
     /// was saved.
     pub fn save_to(&mut self, path: PathBuf) -> bool {
+        if self.session.is_none() {
+            return false;
+        }
+        self.path_input = path.display().to_string();
+        #[cfg(not(target_arch = "wasm32"))]
+        let backup = self.keep_backups(&path);
         let Some(session) = &mut self.session else {
             return false;
         };
-        self.path_input = path.display().to_string();
         match session.save_as(path) {
             Ok(()) => {
                 self.error = None;
@@ -1436,6 +1541,7 @@ impl DesktopApp {
                 {
                     self.record_version();
                     self.record_recent();
+                    self.error = backup.err();
                 }
                 true
             }
@@ -1444,6 +1550,27 @@ impl DesktopApp {
                 false
             }
         }
+    }
+
+    /// Keep the file at `path` as a backup before a save replaces it, when
+    /// backups are on (File > Backups next to the project). A backup that
+    /// fails does not stop the save; the message says so.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn keep_backups(&self, path: &Path) -> Result<(), String> {
+        crate::files::rotate_backups(path, self.settings.backups)
+            .map_err(|error| trf("Saved, but no backup was kept: {0}", &[&error]))
+    }
+
+    /// How many backups a save keeps next to the project; 0 keeps none.
+    #[must_use]
+    pub const fn backups(&self) -> u8 {
+        self.settings.backups
+    }
+
+    /// Keep `count` backups next to the project at every save (at most 9);
+    /// 0 keeps none.
+    pub fn set_backups(&mut self, count: u8) {
+        self.settings.backups = count.min(crate::files::MAX_BACKUPS);
     }
 
     /// Export the drawing. While simulating the current tick is shown in
@@ -1615,6 +1742,9 @@ impl DesktopApp {
                 // Closed on purpose: no copy is kept for a recovery.
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(autosave) = &mut self.autosave {
+                    autosave.clear();
+                }
+                if let Some(autosave) = &mut self.slot_autosave {
                     autosave.clear();
                 }
                 self.allow_close = true;
@@ -1891,6 +2021,9 @@ impl DesktopApp {
     fn replace(&mut self, mut session: Session) {
         // The project that goes was saved, or its changes were dropped on
         // purpose: its copy is not kept.
+        if let Some(autosave) = &mut self.slot_autosave {
+            autosave.clear();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(autosave) = &mut self.autosave {
             autosave.clear();
@@ -2126,6 +2259,8 @@ impl DesktopApp {
             self.autosave_tick(ui);
             self.relock(ui);
         }
+        self.slot_recovery_dialog(ui);
+        self.slot_tick(ui);
 
         let dropped = ui.input(|input| input.raw.dropped_files.clone());
         for file in dropped {
@@ -2573,6 +2708,26 @@ impl DesktopApp {
                         ui.close();
                         self.close_tab();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    ui.menu_button(tr("Backups next to the project"), |ui| {
+                        for (count, label) in [
+                            (0, tr("None")),
+                            (1, tr("The last one")),
+                            (3, tr("The last 3")),
+                            (5, tr("The last 5")),
+                        ] {
+                            if ui
+                                .radio(self.settings.backups == count, label)
+                                .on_hover_text(tr(
+                                    "Each save keeps the file it replaces as name.ocircuit.bak1, bak2…",
+                                ))
+                                .clicked()
+                            {
+                                self.set_backups(count);
+                                ui.close();
+                            }
+                        }
+                    });
                 });
                 ui.menu_button(tr("Modify"), |ui| {
                     let (can_undo, can_redo) = self.session.as_ref().map_or((false, false), |s| {
@@ -3357,6 +3512,20 @@ impl DesktopApp {
                     .on_hover_text(tr(
                         "Saving here and in the other window overwrites each other's changes.",
                     ));
+            }
+            if let Some(autosave) = &self.slot_autosave {
+                if let Some(failure) = autosave.failure() {
+                    ui.separator();
+                    ui.colored_label(
+                        ui.visuals().error_fg_color,
+                        trf("Recovery copy failed: {0}", &[&failure]),
+                    );
+                } else if self.session.as_ref().is_some_and(Session::is_dirty)
+                    && autosave.is_current(self.session.as_ref())
+                {
+                    ui.separator();
+                    ui.label(RichText::new(tr("Recovery copy saved")).color(tokens.text_dim));
+                }
             }
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(autosave) = &self.autosave {

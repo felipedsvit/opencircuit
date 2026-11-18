@@ -480,6 +480,9 @@ pub struct Settings {
     pub keys: Keymap,
     /// Named workspaces, in the order they were saved.
     pub workspaces: Vec<Workspace>,
+    /// How many backups a save keeps next to the project (M9.1); 0, the
+    /// default, keeps none.
+    pub backups: u8,
 }
 
 impl Settings {
@@ -498,6 +501,7 @@ impl Settings {
             .workspaces
             .retain(|workspace| valid_name(&workspace.name));
         settings.workspaces.truncate(MAX_WORKSPACES);
+        settings.backups = settings.backups.min(crate::files::MAX_BACKUPS);
         settings
     }
 

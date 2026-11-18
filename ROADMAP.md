@@ -367,11 +367,14 @@ Decisions, to be confirmed in #118:
 - [x] Autosave to a recovery copy, recovery offered after an unexpected exit,
   and an indicator in the status bar (native window;
   `apps/desktop/tests/recovery.rs`).
-- [ ] Autosave in the browser build, into browser storage.
+- [x] Autosave in the browser build, into browser storage (`localStorage`,
+  offered again when the page is opened; `apps/desktop/src/browser_recovery.rs`,
+  `apps/desktop/tests/browser_and_backups.rs`).
 - [x] A panic in the window writes the recovery copy before the process ends,
   and a copy whose window has stopped is offered at once (the window holds an
   operating-system lock while it runs).
-- [ ] Optional rotating backups next to the project.
+- [x] Optional rotating backups next to the project (File > Backups next to
+  the project: none, 1, 3 or 5 as `name.ocircuit.bak1`…; off by default).
 - [x] Project lock: a second window on the same file is warned in the status
   bar; a lock is released however its window ends, so it is never stale
   (`apps/desktop/tests/project_lock.rs`). Same user and machine only; the

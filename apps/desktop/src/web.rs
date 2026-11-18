@@ -30,10 +30,50 @@ pub fn start() {
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|_creation| Ok(Box::new(DesktopApp::default()))),
+                Box::new(|_creation| {
+                    let mut app = DesktopApp::default();
+                    // Autosave into the browser storage of the page (M9.1).
+                    app.enable_slot_autosave(
+                        Box::new(LocalStorage),
+                        crate::browser_recovery::DEFAULT_INTERVAL_SECONDS,
+                    );
+                    Ok(Box::new(app))
+                }),
             )
             .await;
     });
+}
+
+/// The browser storage of the page (`localStorage`), under one key: the
+/// slot of the autosave. A page whose storage is turned off holds nothing.
+#[derive(Debug)]
+pub struct LocalStorage;
+
+/// The key of the copy in the storage of the page.
+const COPY_KEY: &str = "opencircuit.recovery";
+
+fn storage() -> Option<web_sys::Storage> {
+    web_sys::window()?.local_storage().ok()?
+}
+
+impl crate::browser_recovery::Slot for LocalStorage {
+    fn get(&self) -> Option<String> {
+        storage()?.get_item(COPY_KEY).ok()?
+    }
+
+    fn set(&self, text: &str) -> Result<(), String> {
+        storage()
+            .ok_or_else(|| "the browser storage is turned off".to_owned())?
+            .set_item(COPY_KEY, text)
+            .map_err(|value| format!("{value:?}"))
+    }
+
+    fn remove(&self) {
+        if let Some(storage) = storage() {
+            // Best effort: a copy left behind is offered once and discarded.
+            let _ = storage.remove_item(COPY_KEY);
+        }
+    }
 }
 
 /// Read a dropped file in the background and put it in `inbox`.

@@ -78,6 +78,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("Author", "Autor"),
     ("Automation and logic", "Automação e lógica"),
+    (
+        "Backups next to the project",
+        "Cópias de segurança ao lado do projeto",
+    ),
     ("Bottom", "Base"),
     ("Cancel", "Cancelar"),
     ("Catalog data", "Dados de catálogo"),
@@ -158,6 +162,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Apenas desenhado e ligado: não tem comportamento na simulação.",
     ),
     ("Duplicate selection", "Duplicar seleção"),
+    (
+        "Each save keeps the file it replaces as name.ocircuit.bak1, bak2…",
+        "Cada salvamento guarda o arquivo que substitui como nome.ocircuit.bak1, bak2…",
+    ),
     ("Edit", "Editar"),
     ("Edit label", "Editar rótulo"),
     ("Element", "Elemento"),
@@ -280,6 +288,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "No version yet: one is kept at every save.",
         "Nenhuma versão ainda: uma é guardada a cada salvamento.",
     ),
+    ("None", "Nenhuma"),
     ("Nothing found", "Nada encontrado"),
     ("Nothing here.", "Nada aqui."),
     ("Nothing selected", "Nada selecionado"),
@@ -408,6 +417,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Save project as…", "Salvar projeto como…"),
     ("Save the current layout", "Salvar o leiaute atual"),
     (
+        "Saved, but no backup was kept: {0}",
+        "Salvo, mas nenhuma cópia de segurança foi mantida: {0}",
+    ),
+    (
         "Saving here and in the other window overwrites each other's changes.",
         "Salvar aqui e na outra janela sobrescreve as alterações uma da outra.",
     ),
@@ -478,6 +491,13 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("T", "T"),
     ("Text", "Texto"),
     ("Text notes", "Notas de texto"),
+    ("The last 3", "As 3 últimas"),
+    ("The last 5", "As 5 últimas"),
+    ("The last one", "A última"),
+    (
+        "The last page closed without saving this project. A copy was kept in the browser.",
+        "A última página fechou sem salvar este projeto. Uma cópia foi guardada no navegador.",
+    ),
     (
         "The macro was not played: {0}",
         "A macro não foi executada: {0}",
