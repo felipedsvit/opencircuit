@@ -3,7 +3,7 @@
 //! opened again after it was closed or crashed without saving.
 //!
 //! The logic is the same on every target and works on a [`Slot`], one place
-//! that holds one text: `localStorage` in the browser ([`crate::web`]), and a
+//! that holds one text: `localStorage` in the browser (the `web` module of the browser build), and a
 //! [`MemorySlot`] in tests. A page holds one copy: the project shown.
 
 use std::cell::RefCell;
