@@ -36,6 +36,7 @@ use crate::inspector::{self, InspectorState};
 use crate::palette;
 use crate::session::{SaveError, Session};
 use crate::theme::{self, Tokens};
+use crate::workspace::{Action, ThemeChoice};
 
 /// Radius of the ring marking the pin under the pointer, in subunits.
 const PIN_RING: i64 = SUBUNITS_PER_GRID / 2;
@@ -62,6 +63,8 @@ enum Pending {
     OpenDialog,
     /// Close the window.
     Close,
+    /// Close the project of the tab shown.
+    CloseTab,
     /// Start a new project from the template at this place of
     /// [`crate::templates::TEMPLATES`].
     Template(usize),
@@ -69,6 +72,27 @@ enum Pending {
     #[cfg(not(target_arch = "wasm32"))]
     Restore(crate::versions::Version),
 }
+
+/// A project open in a tab that is not the one shown (M9.2): what the
+/// window keeps of it while another tab is shown.
+#[derive(Debug, Default)]
+struct Tab {
+    session: Option<Session>,
+    mode: Mode,
+    editor: Editor,
+    inspector: InspectorState,
+    camera: Camera,
+    view_back: Vec<Camera>,
+    view_settled: Option<Camera>,
+    path_input: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    autosave: Option<crate::recovery::Autosave>,
+    #[cfg(not(target_arch = "wasm32"))]
+    project_lock: Option<crate::project_lock::ProjectLock>,
+}
+
+/// Most projects a window keeps open in tabs.
+pub const MAX_TABS: usize = 16;
 
 /// What the window is for at the moment.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -269,6 +293,44 @@ pub struct DesktopApp {
     print_preview: crate::print_preview::PrintPreview,
     /// The grid point the context menu was opened at.
     context_point: Option<GridPoint>,
+    /// The projects of the tabs not shown, in tab order without the shown
+    /// one, which is at `active_tab`.
+    tabs: Vec<Tab>,
+    /// Where the shown project is among the tabs.
+    active_tab: usize,
+    /// The store and interval of the autosave, for the autosave of each new
+    /// tab, and the panic copy of the first one, which writes those of the
+    /// others too.
+    #[cfg(not(target_arch = "wasm32"))]
+    recovery_setup: Option<(
+        crate::recovery::RecoveryStore,
+        f64,
+        crate::recovery::PanicCopy,
+    )>,
+    /// The keys of the customizable shortcuts and the named workspaces.
+    settings: crate::workspace::Settings,
+    /// The colours chosen in View > Theme.
+    theme_choice: crate::workspace::ThemeChoice,
+    /// The colours egui was last told to use.
+    theme_applied: Option<crate::workspace::ThemeChoice>,
+    /// The palette, inspector and operator panel are collapsed.
+    side_panels_hidden: bool,
+    /// The tool bar is hidden.
+    toolbar_hidden: bool,
+    /// The palette is on the right, the inspector and operator on the left.
+    panels_swapped: bool,
+    /// The name typed for a new workspace in View > Workspaces.
+    workspace_name: String,
+    /// The window that gives shortcuts other keys, while open: the action
+    /// waiting for its new keys, and the last message.
+    shortcut_editor: Option<(Option<crate::workspace::Action>, String)>,
+    /// Where the settings are kept between sessions; off unless `main` turns
+    /// it on.
+    #[cfg(not(target_arch = "wasm32"))]
+    preferences: Option<crate::workspace::Preferences>,
+    /// The settings as last written, to write them again only on a change.
+    #[cfg(not(target_arch = "wasm32"))]
+    settings_stored: Option<crate::workspace::Settings>,
 }
 
 impl DesktopApp {
@@ -291,10 +353,11 @@ impl DesktopApp {
         store: crate::recovery::RecoveryStore,
         interval_seconds: f64,
     ) {
-        let autosave = crate::recovery::Autosave::new(store, interval_seconds, 0.0);
+        let autosave = crate::recovery::Autosave::new(store.clone(), interval_seconds, 0.0);
         self.recover_offer = autosave
             .store()
             .orphans(autosave.key(), autosave.stale_after());
+        self.recovery_setup = Some((store, interval_seconds, autosave.panic_copy()));
         self.autosave = Some(autosave);
     }
 
@@ -332,6 +395,149 @@ impl DesktopApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enable_recent_projects(&mut self, recent: crate::recent::RecentProjects) {
         self.recent = Some(recent);
+    }
+
+    /// Keep the workspace (theme, panels, view switches), the keys of the
+    /// shortcuts and the named workspaces in `preferences`, and bring back
+    /// what it holds.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_preferences(&mut self, preferences: crate::workspace::Preferences) {
+        let settings = preferences.load();
+        self.apply_layout(&settings.layout);
+        self.settings = settings;
+        self.settings_stored = Some(self.settings_now());
+        self.preferences = Some(preferences);
+    }
+
+    /// The settings as the window is now.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn settings_now(&self) -> crate::workspace::Settings {
+        let mut settings = self.settings.clone();
+        settings.format = 1;
+        settings.layout = self.layout();
+        settings
+    }
+
+    /// Write the settings when they changed since they were last written.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn store_settings(&mut self) {
+        let Some(preferences) = &self.preferences else {
+            return;
+        };
+        let now = self.settings_now();
+        if self.settings_stored.as_ref() == Some(&now) {
+            return;
+        }
+        if let Err(error) = preferences.store(&now) {
+            self.error = Some(error);
+        }
+        // Written or not, it is not tried again every frame.
+        self.settings_stored = Some(now);
+    }
+
+    /// The theme, panels and view switches of the window.
+    #[must_use]
+    pub fn layout(&self) -> crate::workspace::Layout {
+        crate::workspace::Layout {
+            theme: self.theme_choice,
+            side_panels_hidden: self.side_panels_hidden,
+            toolbar_hidden: self.toolbar_hidden,
+            panels_swapped: self.panels_swapped,
+            grid_off: self.grid_off,
+            snap_off: self.snap_off,
+            crosshair_off: self.crosshair_off,
+            problems_hidden: self.diagnostics_hidden,
+            wire_points: self.wire_points,
+            hover_highlight: self.hover_highlight,
+            rulers: self.rulers,
+        }
+    }
+
+    /// Give the window the theme, panels and view switches of `layout`.
+    pub fn apply_layout(&mut self, layout: &crate::workspace::Layout) {
+        self.theme_choice = layout.theme;
+        self.side_panels_hidden = layout.side_panels_hidden;
+        self.toolbar_hidden = layout.toolbar_hidden;
+        self.panels_swapped = layout.panels_swapped;
+        self.grid_off = layout.grid_off;
+        self.snap_off = layout.snap_off;
+        self.crosshair_off = layout.crosshair_off;
+        self.diagnostics_hidden = layout.problems_hidden;
+        self.wire_points = layout.wire_points;
+        self.hover_highlight = layout.hover_highlight;
+        self.rulers = layout.rulers;
+    }
+
+    /// The keys of the customizable shortcuts.
+    #[must_use]
+    pub const fn keymap(&self) -> &crate::workspace::Keymap {
+        &self.settings.keys
+    }
+
+    /// Give `action` the keys `chord`, as the shortcut window does.
+    ///
+    /// # Errors
+    ///
+    /// The keys are reserved or belong to another action.
+    pub fn set_shortcut(
+        &mut self,
+        action: Action,
+        chord: crate::workspace::Chord,
+    ) -> Result<(), crate::workspace::KeymapError> {
+        self.settings.keys.set(action, chord)
+    }
+
+    /// Keep the window's layout as the workspace `name` (View > Workspaces).
+    pub fn save_workspace(&mut self, name: &str) -> bool {
+        let layout = self.layout();
+        match self.settings.save_workspace(name, layout) {
+            Ok(()) => true,
+            Err(message) => {
+                self.error = Some(tr(message).to_owned());
+                false
+            }
+        }
+    }
+
+    /// Bring back the workspace `name`; whether there is one.
+    pub fn open_workspace(&mut self, name: &str) -> bool {
+        let Some(layout) = self
+            .settings
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.name == name)
+            .map(|workspace| workspace.layout.clone())
+        else {
+            return false;
+        };
+        self.apply_layout(&layout);
+        true
+    }
+
+    /// The names of the workspaces, in the order they were saved.
+    #[must_use]
+    pub fn workspace_names(&self) -> Vec<&str> {
+        self.settings
+            .workspaces
+            .iter()
+            .map(|workspace| workspace.name.as_str())
+            .collect()
+    }
+
+    /// Whether the palette, inspector and operator panel are shown.
+    #[must_use]
+    pub const fn side_panels_shown(&self) -> bool {
+        !self.side_panels_hidden
+    }
+
+    /// Show or collapse the side panels.
+    pub const fn show_side_panels(&mut self, shown: bool) {
+        self.side_panels_hidden = !shown;
+    }
+
+    /// Open the window that gives shortcuts other keys.
+    pub fn open_shortcut_editor(&mut self) {
+        self.shortcut_editor = Some((None, String::new()));
     }
 
     /// The projects in File > Open recent, newest first; empty when the list
@@ -910,11 +1116,223 @@ impl DesktopApp {
     /// Whether the window may close now. With unsaved changes it may not:
     /// the user is asked to save, discard or cancel.
     pub fn request_close(&mut self) -> bool {
-        if self.allow_close || !self.is_dirty() {
+        if self.allow_close || !self.any_dirty() {
             return true;
+        }
+        // The question is about the project shown: a tab with changes is
+        // shown first.
+        if !self.is_dirty()
+            && let Some(index) = self.dirty_tab()
+        {
+            self.switch_tab(index);
         }
         self.confirm = Some(Pending::Close);
         false
+    }
+
+    /// Whether the project shown or one in another tab has unsaved changes.
+    #[must_use]
+    pub fn any_dirty(&self) -> bool {
+        self.is_dirty() || self.dirty_tab().is_some()
+    }
+
+    /// The place among the tabs of the first project not shown that has
+    /// unsaved changes.
+    fn dirty_tab(&self) -> Option<usize> {
+        let at = self
+            .tabs
+            .iter()
+            .position(|tab| tab.session.as_ref().is_some_and(Session::is_dirty))?;
+        Some(if at >= self.active_tab {
+            at.saturating_add(1)
+        } else {
+            at
+        })
+    }
+
+    /// How many projects are open, in tabs; one or none without tabs.
+    #[must_use]
+    pub fn tab_count(&self) -> usize {
+        self.tabs
+            .len()
+            .saturating_add(usize::from(self.session.is_some()))
+    }
+
+    /// Where the shown project is among the tabs.
+    #[must_use]
+    pub const fn active_tab(&self) -> usize {
+        self.active_tab
+    }
+
+    /// The names of the projects in the tabs, in tab order.
+    #[must_use]
+    pub fn tab_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .tabs
+            .iter()
+            .map(|tab| {
+                tab.session.as_ref().map_or_else(String::new, |session| {
+                    session.document().project.name.clone()
+                })
+            })
+            .collect();
+        if let Some(session) = &self.session {
+            let at = self.active_tab.min(names.len());
+            names.insert(at, session.document().project.name.clone());
+        }
+        names
+    }
+
+    /// Swap what the window shows with what `tab` keeps.
+    fn swap_tab(&mut self, tab: &mut Tab) {
+        std::mem::swap(&mut self.session, &mut tab.session);
+        std::mem::swap(&mut self.mode, &mut tab.mode);
+        std::mem::swap(&mut self.editor, &mut tab.editor);
+        std::mem::swap(&mut self.inspector, &mut tab.inspector);
+        std::mem::swap(&mut self.camera, &mut tab.camera);
+        std::mem::swap(&mut self.view_back, &mut tab.view_back);
+        std::mem::swap(&mut self.view_settled, &mut tab.view_settled);
+        std::mem::swap(&mut self.path_input, &mut tab.path_input);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::mem::swap(&mut self.autosave, &mut tab.autosave);
+            std::mem::swap(&mut self.project_lock, &mut tab.project_lock);
+        }
+        // What was under way in the other tab does not carry over.
+        self.held = None;
+        self.label_edit = None;
+        self.point_entry = None;
+        self.context_menu = None;
+        self.waiving = None;
+        self.focus = None;
+        self.snapped = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.history = None;
+        }
+    }
+
+    /// Show the project of the tab at `index`.
+    pub fn switch_tab(&mut self, index: usize) {
+        if index == self.active_tab || index >= self.tab_count() || self.session.is_none() {
+            return;
+        }
+        let mut shown = Tab::default();
+        self.swap_tab(&mut shown);
+        let at = self.active_tab.min(self.tabs.len());
+        self.tabs.insert(at, shown);
+        if index < self.tabs.len() {
+            let mut target = self.tabs.remove(index);
+            self.swap_tab(&mut target);
+            self.active_tab = index;
+        }
+    }
+
+    /// Put the shown project in a tab of its own and show an empty one,
+    /// with an autosave of its own; `false` when no other tab can be opened.
+    fn push_tab(&mut self) -> bool {
+        if self.session.is_none() {
+            return true;
+        }
+        if self.tab_count() >= MAX_TABS {
+            self.error = Some(trf("At most {} projects are open at once.", &[&MAX_TABS]));
+            return false;
+        }
+        let mut shown = Tab::default();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((store, interval, root)) = &self.recovery_setup {
+            let autosave = crate::recovery::Autosave::new(store.clone(), *interval, 0.0);
+            root.adopt(autosave.panic_copy());
+            shown.autosave = Some(autosave);
+        }
+        self.swap_tab(&mut shown);
+        let at = self.active_tab.min(self.tabs.len());
+        self.tabs.insert(at, shown);
+        self.active_tab = self.tabs.len();
+        true
+    }
+
+    /// Take back the tab just pushed when nothing was opened in it.
+    fn pop_empty_tab(&mut self, before: usize) {
+        if self.session.is_none() && !self.tabs.is_empty() && self.active_tab != before {
+            let index = before.min(self.tabs.len().saturating_sub(1));
+            let mut target = self.tabs.remove(index);
+            self.swap_tab(&mut target);
+            self.active_tab = index;
+        }
+    }
+
+    /// A new, empty project in a tab of its own; the shown one stays open.
+    pub fn new_tab(&mut self) {
+        let before = self.active_tab;
+        if self.push_tab() {
+            self.perform(Pending::New);
+            self.pop_empty_tab(before);
+        }
+    }
+
+    /// Open the project at `path` in a tab of its own; the shown one stays
+    /// open. A project open already in a tab is shown instead.
+    pub fn open_in_new_tab(&mut self, path: &Path) {
+        if let Some(index) = self.tab_of(path) {
+            self.switch_tab(index);
+            return;
+        }
+        let before = self.active_tab;
+        if self.push_tab() {
+            self.open_path(path);
+            self.pop_empty_tab(before);
+        }
+    }
+
+    /// The tab whose project was opened from or saved to `path`.
+    fn tab_of(&self, path: &Path) -> Option<usize> {
+        let same = |session: &Session| session.path().is_some_and(|own| own == path);
+        if self.session.as_ref().is_some_and(same) {
+            return Some(self.active_tab);
+        }
+        let at = self
+            .tabs
+            .iter()
+            .position(|tab| tab.session.as_ref().is_some_and(same))?;
+        Some(if at >= self.active_tab {
+            at.saturating_add(1)
+        } else {
+            at
+        })
+    }
+
+    /// Close the project shown, asking first about unsaved changes; the
+    /// next tab is shown.
+    pub fn close_tab(&mut self) {
+        if self.session.is_some() {
+            self.guard(Pending::CloseTab);
+        }
+    }
+
+    /// Drop the project shown, whose changes were saved or dropped on
+    /// purpose, and show the tab next to it.
+    fn drop_shown(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(autosave) = &mut self.autosave {
+            autosave.clear();
+        }
+        if self.tabs.is_empty() {
+            let mut empty = Tab::default();
+            // The first tab keeps the autosave of the window.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                empty.autosave = self.autosave.take();
+            }
+            self.swap_tab(&mut empty);
+            self.active_tab = 0;
+            self.error = None;
+            return;
+        }
+        let index = self.active_tab.min(self.tabs.len().saturating_sub(1));
+        let mut target = self.tabs.remove(index);
+        self.swap_tab(&mut target);
+        self.active_tab = index;
     }
 
     /// Whether the open project has unsaved changes.
@@ -1181,6 +1599,19 @@ impl DesktopApp {
                 }
             }
             Pending::Close => {
+                // Another tab with unsaved changes is asked about next; the
+                // project answered for is closed.
+                if let Some(index) = self.dirty_tab() {
+                    self.drop_shown();
+                    let index = if index > self.active_tab {
+                        index.saturating_sub(1)
+                    } else {
+                        index
+                    };
+                    self.switch_tab(index);
+                    self.confirm = Some(Pending::Close);
+                    return;
+                }
                 // Closed on purpose: no copy is kept for a recovery.
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(autosave) = &mut self.autosave {
@@ -1189,6 +1620,7 @@ impl DesktopApp {
                 self.allow_close = true;
                 self.close_now = true;
             }
+            Pending::CloseTab => self.drop_shown(),
         }
     }
 
@@ -1206,6 +1638,12 @@ impl DesktopApp {
         }
         let now = ui.input(|input| input.time);
         autosave.tick(now, self.session.as_ref());
+        // The projects of the other tabs are kept too.
+        for tab in &mut self.tabs {
+            if let Some(autosave) = &mut tab.autosave {
+                autosave.tick(now, tab.session.as_ref());
+            }
+        }
         if self.session.as_ref().is_some_and(Session::is_dirty) {
             let wait = autosave.due_in(now).max(0.1);
             ui.ctx()
@@ -1704,14 +2142,12 @@ impl DesktopApp {
                 ui.ctx().request_repaint();
             }
         }
-        if ui.input_mut(|input| {
-            input.consume_shortcut(&KeyboardShortcut::new(
-                egui::Modifiers::COMMAND,
-                egui::Key::Num9,
-            ))
-        }) {
+        if self.settings.keys.clone().pressed(ui, Action::CommandLine) {
             self.command_line.focus();
         }
+        // The shortcut window takes the keys it waits for before any
+        // shortcut sees them.
+        self.shortcut_window(ui);
         if self.mode == Mode::Edit {
             self.shortcuts(ui);
         }
@@ -1721,10 +2157,20 @@ impl DesktopApp {
             theme::apply_style(ui.ctx());
             self.styled = true;
         }
+        // A fresh window never tells egui a theme: it follows the system as
+        // before.
+        if self.theme_applied.unwrap_or_default() != self.theme_choice {
+            ui.ctx().set_theme(self.theme_choice.preference());
+            self.theme_applied = Some(self.theme_choice);
+        }
         let tokens = Tokens::of(ui);
         self.update_trace();
         self.menu_bar(ui);
-        egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
+        #[cfg(not(target_arch = "wasm32"))]
+        self.store_settings();
+        if !self.toolbar_hidden {
+            egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
+        }
         if self.session.is_some() {
             egui::Panel::top("document")
                 .frame(
@@ -1748,9 +2194,17 @@ impl DesktopApp {
                 .show(ui, |ui| self.diagnostics(ui));
         }
         self.help_windows(ui);
+        // The side panels go on the side the workspace puts them on.
+        type Side = fn(&'static str) -> egui::Panel;
+        let (palette_panel, inspector_panel): (Side, Side) = if self.panels_swapped {
+            (egui::Panel::right, egui::Panel::left)
+        } else {
+            (egui::Panel::left, egui::Panel::right)
+        };
         match self.mode {
+            _ if self.side_panels_hidden => {}
             Mode::Edit if self.session.is_some() => {
-                egui::Panel::left("palette")
+                palette_panel("palette")
                     .resizable(true)
                     .default_size(260.0)
                     .show(ui, |ui| {
@@ -1763,13 +2217,13 @@ impl DesktopApp {
                             );
                         }
                     });
-                egui::Panel::right("inspector")
+                inspector_panel("inspector")
                     .resizable(true)
                     .default_size(280.0)
                     .show(ui, |ui| self.inspector(ui));
             }
             Mode::Simulate if self.session.as_ref().is_some_and(Session::can_simulate) => {
-                egui::Panel::right("operator")
+                inspector_panel("operator")
                     .resizable(true)
                     .default_size(260.0)
                     .show(ui, |ui| self.operator(ui));
@@ -1799,20 +2253,21 @@ impl DesktopApp {
         } else if pressed(ui, egui::Modifiers::COMMAND, egui::Key::Z) {
             self.undo();
         }
-        if pressed(ui, egui::Modifiers::NONE, egui::Key::W) {
+        let keys = self.settings.keys.clone();
+        if keys.pressed(ui, Action::WireTool) {
             self.editor.set_tool(Tool::Wire);
         }
-        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::H) {
+        if keys.pressed(ui, Action::FindReplace) {
             self.find_replace.open();
         }
-        if pressed(ui, egui::Modifiers::NONE, egui::Key::F2) {
+        if keys.pressed(ui, Action::EditLabel) {
             self.edit_label();
         }
-        if pressed(ui, egui::Modifiers::NONE, egui::Key::G) {
+        if keys.pressed(ui, Action::TypePoint) {
             self.type_point();
         }
         let mut actions = Vec::new();
-        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::A) {
+        if keys.pressed(ui, Action::SelectAll) {
             actions.push(Key::SelectAll);
         }
         // The window system may turn Ctrl+C and Ctrl+V into clipboard events
@@ -1833,7 +2288,7 @@ impl DesktopApp {
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::V) || paste {
             actions.push(Key::Paste);
         }
-        if pressed(ui, egui::Modifiers::COMMAND, egui::Key::D) {
+        if keys.pressed(ui, Action::Duplicate) {
             actions.push(Key::Duplicate);
         }
         // Shift moves five grid units; the plain arrow one.
@@ -1852,10 +2307,12 @@ impl DesktopApp {
                 }
             }
         }
+        if keys.pressed(ui, Action::Rotate) {
+            actions.push(Key::Rotate);
+        }
         for (key, action) in [
             (egui::Key::Delete, Key::Delete),
             (egui::Key::Backspace, Key::Delete),
-            (egui::Key::R, Key::Rotate),
             (egui::Key::Escape, Key::Escape),
             (egui::Key::Space, Key::FlipBend),
         ] {
@@ -1880,22 +2337,16 @@ impl DesktopApp {
         if ui.ctx().egui_wants_keyboard_input() {
             return;
         }
+        let keys = self.settings.keys.clone();
         // The command palette, in both modes.
-        if ui.input_mut(|input| {
-            input.consume_shortcut(&KeyboardShortcut::new(
-                egui::Modifiers::COMMAND,
-                egui::Key::K,
-            ))
-        }) {
+        if keys.pressed(ui, Action::CommandPalette) {
             self.command_palette.open();
         }
-        if ui.input_mut(|input| {
-            input.consume_shortcut(&KeyboardShortcut::new(
-                egui::Modifiers::ALT,
-                egui::Key::ArrowLeft,
-            ))
-        }) {
+        if keys.pressed(ui, Action::PreviousView) {
             self.previous_view();
+        }
+        if keys.pressed(ui, Action::SidePanels) {
+            self.side_panels_hidden = !self.side_panels_hidden;
         }
         let pressed = |ui: &mut Ui, key: egui::Key| {
             ui.input_mut(|input| {
@@ -1908,13 +2359,13 @@ impl DesktopApp {
         if pressed(ui, egui::Key::Minus) {
             self.zoom_request = Some(1.0 / KEY_ZOOM);
         }
-        if pressed(ui, egui::Key::Num0) {
+        if keys.pressed(ui, Action::FitDrawing) {
             self.fit_pending = true;
         }
-        if pressed(ui, egui::Key::F) && !self.editor.selection().is_empty() {
+        if keys.pressed(ui, Action::FitSelection) && !self.editor.selection().is_empty() {
             self.frame_selection = true;
         }
-        if pressed(ui, egui::Key::T) {
+        if keys.pressed(ui, Action::TraceNet) {
             self.trace_net = !self.trace_net;
         }
     }
@@ -2100,6 +2551,25 @@ impl DesktopApp {
                             }
                         });
                     });
+                    ui.separator();
+                    if ui.button(tr("New tab")).clicked() {
+                        ui.close();
+                        self.new_tab();
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button(tr("Open in a new tab…")).clicked() {
+                        ui.close();
+                        if let Some(path) = dialogs::pick_project() {
+                            self.open_in_new_tab(&path);
+                        }
+                    }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new(tr("Close tab")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.close_tab();
+                    }
                 });
                 ui.menu_button(tr("Modify"), |ui| {
                     let (can_undo, can_redo) = self.session.as_ref().map_or((false, false), |s| {
@@ -2299,6 +2769,8 @@ impl DesktopApp {
                         self.diagnostics_hidden = !problems;
                     }
                     ui.checkbox(&mut self.trace_net, tr("Trace the net of the selection"));
+                    ui.separator();
+                    self.workspace_menu(ui);
                 });
                 ui.menu_button(tr("Run"), |ui| {
                     let mut mode = self.mode;
@@ -2377,6 +2849,184 @@ impl DesktopApp {
         });
     }
 
+    /// The end of the View menu: the theme, the panels, the named
+    /// workspaces and the keys of the shortcuts.
+    fn workspace_menu(&mut self, ui: &mut Ui) {
+        ui.menu_button(tr("Theme"), |ui| {
+            for choice in ThemeChoice::ALL {
+                if ui
+                    .radio_value(&mut self.theme_choice, choice, tr(choice.name()))
+                    .clicked()
+                {
+                    ui.close();
+                }
+            }
+        });
+        let mut side = !self.side_panels_hidden;
+        if ui
+            .checkbox(&mut side, tr("Show the side panels"))
+            .on_hover_text(self.settings.keys.chord(Action::SidePanels).text())
+            .changed()
+        {
+            self.side_panels_hidden = !side;
+        }
+        let mut toolbar = !self.toolbar_hidden;
+        if ui.checkbox(&mut toolbar, tr("Show the tool bar")).changed() {
+            self.toolbar_hidden = !toolbar;
+        }
+        ui.checkbox(
+            &mut self.panels_swapped,
+            tr("Palette on the right, inspector on the left"),
+        );
+        ui.menu_button(tr("Workspaces"), |ui| {
+            let names: Vec<String> = self
+                .workspace_names()
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            if names.is_empty() {
+                ui.label(RichText::new(tr("No saved workspace")).weak());
+            }
+            for name in &names {
+                ui.horizontal(|ui| {
+                    if ui.button(name).clicked() {
+                        ui.close();
+                        self.open_workspace(name);
+                    }
+                    if ui
+                        .small_button("×")
+                        .on_hover_text(tr("Delete this workspace"))
+                        .clicked()
+                    {
+                        self.settings.delete_workspace(name);
+                    }
+                });
+            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                let field = ui.add(
+                    egui::TextEdit::singleline(&mut self.workspace_name)
+                        .hint_text(tr("name"))
+                        .desired_width(120.0),
+                );
+                let entered =
+                    field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+                if (ui.button(tr("Save the current layout")).clicked() || entered)
+                    && self.save_workspace(&self.workspace_name.clone())
+                {
+                    self.workspace_name.clear();
+                    ui.close();
+                }
+            });
+        });
+        if ui.button(tr("Customize shortcuts…")).clicked() {
+            ui.close();
+            self.open_shortcut_editor();
+        }
+    }
+
+    /// The window that gives shortcuts other keys: a row per action with its
+    /// keys, a button that waits for the new keys, and one that puts the
+    /// keys of a fresh window back.
+    fn shortcut_window(&mut self, ui: &Ui) {
+        let Some((mut waiting, mut message)) = self.shortcut_editor.take() else {
+            return;
+        };
+        // The next key pressed, with its modifiers, goes to the waiting
+        // action; Escape stops waiting.
+        if let Some(action) = waiting {
+            let pressed = ui.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } => Some(crate::workspace::Chord::pressed(*key, *modifiers)),
+                    _ => None,
+                })
+            });
+            if let Some(chord) = pressed {
+                ui.input_mut(|input| {
+                    input
+                        .events
+                        .retain(|event| !matches!(event, egui::Event::Key { .. }));
+                });
+                waiting = None;
+                if chord.key == egui::Key::Escape && chord.modifiers == crate::workspace::Mods::NONE
+                {
+                    message.clear();
+                } else {
+                    message = match self.settings.keys.set(action, chord) {
+                        Ok(()) => String::new(),
+                        Err(crate::workspace::KeymapError::Reserved(chord)) => {
+                            trf("{} is kept for its usual use.", &[&chord.text()])
+                        }
+                        Err(crate::workspace::KeymapError::Taken(chord, other)) => trf(
+                            "{} already does: {}.",
+                            &[&chord.text(), &tr(other.description())],
+                        ),
+                    };
+                }
+            }
+        }
+        let mut open = true;
+        egui::Window::new(tr("Customize shortcuts"))
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ui.ctx(), |ui| {
+                egui::Grid::new("custom_keys")
+                    .num_columns(3)
+                    .show(ui, |ui| {
+                        for action in Action::ALL {
+                            ui.label(tr(action.description()));
+                            let keys = if waiting == Some(action) {
+                                tr("press the new keys…").to_owned()
+                            } else {
+                                self.settings.keys.chord(action).text()
+                            };
+                            if ui.button(RichText::new(keys).monospace()).clicked() {
+                                waiting = Some(action);
+                                message.clear();
+                            }
+                            if ui
+                                .add_enabled(
+                                    self.settings.keys.is_changed(action),
+                                    egui::Button::new(tr("Default")),
+                                )
+                                .clicked()
+                                && !self.settings.keys.reset(action)
+                            {
+                                message = tr(
+                                "Another shortcut has these keys now; give it other keys first.",
+                            )
+                            .to_owned();
+                            }
+                            ui.end_row();
+                        }
+                    });
+                if !message.is_empty() {
+                    ui.colored_label(ui.visuals().warn_fg_color, &message);
+                }
+                if ui.button(tr("All shortcuts to their defaults")).clicked() {
+                    self.settings.keys.reset_all();
+                    waiting = None;
+                    message.clear();
+                }
+            });
+        if open {
+            self.shortcut_editor = Some((waiting, message));
+        }
+    }
+
+    /// Whether the window that gives shortcuts other keys is open.
+    #[must_use]
+    pub const fn shortcut_editor_open(&self) -> bool {
+        self.shortcut_editor.is_some()
+    }
+
     /// The windows of the Help menu.
     fn help_windows(&mut self, ui: &Ui) {
         let ctx = ui.ctx().clone();
@@ -2388,6 +3038,15 @@ impl DesktopApp {
             .show(&ctx, |ui| {
                 egui::Grid::new("keys").num_columns(2).show(ui, |ui| {
                     for (keys, action) in palette::KEYS {
+                        // A shortcut given other keys shows them.
+                        if let Some(custom) = Action::for_keys_row(keys)
+                            .filter(|action| self.settings.keys.is_changed(*action))
+                        {
+                            ui.monospace(self.settings.keys.chord(custom).text());
+                            ui.label(tr(action));
+                            ui.end_row();
+                            continue;
+                        }
                         ui.monospace(tr(keys));
                         ui.label(tr(action));
                         ui.end_row();
@@ -2507,6 +3166,10 @@ impl DesktopApp {
     /// The tab of the open project: its name, and whether it has unsaved
     /// changes.
     fn document_tab(&mut self, ui: &mut Ui) {
+        if !self.tabs.is_empty() {
+            self.document_tabs(ui);
+            return;
+        }
         let Some(session) = &self.session else {
             return;
         };
@@ -2527,6 +3190,67 @@ impl DesktopApp {
             .show(ui, |ui| {
                 ui.label(RichText::new(name).strong());
             });
+    }
+
+    /// One tab per open project, when there are several: the shown one as
+    /// the single tab is drawn, the others as buttons that show them, each
+    /// with a button that closes it.
+    fn document_tabs(&mut self, ui: &mut Ui) {
+        let tokens = Tokens::of(ui);
+        let names = self.tab_names();
+        let dirty: Vec<bool> = {
+            let mut dirty: Vec<bool> = self
+                .tabs
+                .iter()
+                .map(|tab| tab.session.as_ref().is_some_and(Session::is_dirty))
+                .collect();
+            dirty.insert(self.active_tab.min(dirty.len()), self.is_dirty());
+            dirty
+        };
+        let mut show = None;
+        let mut close = None;
+        ui.horizontal(|ui| {
+            for (index, (name, unsaved)) in names.iter().zip(dirty).enumerate() {
+                let mut text = name.clone();
+                if unsaved {
+                    text.push_str(tr(" (unsaved)"));
+                }
+                if index == self.active_tab {
+                    egui::Frame::new()
+                        .fill(tokens.tab_active)
+                        .corner_radius(egui::CornerRadius {
+                            nw: 5,
+                            ne: 5,
+                            sw: 0,
+                            se: 0,
+                        })
+                        .inner_margin(egui::Margin::symmetric(12, 3))
+                        .show(ui, |ui| {
+                            ui.label(RichText::new(text).strong());
+                        });
+                } else if ui
+                    .add(egui::Button::new(text).frame(false))
+                    .on_hover_text(tr("Show this project"))
+                    .clicked()
+                {
+                    show = Some(index);
+                }
+                let label = trf("Close {}", &[name]);
+                let response = ui.small_button("×").on_hover_text(label.as_str());
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
+                });
+                if response.clicked() {
+                    close = Some(index);
+                }
+            }
+        });
+        if let Some(index) = close {
+            self.switch_tab(index);
+            self.close_tab();
+        } else if let Some(index) = show {
+            self.switch_tab(index);
+        }
     }
 
     /// The status bar: the position of the pointer, one tab per sheet, and

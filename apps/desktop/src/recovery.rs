@@ -294,9 +294,18 @@ impl Autosave {
     /// seconds of `now` (the window's clock).
     #[must_use]
     pub fn new(store: RecoveryStore, interval: f64, now: f64) -> Self {
-        let key = format!("window-{}-{}", std::process::id(), unix_now());
+        // The count tells apart the autosaves of two tabs made in the same
+        // second.
+        static MADE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let made = MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let key = if made == 0 {
+            format!("window-{}-{}", std::process::id(), unix_now())
+        } else {
+            format!("window-{}-{}-{made}", std::process::id(), unix_now())
+        };
         let panic = PanicCopy {
             slot: Arc::default(),
+            others: Arc::default(),
             store: store.clone(),
             key: key.clone(),
         };
@@ -445,6 +454,8 @@ impl Autosave {
 #[derive(Clone, Debug)]
 pub struct PanicCopy {
     slot: Arc<Mutex<Option<Kept>>>,
+    /// The copies of the other tabs of the window, written by the same hook.
+    others: Arc<Mutex<Vec<PanicCopy>>>,
     store: RecoveryStore,
     key: String,
 }
@@ -476,10 +487,31 @@ impl PanicCopy {
         *self.slot.lock().unwrap_or_else(PoisonError::into_inner) = None;
     }
 
+    /// Have this hook write the project of another tab of the window too.
+    pub fn adopt(&self, other: PanicCopy) {
+        self.others
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(other);
+    }
+
+    /// Write the kept documents of this tab and of the tabs it adopted.
+    pub fn write_now(&self) {
+        self.write_own();
+        let others = match self.others.try_lock() {
+            Ok(others) => others,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return,
+        };
+        for other in others.iter() {
+            other.write_own();
+        }
+    }
+
     /// Write the kept document as a recovery copy whose window has stopped,
     /// so that the next window offers it at once. Nothing happens without a
     /// kept document, or while another thread holds it.
-    pub fn write_now(&self) {
+    fn write_own(&self) {
         let slot = match self.slot.try_lock() {
             Ok(slot) => slot,
             Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),

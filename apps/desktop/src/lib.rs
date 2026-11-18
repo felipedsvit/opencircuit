@@ -45,6 +45,7 @@ mod theme;
 pub mod versions;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
+pub mod workspace;
 
 pub use app::{DesktopApp, Mode};
 pub use i18n::Language;

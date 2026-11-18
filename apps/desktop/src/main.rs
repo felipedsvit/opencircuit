@@ -38,6 +38,7 @@ mod native {
     use opencircuit_desktop::recent::RecentProjects;
     use opencircuit_desktop::recovery::{DEFAULT_INTERVAL_SECONDS, RecoveryStore};
     use opencircuit_desktop::versions::VersionStore;
+    use opencircuit_desktop::workspace::Preferences;
     use opencircuit_desktop::{DesktopApp, Language};
 
     const USAGE: &str = "usage: opencircuit-desktop [PROJECT.ocircuit]";
@@ -92,6 +93,10 @@ mod native {
                 }
                 if let Some(recent) = RecentProjects::in_user_data() {
                     app.enable_recent_projects(recent);
+                }
+                // The theme, panels and shortcuts of the last session.
+                if let Some(preferences) = Preferences::in_user_data() {
+                    app.enable_preferences(preferences);
                 }
                 Ok(Box::new(app))
             }),
