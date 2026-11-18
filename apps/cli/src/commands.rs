@@ -2,7 +2,7 @@
 //! `serve`.
 
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use circuit_model::{
     ComponentCatalog, Diagnostic, InputAction, Schematic, Severity, SimSnapshot, WaiverIndex,
@@ -103,6 +103,24 @@ pub(crate) fn execute(
                 report: *report,
             };
             export(project, output, drawing, &catalog, out, err)
+        }
+        Command::ExportMany {
+            projects,
+            dir,
+            format,
+            theme,
+            sheet,
+            library,
+            report,
+        } => {
+            let catalog = load_catalog(library.as_slice())?;
+            let drawing = Drawing {
+                format: *format,
+                theme: *theme,
+                sheet: *sheet,
+                report: *report,
+            };
+            export_many(projects, dir, drawing, &catalog, out, err)
         }
         Command::New {
             file,
@@ -505,19 +523,46 @@ fn export(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<u8, CliError> {
+    let report = drawing.report;
+    let (bytes, pages) = match draw(project, drawing, catalog)? {
+        Ok(drawn) => drawn,
+        Err(message) => return fail(report, "export", &message, &[], out, err),
+    };
+    write_atomic(output, &bytes)?;
+    match report {
+        OutputFormat::Text => writeln!(out, "wrote  {}", output.display())?,
+        OutputFormat::Json => emit(
+            out,
+            &ExportReport {
+                format: JSON_FORMAT,
+                command: "export",
+                ok: true,
+                file: output.display().to_string(),
+                kind: drawing.format.extension(),
+                pages,
+            },
+        )?,
+    }
+    Ok(EXIT_OK)
+}
+
+/// The bytes of the drawing of a project and its number of pages, or why it
+/// cannot be drawn. A file that cannot be read is an I/O error.
+fn draw(
+    project: &Path,
+    drawing: Drawing,
+    catalog: &ComponentCatalog,
+) -> Result<Result<(Vec<u8>, usize), String>, CliError> {
     let Drawing {
         format,
         theme,
         sheet,
-        report,
+        ..
     } = drawing;
     let text = read_text(project, MAX_PROJECT_BYTES)?;
     let doc = match circuit_project::from_str(&text) {
         Ok(doc) => doc,
-        Err(error) => {
-            let message = format!("{}: {error}", project.display());
-            return fail(report, "export", &message, &[], out, err);
-        }
+        Err(error) => return Ok(Err(format!("{}: {error}", project.display()))),
     };
     let options = circuit_renderer::SceneOptions::default();
     // One sheet by its number: a scene of the paper, for SVG and for PDF.
@@ -528,18 +573,17 @@ fn export(
                 .iter()
                 .find(|candidate| candidate.number == number)
             else {
-                let message = format!(
+                return Ok(Err(format!(
                     "{}: no sheet number {number}; the project has {} sheet(s)",
                     project.display(),
                     doc.sheets.len()
-                );
-                return fail(report, "export", &message, &[], out, err);
+                )));
             };
             circuit_renderer::build_sheet_scene(&doc, catalog, None, &options, found.id)
         }
         SheetChoice::Default | SheetChoice::All => None,
     };
-    let (bytes, pages) = match (format, one) {
+    Ok(Ok(match (format, one) {
         (ExportFormat::Svg, Some(page)) => (circuit_export::svg(&page, theme).into_bytes(), 1),
         (ExportFormat::Pdf, Some(page)) => (circuit_export::pdf(&page, theme), 1),
         (ExportFormat::Svg, None) => {
@@ -555,26 +599,111 @@ fn export(
                 (circuit_export::pdf_pages(&pages, theme), pages.len())
             }
         }
-    };
-    write_atomic(output, &bytes)?;
-    match report {
-        OutputFormat::Text => writeln!(out, "wrote  {}", output.display())?,
-        OutputFormat::Json => emit(
+    }))
+}
+
+#[derive(Serialize)]
+struct ExportedFile {
+    project: String,
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pages: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ExportManyReport<'a> {
+    format: u32,
+    command: &'static str,
+    ok: bool,
+    kind: &'a str,
+    files: Vec<ExportedFile>,
+}
+
+/// Draw several projects into one folder, each as `<name>.<svg|pdf>` after
+/// its file name. A project that cannot be drawn is reported and the others
+/// are still written; the exit code is then 1. Two projects that would write
+/// the same file are refused before anything is written.
+fn export_many(
+    projects: &[PathBuf],
+    dir: &Path,
+    drawing: Drawing,
+    catalog: &ComponentCatalog,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<u8, CliError> {
+    let report = drawing.report;
+    let extension = drawing.format.extension();
+    let mut targets: Vec<PathBuf> = Vec::with_capacity(projects.len());
+    for project in projects {
+        // The file name without its last extension, then the new one:
+        // `a.scenario.json` gives `a.scenario.pdf`, not `a.pdf`.
+        let mut name = project
+            .file_stem()
+            .map_or_else(|| "project".into(), std::ffi::OsStr::to_os_string);
+        name.push(".");
+        name.push(extension);
+        let target = dir.join(name);
+        if targets.contains(&target) {
+            let message = format!(
+                "two projects would write {}; export them separately",
+                target.display()
+            );
+            return fail(report, "export", &message, &[], out, err);
+        }
+        targets.push(target);
+    }
+    std::fs::create_dir_all(dir)?;
+    let mut files = Vec::with_capacity(projects.len());
+    for (project, target) in projects.iter().zip(&targets) {
+        let drawn = match draw(project, drawing, catalog) {
+            Ok(drawn) => drawn,
+            Err(error) => Err(format!("{}: {error}", project.display())),
+        };
+        let written = drawn.and_then(|(bytes, pages)| {
+            write_atomic(target, &bytes)
+                .map(|()| pages)
+                .map_err(|error| format!("{}: {error}", target.display()))
+        });
+        match (&written, report) {
+            (Ok(_), OutputFormat::Text) => writeln!(out, "wrote  {}", target.display())?,
+            (Err(message), OutputFormat::Text) => writeln!(err, "error: {message}")?,
+            (_, OutputFormat::Json) => {}
+        }
+        files.push(match written {
+            Ok(pages) => ExportedFile {
+                project: project.display().to_string(),
+                ok: true,
+                file: Some(target.display().to_string()),
+                pages: Some(pages),
+                error: None,
+            },
+            Err(message) => ExportedFile {
+                project: project.display().to_string(),
+                ok: false,
+                file: None,
+                pages: None,
+                error: Some(message),
+            },
+        });
+    }
+    let ok = files.iter().all(|file| file.ok);
+    if report == OutputFormat::Json {
+        emit(
             out,
-            &ExportReport {
+            &ExportManyReport {
                 format: JSON_FORMAT,
                 command: "export",
-                ok: true,
-                file: output.display().to_string(),
-                kind: match format {
-                    ExportFormat::Svg => "svg",
-                    ExportFormat::Pdf => "pdf",
-                },
-                pages,
+                ok,
+                kind: extension,
+                files,
             },
-        )?,
+        )?;
     }
-    Ok(EXIT_OK)
+    Ok(if ok { EXIT_OK } else { EXIT_FAILED })
 }
 
 /// What `report` makes and where it goes.

@@ -84,6 +84,18 @@ exit code 1, with its position and the reason: `operation 7 (connect): ...`.
 The compiler is not asked to accept the result: `errors` and `warnings` in
 the output say what it finds, and `validate` is the check to run after.
 
+The window writes edit files too: Modify > Record macro records the edits
+that follow, and Stop recording saves them as an edit file that Modify >
+Play macro, `opencircuit edit --apply` and the MCP server play back. Each
+change is written as operations and kept only when running them on the
+project as it was gives exactly the change; one that cannot be (a wire route
+dragged by hand, a layer, a supply) is left out, and the status bar counts
+it. Elements the macro creates are named `s12`, `j13`, `w14`, `t15` after
+their IDs at recording time; the others are named by their IDs and devices
+by their designators, so a macro that refers to elements it did not create
+plays back on the project it was recorded on. The reader of edit files is
+`circuit_commands::script`.
+
 ```json
 {
   "schema_version": 1,
@@ -143,6 +155,7 @@ elements with their kind and ID.
 | `unwaive` | `code`, `subject` | takes a waiver away |
 | `renumber` | `sheet` | gives the designators the next numbers in reading order, on every sheet or on the sheet with this number |
 | `renumber_sheets` | | numbers the sheets 1, 2, 3… in reading order of their frames (top to bottom, then left to right); the cross-references follow |
+| `route` | `wires` (names or IDs) | gives each wire an orthogonal route around symbols, junctions and other wires, with few bends; refused when none is found within 20 grid units of its ends |
 | `replace` | `find`, `with`, `designators`, `notes`, `parameters` | replaces `find` (exactly, with its case) by `with` in the designators, the text notes and the text parameters; each kind is on unless set to `false`. Refused as a whole when a designator would be invalid or taken twice, or a value would not fit |
 | `add_text` | `at`, `text`, `anchor`, `as` | a text note (ADR-0015): one line of 1 to 120 characters; `anchor` is `left` (default) or `center` |
 | `set_text` | `text` (name or ID), `to` | changes the words of a note |
@@ -249,10 +262,21 @@ OPC UA and MQTT were evaluated and are not implemented
 ## Export
 
 `opencircuit export <project> --output <file.svg | file.pdf>` draws the
-sheet, and the desktop application has the same in its Export menu. Output is
+sheet, and the desktop application has the same in its Export menu, with File
+> Print preview showing the pages of the PDF first. Output is
 deterministic: the same project gives the same bytes on every platform,
 which is what the committed drawings under `examples/` are checked against.
 Library artwork is drawn when its library is loaded.
+
+Several projects go into one folder with `opencircuit export <project>...
+--output-dir <dir> --to svg|pdf`: each is written as `<dir>/<file name>.<svg|pdf>`
+(`a.scenario.json` gives `a.scenario.pdf`), with the same `--theme` and
+`--sheet` for all. A project that cannot be drawn is reported and the others
+are still written, with exit code 1; two projects that would write the same
+file are refused before anything is written. With `--format json` the
+document has `kind` and `files`, one entry per project with `project`, `ok`,
+and `file` and `pages`, or `error`. `--output` and `--output-dir` do not
+mix, and `--to` goes only with `--output-dir`.
 
 A project with sheets (ADR-0011, `FORMAT.md`) draws the frame, the zone
 marks and the title block of each sheet. Its PDF has one page per sheet, in

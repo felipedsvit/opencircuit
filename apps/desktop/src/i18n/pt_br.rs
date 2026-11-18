@@ -24,6 +24,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("24 V DC", "24 V CC"),
     ("400/230 V 50 Hz three phase", "400/230 V 50 Hz trifásica"),
     (
+        "A change left out (a hand-drawn wire route, a layer, a supply) cannot be written as an operation of an edit file",
+        "Uma alteração deixada de fora (rota de fio desenhada à mão, camada, alimentação) não pode ser escrita como operação de um arquivo de edição",
+    ),
+    (
         "A command, a designator, a wire number, a text…",
         "Um comando, um identificador, um número de fio, um texto…",
     ),
@@ -44,6 +48,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     (
         "An open-source editor and simulator for industrial control circuits.",
         "Um editor e simulador de código aberto para circuitos de comando industriais.",
+    ),
+    (
+        "An orthogonal route around the symbols, undone in one step",
+        "Uma rota ortogonal em volta dos símbolos, desfeita em um passo",
     ),
     ("Arrows", "Setas"),
     ("As PDF…", "Como PDF…"),
@@ -123,9 +131,11 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Cada vez que este projeto foi salvo; abra uma como projeto novo",
     ),
     ("Export", "Exportar"),
+    ("Export as PDF…", "Exportar como PDF…"),
     ("Export drawing", "Exportar desenho"),
     ("Export drawing as PDF…", "Exportar desenho como PDF…"),
     ("Export drawing as SVG…", "Exportar desenho como SVG…"),
+    ("Extend wire end", "Estender ponta do fio"),
     ("F", "F"),
     ("F2", "F2"),
     (
@@ -191,6 +201,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("New from template", "Novo a partir de modelo"),
     ("New layer", "Nova camada"),
     ("New project", "Novo projeto"),
+    ("Next page", "Próxima página"),
     (
         "No diagnostics: the project compiles.",
         "Sem diagnósticos: o projeto compila.",
@@ -228,6 +239,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "O OpenCircuit fechou sem salvar estes projetos. Uma cópia de cada um foi guardada.",
     ),
     ("OpenCircuit library", "Biblioteca OpenCircuit"),
+    (
+        "OpenCircuit macro (edit file)",
+        "Macro do OpenCircuit (arquivo de edição)",
+    ),
     ("OpenCircuit project", "Projeto OpenCircuit"),
     ("Open…", "Abrir…"),
     ("Operator", "Operador"),
@@ -238,6 +253,8 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Own number", "Número próprio"),
     ("PDF document", "Documento PDF"),
     ("PDF…", "PDF…"),
+    ("Page {0} of {1}", "Página {0} de {1}"),
+    ("Parallel copy of the wires", "Cópia paralela dos fios"),
     ("Parameters", "Parâmetros"),
     ("Parameters of {0} {1}", "Parâmetros de {0} {1}"),
     ("Part no", "Nº da peça"),
@@ -246,9 +263,13 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Pause", "Pausar"),
     ("Pause simulation", "Pausar simulação"),
     ("Play", "Iniciar"),
+    ("Play macro…", "Executar macro…"),
     ("Point", "Ponto"),
     ("Prefix", "Prefixo"),
+    ("Previous page", "Página anterior"),
     ("Previous view", "Vista anterior"),
+    ("Print preview", "Visualizar impressão"),
+    ("Print preview…", "Visualizar impressão…"),
     ("Problems", "Problemas"),
     ("Project", "Projeto"),
     ("Project tree", "Árvore do projeto"),
@@ -267,6 +288,16 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("Recent", "Recentes"),
     ("Recent {0} · {1}", "Recente {0} · {1}"),
+    ("Record macro", "Gravar macro"),
+    (
+        "Record the next edits as an edit file to play back",
+        "Gravar as próximas edições como arquivo de edição para reproduzir",
+    ),
+    ("Recording macro: {0} steps", "Gravando macro: {0} passos"),
+    (
+        "Recording macro: {0} steps, {1} left out",
+        "Gravando macro: {0} passos, {1} deixados de fora",
+    ),
     ("Recover", "Recuperar"),
     ("Recover unsaved work", "Recuperar trabalho não salvo"),
     (
@@ -298,6 +329,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Rotate all", "Girar todos"),
     ("Rotate selection", "Girar seleção"),
     ("Rotate symbol", "Girar símbolo"),
+    ("Route the selected wires", "Rotear os fios selecionados"),
     ("Run", "Executar"),
     ("Runtime faults", "Falhas de execução"),
     ("SVG drawing", "Desenho SVG"),
@@ -362,6 +394,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Partida em duas folhas com carimbo",
     ),
     ("Step", "Passo"),
+    (
+        "Stop recording and save the macro…",
+        "Parar a gravação e salvar a macro…",
+    ),
     ("Supplies", "Alimentações"),
     ("Supplies and sources", "Alimentação e fontes"),
     ("Supply {0} ({1}, {2} mV)", "Alimentação {0} ({1}, {2} mV)"),
@@ -370,6 +406,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("T", "T"),
     ("Text", "Texto"),
     ("Text notes", "Notas de texto"),
+    (
+        "The macro was not played: {0}",
+        "A macro não foi executada: {0}",
+    ),
     (
         "The project has changes that are not saved.",
         "O projeto tem alterações que não foram salvas.",
@@ -384,6 +424,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Trace the net of the selection",
         "Rastrear a rede da seleção",
     ),
+    ("Trim wire here", "Aparar fio aqui"),
     (
         "Type a point as x,y or @dx,dy.",
         "Digite um ponto como x,y ou @dx,dy.",

@@ -65,6 +65,29 @@ here when it lands.
   View options, off unless turned on: snap the wire tool to the ends, bends,
   middles and crossings of wires (`circuit_editor::snap_with`), outline the
   element under the pointer, and rulers along the drawing.
+- **Print preview** (File > Print preview): the pages of the PDF, at rest and
+  on white, one at a time, with Export as PDF.
+- **Export of several projects**: `opencircuit export a.ocircuit b.ocircuit
+  --output-dir out --to pdf` writes `out/a.pdf` and `out/b.pdf`; one that fails
+  is reported and the others are written (exit code 1).
+- **Wire tools** (context menu of the drawing in edit mode, and the command
+  line of the window): *trim* cuts a wire at a point and removes the part
+  toward its nearer end (`trim x,y`); *extend* runs a free wire end along its
+  last segment to the next terminal, junction or wire and connects it
+  (`extend x,y`); *parallel copy* copies the selected wires alongside,
+  connected to nothing (`offset dx,dy`). Each is one undoable step.
+- **Macros** (Modify > Record macro, Stop recording and save the macro, Play
+  macro): the edits of the window are recorded as an edit file that the
+  window, `opencircuit edit --apply` and the MCP server play back; played in
+  the window it is one undoable step. A change that cannot be written as
+  operations is left out and counted in the status bar. The reader of edit
+  files moved from the command line to `circuit_commands::script`, so that
+  the window shares it.
+- **Wire routing on request** (Modify > Route the selected wires, `route` on
+  the command line of the window, `{ "op": "route" }` in edit files): each
+  selected wire gets an orthogonal route with few bends around symbols,
+  junctions and terminals, without running along another wire; one undo
+  takes it back.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.

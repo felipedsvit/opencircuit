@@ -108,6 +108,8 @@ pub struct Session {
     message: Option<String>,
     /// Undo and redo of the edits of the document.
     history: History,
+    /// The macro being recorded (M9.2), while one is.
+    recorder: Option<circuit_commands::record::Recorder>,
 }
 
 impl Session {
@@ -157,6 +159,7 @@ impl Session {
             events: VecDeque::new(),
             message: None,
             history: History::new(),
+            recorder: None,
         };
         session.recompile();
         session
@@ -207,9 +210,48 @@ impl Session {
         if tx.is_empty() {
             return Ok(());
         }
+        let recording = self
+            .recorder
+            .is_some()
+            .then(|| (self.doc.clone(), tx.clone()));
         self.history.execute(&mut self.doc, tx)?;
+        if let (Some(recorder), Some((before, tx))) = (&mut self.recorder, recording) {
+            recorder.record(&before, &self.catalog, &tx);
+        }
         self.recompile();
         Ok(())
+    }
+
+    /// Start recording a macro: every edit from now on, until
+    /// [`Session::stop_recording`].
+    pub fn start_recording(&mut self) {
+        self.recorder = Some(circuit_commands::record::Recorder::new());
+    }
+
+    /// Stop recording and hand over what was recorded.
+    pub fn stop_recording(&mut self) -> Option<circuit_commands::record::Recorder> {
+        self.recorder.take()
+    }
+
+    /// The macro being recorded, if one is.
+    #[must_use]
+    pub const fn recording(&self) -> Option<&circuit_commands::record::Recorder> {
+        self.recorder.as_ref()
+    }
+
+    /// Play a macro (an edit file) on the project, as one edit that one undo
+    /// takes back. Returns how many operations ran.
+    ///
+    /// # Errors
+    ///
+    /// Returns why the file was refused; the project is then unchanged.
+    pub fn play_macro(&mut self, text: &str) -> Result<usize, String> {
+        let applied = circuit_commands::script::apply(self.doc.clone(), &self.catalog, text)
+            .map_err(|error| error.to_string())?;
+        let mut tx = applied.transaction;
+        tx.label = "Play macro".to_owned();
+        self.edit(tx).map_err(|error| error.to_string())?;
+        Ok(applied.operations)
     }
 
     /// Undo the last edit. `Ok(false)` when there is none.
@@ -221,6 +263,9 @@ impl Session {
     pub fn undo(&mut self) -> Result<bool, CommandError> {
         let changed = self.history.undo(&mut self.doc)?;
         if changed {
+            if let Some(recorder) = &mut self.recorder {
+                recorder.undo();
+            }
             self.recompile();
         }
         Ok(changed)
@@ -235,6 +280,9 @@ impl Session {
     pub fn redo(&mut self) -> Result<bool, CommandError> {
         let changed = self.history.redo(&mut self.doc)?;
         if changed {
+            if let Some(recorder) = &mut self.recorder {
+                recorder.redo();
+            }
             self.recompile();
         }
         Ok(changed)
@@ -380,6 +428,14 @@ impl Session {
             circuit_renderer::sheet_scenes(&self.doc, &self.catalog, snapshot, &options),
             theme,
         )
+    }
+
+    /// The pages a PDF of the drawing at rest has: one per sheet, in the
+    /// order of their numbers, or the whole drawing when there is no sheet.
+    #[must_use]
+    pub fn print_pages(&self) -> Vec<Scene> {
+        let (scene, pages, _) = self.export_scene(false);
+        if pages.is_empty() { vec![scene] } else { pages }
     }
 
     /// The drawing as SVG text, with the same exporter as the command line:

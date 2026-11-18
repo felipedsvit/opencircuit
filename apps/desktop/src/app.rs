@@ -265,6 +265,10 @@ pub struct DesktopApp {
     /// a relative point starts from, where the field is on screen, and
     /// whether the field still has to take the keyboard.
     point_entry: Option<(String, GridPoint, egui::Pos2, bool)>,
+    /// The print preview (File > Print preview).
+    print_preview: crate::print_preview::PrintPreview,
+    /// The grid point the context menu was opened at.
+    context_point: Option<GridPoint>,
 }
 
 impl DesktopApp {
@@ -462,6 +466,82 @@ impl DesktopApp {
                 self.click_at(point);
             }
         }
+    }
+
+    /// Start recording a macro of the edits of the project.
+    pub fn start_macro(&mut self) {
+        if let Some(session) = &mut self.session {
+            session.start_recording();
+        }
+    }
+
+    /// How many steps the macro being recorded has, and how many changes it
+    /// left out; `None` when none is being recorded.
+    #[must_use]
+    pub fn macro_steps(&self) -> Option<(usize, usize)> {
+        self.session
+            .as_ref()
+            .and_then(Session::recording)
+            .map(|recorder| (recorder.steps(), recorder.left_out()))
+    }
+
+    /// Stop recording and return the macro as an edit file.
+    pub fn finish_macro(&mut self) -> Option<String> {
+        self.session
+            .as_mut()
+            .and_then(Session::stop_recording)
+            .map(|recorder| recorder.to_edit_file())
+    }
+
+    /// Stop recording and save the macro where the person chooses; a
+    /// browser downloads it.
+    fn save_macro_dialog(&mut self) {
+        let Some(text) = self.finish_macro() else {
+            return;
+        };
+        #[cfg(target_arch = "wasm32")]
+        if let Err(error) = crate::web::download("macro.json", text.as_bytes(), "application/json")
+        {
+            self.error = Some(error);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = dialogs::choose_macro_path()
+            && let Err(error) = crate::files::write_atomic(&path, text)
+        {
+            self.error = Some(error.to_string());
+        }
+    }
+
+    /// Play a macro (an edit file) on the project, as one step one undo
+    /// takes back.
+    pub fn play_macro_text(&mut self, text: &str) {
+        let Some(session) = &mut self.session else {
+            return;
+        };
+        match session.play_macro(text) {
+            Ok(_) => self.error = None,
+            Err(error) => self.error = Some(trf("The macro was not played: {0}", &[&error])),
+        }
+        self.inspector.clear();
+        if let Some(session) = &self.session {
+            self.editor.retain_existing(session.document());
+        }
+    }
+
+    /// Open the print preview of the project.
+    pub fn open_print_preview(&mut self) {
+        if let Some(session) = &self.session {
+            self.print_preview.open(session);
+        }
+    }
+
+    /// The pages of the print preview and the page shown, from 0, while it
+    /// is open.
+    #[must_use]
+    pub fn print_preview_page(&self) -> Option<(usize, usize)> {
+        self.print_preview
+            .pages()
+            .map(|pages| (self.print_preview.page(), pages))
     }
 
     /// Open the find and replace window, as Ctrl+H does in edit mode.
@@ -1589,6 +1669,11 @@ impl DesktopApp {
         }
         self.confirm_dialog(ui);
         self.command_palette(ui);
+        if self.print_preview.show(ui, self.session.as_ref())
+            == Some(crate::print_preview::Action::ExportPdf)
+        {
+            self.export_dialog("pdf");
+        }
         if let Some(session) = &self.session
             && let Some(request) = self
                 .find_replace
@@ -1996,6 +2081,13 @@ impl DesktopApp {
                         ui.close();
                         self.library_dialog();
                     }
+                    if ui
+                        .add_enabled(has_session, egui::Button::new(tr("Print preview…")))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.open_print_preview();
+                    }
                     ui.add_enabled_ui(has_session, |ui| {
                         ui.menu_button(tr("Export drawing"), |ui| {
                             for (label, extension) in
@@ -2060,6 +2152,69 @@ impl DesktopApp {
                         if let Some(session) = &self.session {
                             let request = designators::renumber(session.document(), Scope::All);
                             self.commit(request);
+                        }
+                    }
+                    let wires: Vec<circuit_model::WireId> = self
+                        .editor
+                        .selection()
+                        .iter()
+                        .filter_map(|subject| match subject {
+                            Subject::Wire(id) => Some(*id),
+                            _ => None,
+                        })
+                        .collect();
+                    if ui
+                        .add_enabled(
+                            editing && !wires.is_empty(),
+                            egui::Button::new(tr("Route the selected wires")),
+                        )
+                        .on_hover_text(tr(
+                            "An orthogonal route around the symbols, undone in one step",
+                        ))
+                        .clicked()
+                    {
+                        ui.close();
+                        if let Some(session) = &self.session {
+                            let request = circuit_commands::route::route(
+                                session.document(),
+                                session.catalog(),
+                                &wires,
+                            );
+                            self.commit(request);
+                        }
+                    }
+                    let recording = self.macro_steps().is_some();
+                    if !recording
+                        && ui
+                            .add_enabled(has_session, egui::Button::new(tr("Record macro")))
+                            .on_hover_text(tr("Record the next edits as an edit file to play back"))
+                            .clicked()
+                    {
+                        ui.close();
+                        self.start_macro();
+                    }
+                    if recording
+                        && ui
+                            .button(tr("Stop recording and save the macro…"))
+                            .clicked()
+                    {
+                        ui.close();
+                        self.save_macro_dialog();
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui
+                        .add_enabled(editing, egui::Button::new(tr("Play macro…")))
+                        .clicked()
+                    {
+                        ui.close();
+                        if let Some(path) = dialogs::pick_macro() {
+                            match crate::files::read_text(
+                                &path,
+                                circuit_commands::script::MAX_EDIT_BYTES,
+                            ) {
+                                Ok(text) => self.play_macro_text(&text),
+                                Err(error) => self.error = Some(error.to_string()),
+                            }
                         }
                     }
                     if ui
@@ -2408,6 +2563,21 @@ impl DesktopApp {
                 ui.separator();
                 ui.label(RichText::new(self.traced.1.as_str()).color(tokens.text_dim));
             }
+            if let Some((steps, left_out)) = self.macro_steps() {
+                ui.separator();
+                let text = if left_out == 0 {
+                    trf("Recording macro: {0} steps", &[&steps])
+                } else {
+                    trf(
+                        "Recording macro: {0} steps, {1} left out",
+                        &[&steps, &left_out],
+                    )
+                };
+                ui.colored_label(ui.visuals().warn_fg_color, text)
+                    .on_hover_text(tr(
+                        "A change left out (a hand-drawn wire route, a layer, a supply) cannot be written as an operation of an edit file",
+                    ));
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if self.open_elsewhere() {
                 ui.separator();
@@ -2555,6 +2725,59 @@ impl DesktopApp {
         );
     }
 
+    /// The wire tools the context menu offers at its point, in edit mode:
+    /// trim the wire there, extend a free end there, and copy the selected
+    /// wires alongside, two grid units across their first segment.
+    fn wire_tool_requests(&self) -> Vec<(&'static str, inspector::Request)> {
+        use circuit_commands::wire_tools;
+        let (Some(session), Some(at)) = (&self.session, self.context_point) else {
+            return Vec::new();
+        };
+        if self.mode != Mode::Edit {
+            return Vec::new();
+        }
+        let (doc, catalog) = (session.document(), session.catalog());
+        let mut offered = Vec::new();
+        if let Some(wire) = wire_tools::wire_at(doc, catalog, at) {
+            let trimmed = wire_tools::trim(doc, catalog, wire, at);
+            if trimmed.is_ok() {
+                offered.push((tr("Trim wire here"), trimmed));
+            }
+        }
+        let extended = wire_tools::extend(doc, catalog, at);
+        if extended.is_ok() {
+            offered.push((tr("Extend wire end"), extended));
+        }
+        let wires: Vec<circuit_model::WireId> = self
+            .editor
+            .selection()
+            .iter()
+            .filter_map(|subject| match subject {
+                Subject::Wire(id) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        if let Some(first) = wires.first() {
+            let layout = LayoutIndex::new(doc, catalog);
+            let across = doc
+                .wires
+                .iter()
+                .find(|wire| wire.id == *first)
+                .and_then(|wire| layout.wire_polyline(wire))
+                .and_then(|path| match path.get(..2) {
+                    Some([a, b]) if a.y == b.y => Some((0, 2)),
+                    Some(_) => Some((2, 0)),
+                    None => None,
+                })
+                .unwrap_or((0, 2));
+            offered.push((
+                tr("Parallel copy of the wires"),
+                wire_tools::parallel_copy(doc, catalog, &wires, across),
+            ));
+        }
+        offered
+    }
+
     /// Keep the view the drawing rested at, so that Previous view can go
     /// back to it: a zoom with the wheel or a pan with the pointer counts once,
     /// when it ends.
@@ -2684,6 +2907,7 @@ impl DesktopApp {
         if let Some(at) = events.context {
             let [left, top] = events.origin;
             self.context_menu = Some(egui::pos2(left + at[0], top + at[1]));
+            self.context_point = self.camera.to_grid(at);
             // A click on something that is not selected selects it, so the
             // menu acts on what was clicked.
             if self.mode == Mode::Edit
@@ -2703,6 +2927,8 @@ impl DesktopApp {
         let mut chosen: Option<Key> = None;
         let mut fit = false;
         let mut label = false;
+        let wire_tools = self.wire_tool_requests();
+        let mut wire_tool: Option<inspector::Request> = None;
         let area = egui::Area::new(ui.scope_id().with(egui::IdSalt::new("context menu")))
             .order(egui::Order::Foreground)
             .fixed_pos(at)
@@ -2731,6 +2957,11 @@ impl DesktopApp {
                     {
                         label = true;
                     }
+                    for (text, request) in wire_tools {
+                        if ui.button(text).clicked() {
+                            wire_tool = Some(request);
+                        }
+                    }
                     ui.separator();
                     if ui.button(tr("Zoom to the whole drawing")).clicked() {
                         fit = true;
@@ -2739,8 +2970,11 @@ impl DesktopApp {
             });
         // The click that opened the menu is not one that closes it.
         let outside = events.context.is_none() && area.response.clicked_elsewhere();
-        if chosen.is_some() || fit || label || outside {
+        if chosen.is_some() || fit || label || wire_tool.is_some() || outside {
             self.context_menu = None;
+        }
+        if let Some(request) = wire_tool {
+            self.commit(request);
         }
         if label {
             self.edit_label();

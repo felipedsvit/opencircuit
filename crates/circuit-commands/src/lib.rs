@@ -20,8 +20,9 @@
 //! of devices and the wire numbers, [`waivers`] accepts a warning with a
 //! reason, [`layers`] edits the layers and refuses changes to what is on a
 //! locked one, and [`commandline`] reads a typed
-//! command into the same operations. The crate depends on
-//! `circuit-model` only and does no I/O.
+//! command into the same operations, and [`script`] reads edit files into
+//! them. The crate depends on `circuit-model` and, to read edit files, on
+//! `serde_json`; it does no I/O.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -48,10 +49,14 @@ pub mod find;
 mod history;
 pub mod layers;
 pub mod ops;
+pub mod record;
+pub mod route;
+pub mod script;
 pub mod sheets;
 mod sorted;
 mod transaction;
 pub mod waivers;
+pub mod wire_tools;
 
 #[cfg(test)]
 mod tests;

@@ -25,7 +25,8 @@
 
 mod args;
 mod commands;
-pub mod edit;
+/// The edit files of `edit --apply`, read by `circuit_commands::script`.
+pub use circuit_commands::script as edit;
 mod fsio;
 mod mcp;
 pub mod scenario;
@@ -61,6 +62,9 @@ usage:
                    [--dry-run] [--format text|json]
                    [--library <file.oclib|dir>]
   opencircuit export <project.ocircuit> --output <file.svg|file.pdf>
+                     [--theme print|live] [--sheet <number>|all]
+                     [--format text|json] [--library <file.oclib|dir>]
+  opencircuit export <project.ocircuit>... --output-dir <dir> --to svg|pdf
                      [--theme print|live] [--sheet <number>|all]
                      [--format text|json] [--library <file.oclib|dir>]
   opencircuit report <project.ocircuit> --kind bom|wires|terminals|strips|xref|io|problems|devices|all
