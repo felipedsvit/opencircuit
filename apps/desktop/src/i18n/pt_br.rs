@@ -174,6 +174,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Number the wires", "Numerar os fios"),
     ("Number {0}", "Número {0}"),
     ("Open", "Abrir"),
+    ("Open in another window", "Aberto em outra janela"),
     ("Open project…", "Abrir projeto…"),
     (
         "OpenCircuit ended without saving these projects. A copy of each was kept.",
@@ -249,6 +250,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Save list…", "Salvar lista…"),
     ("Save project", "Salvar projeto"),
     ("Save project as…", "Salvar projeto como…"),
+    (
+        "Saving here and in the other window overwrites each other's changes.",
+        "Salvar aqui e na outra janela sobrescreve as alterações uma da outra.",
+    ),
     ("Search", "Buscar"),
     ("Search results", "Resultados da busca"),
     ("Select", "Selecionar"),

@@ -34,6 +34,7 @@ mod native {
     use std::process::ExitCode;
 
     use eframe::egui;
+    use opencircuit_desktop::project_lock::ProjectLocks;
     use opencircuit_desktop::recovery::{DEFAULT_INTERVAL_SECONDS, RecoveryStore};
     use opencircuit_desktop::{DesktopApp, Language};
 
@@ -76,6 +77,13 @@ mod native {
                 // the window: a test of the window never touches it.
                 if let Some(store) = RecoveryStore::in_user_data() {
                     app.enable_recovery(store, DEFAULT_INTERVAL_SECONDS);
+                    // A panic writes the newest changes before the process ends.
+                    if let Some(copy) = app.panic_copy() {
+                        copy.install_hook();
+                    }
+                }
+                if let Some(locks) = ProjectLocks::in_user_data() {
+                    app.enable_project_locks(locks, 5.0);
                 }
                 Ok(Box::new(app))
             }),

@@ -136,6 +136,7 @@ cargo run -p opencircuit-desktop -- examples/direct-starter/starter.ocircuit
 A project can also be dropped on the window or typed in the path field.
 While a project has unsaved changes, the window keeps a recovery copy in the
 user's data folder every 30 seconds; after a crash, the next window offers it.
+A second window on the same project says so in its status bar.
 Play, Pause, Step, Reset and the speed control run the simulation; the
 Operator panel (or a click on the symbol) presses S1, opens a switch or trips
 a thermal relay, and the events panel shows the trace as it happens. Wires

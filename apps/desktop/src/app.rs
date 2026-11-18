@@ -212,6 +212,17 @@ pub struct DesktopApp {
     /// Copies left by windows that ended without closing, offered once.
     #[cfg(not(target_arch = "wasm32"))]
     recover_offer: Vec<crate::recovery::Entry>,
+    /// Where this window locks the projects it opens; off unless `main`
+    /// turns it on.
+    #[cfg(not(target_arch = "wasm32"))]
+    project_locks: Option<crate::project_lock::ProjectLocks>,
+    /// The lock of the open project, or the note that another window holds it.
+    #[cfg(not(target_arch = "wasm32"))]
+    project_lock: Option<crate::project_lock::ProjectLock>,
+    /// Seconds between two attempts to take a lock another window holds,
+    /// and when the last attempt was, in window seconds.
+    #[cfg(not(target_arch = "wasm32"))]
+    lock_retry: (f64, f64),
 }
 
 impl DesktopApp {
@@ -239,6 +250,38 @@ impl DesktopApp {
             .store()
             .orphans(autosave.key(), autosave.stale_after());
         self.autosave = Some(autosave);
+    }
+
+    /// The project a panic hook writes before the process ends (`main`
+    /// installs the hook), when recovery is on.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn panic_copy(&self) -> Option<crate::recovery::PanicCopy> {
+        self.autosave
+            .as_ref()
+            .map(crate::recovery::Autosave::panic_copy)
+    }
+
+    /// Lock each project this window opens in `locks`, and say when another
+    /// window has it open; a lock another window holds is tried again every
+    /// `retry_seconds`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_project_locks(
+        &mut self,
+        locks: crate::project_lock::ProjectLocks,
+        retry_seconds: f64,
+    ) {
+        self.project_locks = Some(locks);
+        self.lock_retry = (retry_seconds.max(0.0), f64::NEG_INFINITY);
+    }
+
+    /// Whether another window has the open project open too.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn open_elsewhere(&self) -> bool {
+        self.project_lock
+            .as_ref()
+            .is_some_and(crate::project_lock::ProjectLock::open_elsewhere)
     }
 
     /// How many copies are offered for recovery.
@@ -554,6 +597,37 @@ impl DesktopApp {
             let wait = autosave.due_in(now).max(0.1);
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
+    }
+
+    /// Hold the lock of the open project: take it when the project or its
+    /// file changes, release the old one, and try again now and then while
+    /// another window holds it.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn relock(&mut self, ui: &Ui) {
+        let Some(locks) = &self.project_locks else {
+            return;
+        };
+        let path = self.session.as_ref().and_then(Session::path);
+        let held = self
+            .project_lock
+            .as_ref()
+            .map(crate::project_lock::ProjectLock::project);
+        let now = ui.input(|input| input.time);
+        let (every, last) = self.lock_retry;
+        let retry = self.open_elsewhere() && now - last >= every;
+        if held == path && !retry {
+            return;
+        }
+        let path = path.map(Path::to_path_buf);
+        // Release first: taking the same project again must not find this
+        // window's own lock.
+        self.project_lock = None;
+        self.lock_retry.1 = now;
+        self.project_lock = path.map(|path| locks.take(&path));
+        if self.open_elsewhere() {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs_f64(every.max(0.5)));
         }
     }
 
@@ -895,6 +969,7 @@ impl DesktopApp {
         {
             self.recovery_dialog(ui);
             self.autosave_tick(ui);
+            self.relock(ui);
         }
 
         let dropped = ui.input(|input| input.raw.dropped_files.clone());
@@ -1593,6 +1668,14 @@ impl DesktopApp {
             if !self.traced.1.is_empty() {
                 ui.separator();
                 ui.label(RichText::new(self.traced.1.as_str()).color(tokens.text_dim));
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.open_elsewhere() {
+                ui.separator();
+                ui.colored_label(ui.visuals().warn_fg_color, tr("Open in another window"))
+                    .on_hover_text(tr(
+                        "Saving here and in the other window overwrites each other's changes.",
+                    ));
             }
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(autosave) = &self.autosave {

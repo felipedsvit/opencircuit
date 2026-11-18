@@ -5,19 +5,24 @@
 //! file. The copy is removed when the project is saved, replaced or closed on
 //! purpose. A copy still there when a window starts belongs to a window that
 //! ended without closing (a crash, a killed process, a power loss) and is
-//! offered for recovery, unless its window still runs: a running window
-//! renews the heartbeat of its copy once per interval.
+//! offered for recovery, unless its window still runs. A running window holds
+//! an operating-system lock on a file next to its copy, which the system
+//! releases however the process ends; where locks are not available, a
+//! heartbeat renewed once per interval tells instead. A panic in the window
+//! writes the copy at once (see [`PanicCopy`]).
 //!
 //! The folder is chosen in `main` and handed to the window, so that a window
 //! made by a test never sees the copies of a real session.
 
 #![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use circuit_model::Schematic;
 use circuit_project::MAX_PROJECT_BYTES;
 use serde::{Deserialize, Serialize};
 
@@ -34,6 +39,78 @@ const MAX_META_BYTES: usize = 64 * 1024;
 const COPY_EXTENSION: &str = "ocircuit";
 /// Extension of the description of a copy.
 const META_EXTENSION: &str = "json";
+/// Extension of the file a running window keeps locked.
+const LOCK_EXTENSION: &str = "lock";
+
+/// The data folder of OpenCircuit for this user: `$XDG_DATA_HOME/opencircuit`
+/// or `~/.local/share/opencircuit` on Linux and other Unix systems,
+/// `~/Library/Application Support/OpenCircuit` on macOS and
+/// `%LOCALAPPDATA%\OpenCircuit` on Windows. `None` when the environment names
+/// none.
+#[must_use]
+pub fn user_data_dir() -> Option<PathBuf> {
+    let env = |name: &str| {
+        std::env::var_os(name)
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+    };
+    Some(if cfg!(windows) {
+        env("LOCALAPPDATA")
+            .or_else(|| env("APPDATA"))?
+            .join("OpenCircuit")
+    } else if cfg!(target_os = "macos") {
+        env("HOME")?
+            .join("Library/Application Support")
+            .join("OpenCircuit")
+    } else {
+        env("XDG_DATA_HOME")
+            .or_else(|| env("HOME").map(|home| home.join(".local/share")))?
+            .join("opencircuit")
+    })
+}
+
+/// Create `dir` and its parents, the last one readable by this user only.
+pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        builder.mode(0o700);
+    }
+    builder.create(dir)
+}
+
+/// Whether another process holds the lock of the file at `path`: `None` when
+/// the file is missing or cannot be locked here.
+pub(crate) fn held_elsewhere(path: &Path) -> Option<bool> {
+    let file = OpenOptions::new().read(true).write(true).open(path).ok()?;
+    match file.try_lock() {
+        // Released when `file` is dropped.
+        Ok(()) => Some(false),
+        Err(fs::TryLockError::WouldBlock) => Some(true),
+        Err(fs::TryLockError::Error(_)) => None,
+    }
+}
+
+/// Open (creating it) and lock the file at `path` for as long as the result
+/// lives.
+pub(crate) fn hold(path: &Path) -> io::Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
+    file.try_lock().map_err(|error| match error {
+        fs::TryLockError::WouldBlock => io::Error::new(
+            io::ErrorKind::WouldBlock,
+            format!("{} is locked by another process", path.display()),
+        ),
+        fs::TryLockError::Error(error) => error,
+    })?;
+    Ok(file)
+}
 
 /// The folder of the recovery copies of this user.
 #[derive(Clone, Debug)]
@@ -67,6 +144,7 @@ pub struct Entry {
     pub saved_at: u64,
     copy: PathBuf,
     meta: PathBuf,
+    lock: PathBuf,
 }
 
 impl Entry {
@@ -84,6 +162,7 @@ impl Entry {
         // Best effort: a copy that cannot be removed is offered again.
         let _ = fs::remove_file(&self.copy);
         let _ = fs::remove_file(&self.meta);
+        let _ = fs::remove_file(&self.lock);
     }
 }
 
@@ -95,31 +174,10 @@ fn unix_now() -> u64 {
 }
 
 impl RecoveryStore {
-    /// The folder in the data folder of this user: `$XDG_DATA_HOME` or
-    /// `~/.local/share` on Linux and other Unix systems, `~/Library/Application
-    /// Support` on macOS and `%LOCALAPPDATA%` on Windows. `None` when the
-    /// environment names none.
+    /// The `recovery` folder of [`user_data_dir`].
     #[must_use]
     pub fn in_user_data() -> Option<Self> {
-        let env = |name: &str| {
-            std::env::var_os(name)
-                .map(PathBuf::from)
-                .filter(|path| path.is_absolute())
-        };
-        let base = if cfg!(windows) {
-            env("LOCALAPPDATA")
-                .or_else(|| env("APPDATA"))?
-                .join("OpenCircuit")
-        } else if cfg!(target_os = "macos") {
-            env("HOME")?
-                .join("Library/Application Support")
-                .join("OpenCircuit")
-        } else {
-            env("XDG_DATA_HOME")
-                .or_else(|| env("HOME").map(|home| home.join(".local/share")))?
-                .join("opencircuit")
-        };
-        Some(Self::at(base.join("recovery")))
+        Some(Self::at(user_data_dir()?.join("recovery")))
     }
 
     /// A store in `dir`, created when the first copy is written.
@@ -141,21 +199,20 @@ impl RecoveryStore {
         )
     }
 
-    /// Create the folder, readable by this user only.
-    fn ensure_dir(&self) -> io::Result<()> {
-        let mut builder = fs::DirBuilder::new();
-        builder.recursive(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt as _;
-            builder.mode(0o700);
-        }
-        builder.create(&self.dir)
+    fn lock_path(&self, key: &str) -> PathBuf {
+        self.dir.join(format!("{key}.{LOCK_EXTENSION}"))
     }
 
-    /// The copies whose window has not renewed its heartbeat for
-    /// `stale_after` seconds, oldest first, leaving out `own`. A description
-    /// that cannot be read is skipped, not removed.
+    /// Create the folder, readable by this user only.
+    fn ensure_dir(&self) -> io::Result<()> {
+        private_dir(&self.dir)
+    }
+
+    /// The copies whose window no longer runs, oldest first, leaving out
+    /// `own`. A window runs while it holds the lock next to its copy; where
+    /// that cannot be asked, while its heartbeat is younger than
+    /// `stale_after` seconds. A description that cannot be read is skipped,
+    /// not removed.
     #[must_use]
     pub fn orphans(&self, own: &str, stale_after: u64) -> Vec<Entry> {
         let Ok(listing) = fs::read_dir(&self.dir) else {
@@ -177,7 +234,13 @@ impl RecoveryStore {
                 }
                 let text = read_text(&meta_path, MAX_META_BYTES).ok()?;
                 let meta: Meta = serde_json::from_str(&text).ok()?;
-                if meta.format != 1 || now.saturating_sub(meta.heartbeat) < stale_after {
+                if meta.format != 1 {
+                    return None;
+                }
+                let lock = self.lock_path(&key);
+                let running = held_elsewhere(&lock)
+                    .unwrap_or_else(|| now.saturating_sub(meta.heartbeat) < stale_after);
+                if running {
                     return None;
                 }
                 let (copy, meta_path) = self.paths(&key);
@@ -187,6 +250,7 @@ impl RecoveryStore {
                     saved_at: meta.saved_at,
                     copy,
                     meta: meta_path,
+                    lock,
                 })
             })
             .collect();
@@ -209,6 +273,20 @@ pub struct Autosave {
     last_write: f64,
     /// Why the last write failed.
     failure: Option<String>,
+    /// The lock that tells other windows this one runs, taken with the
+    /// first copy.
+    lock: Option<File>,
+    /// The project a panic writes.
+    panic: PanicCopy,
+}
+
+impl Drop for Autosave {
+    fn drop(&mut self) {
+        if self.lock.take().is_some() {
+            // Best effort: a leftover lock file is unlocked and harmless.
+            let _ = fs::remove_file(self.store.lock_path(&self.key));
+        }
+    }
 }
 
 impl Autosave {
@@ -217,6 +295,11 @@ impl Autosave {
     #[must_use]
     pub fn new(store: RecoveryStore, interval: f64, now: f64) -> Self {
         let key = format!("window-{}-{}", std::process::id(), unix_now());
+        let panic = PanicCopy {
+            slot: Arc::default(),
+            store: store.clone(),
+            key: key.clone(),
+        };
         Self {
             store,
             key,
@@ -225,7 +308,15 @@ impl Autosave {
             meta: None,
             last_write: now,
             failure: None,
+            lock: None,
+            panic,
         }
+    }
+
+    /// What a panic hook needs to write the project of this window.
+    #[must_use]
+    pub fn panic_copy(&self) -> PanicCopy {
+        self.panic.clone()
     }
 
     /// The name of this window's copy, which [`RecoveryStore::orphans`]
@@ -279,6 +370,7 @@ impl Autosave {
             self.clear();
             return;
         };
+        self.panic.keep(session);
         if now - self.last_write < self.interval {
             return;
         }
@@ -297,6 +389,10 @@ impl Autosave {
         self.store
             .ensure_dir()
             .map_err(|error| format!("{}: {error}", self.store.dir.display()))?;
+        if self.lock.is_none() {
+            // Without a lock, the heartbeat tells other windows instead.
+            self.lock = hold(&self.store.lock_path(&self.key)).ok();
+        }
         let (copy, _) = self.store.paths(&self.key);
         write_atomic(&copy, &text).map_err(|error| error.to_string())?;
         let now = unix_now();
@@ -339,6 +435,90 @@ impl Autosave {
         }
         self.meta = None;
         self.failure = None;
+        self.panic.forget();
+    }
+}
+
+/// The project of a window with unsaved changes, kept where a panic hook can
+/// write it: a panic in the window writes the recovery copy at once, so that
+/// even changes newer than the last copy survive.
+#[derive(Clone, Debug)]
+pub struct PanicCopy {
+    slot: Arc<Mutex<Option<Kept>>>,
+    store: RecoveryStore,
+    key: String,
+}
+
+/// A document kept for [`PanicCopy`].
+#[derive(Debug)]
+struct Kept {
+    doc: Schematic,
+    original: Option<PathBuf>,
+    revision: u64,
+}
+
+impl PanicCopy {
+    /// Keep the document of `session` unless this revision is kept already.
+    fn keep(&self, session: &Session) {
+        let revision = session.history().revision();
+        let mut slot = self.slot.lock().unwrap_or_else(PoisonError::into_inner);
+        if slot.as_ref().is_some_and(|kept| kept.revision == revision) {
+            return;
+        }
+        *slot = Some(Kept {
+            doc: session.document().clone(),
+            original: session.path().map(Path::to_path_buf),
+            revision,
+        });
+    }
+
+    fn forget(&self) {
+        *self.slot.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    }
+
+    /// Write the kept document as a recovery copy whose window has stopped,
+    /// so that the next window offers it at once. Nothing happens without a
+    /// kept document, or while another thread holds it.
+    pub fn write_now(&self) {
+        let slot = match self.slot.try_lock() {
+            Ok(slot) => slot,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return,
+        };
+        let Some(kept) = slot.as_ref() else {
+            return;
+        };
+        let Ok(text) = circuit_project::to_string(&kept.doc) else {
+            return;
+        };
+        if self.store.ensure_dir().is_err() {
+            return;
+        }
+        let (copy, meta_path) = self.store.paths(&self.key);
+        if write_atomic(&copy, &text).is_err() {
+            return;
+        }
+        let meta = Meta {
+            format: 1,
+            original: kept.original.clone(),
+            name: kept.doc.project.name.clone(),
+            saved_at: unix_now(),
+            // The window is going away: no heartbeat to wait for.
+            heartbeat: 0,
+        };
+        if let Ok(text) = serde_json::to_string_pretty(&meta) {
+            let _ = write_atomic(&meta_path, text);
+        }
+    }
+
+    /// Write the copy before the panic is reported, then report it as
+    /// before. For `main`; the hook is global to the process.
+    pub fn install_hook(self) {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            self.write_now();
+            previous(info);
+        }));
     }
 }
 
@@ -423,12 +603,22 @@ mod tests {
         let key = autosave.key().to_owned();
         assert_eq!(
             scratch.files(),
-            [format!("{key}.json"), format!("{key}.ocircuit")]
+            [
+                format!("{key}.json"),
+                format!("{key}.lock"),
+                format!("{key}.ocircuit")
+            ]
         );
         assert!(autosave.is_current(Some(&session)));
 
         session.mark_saved();
         autosave.tick(32.0, Some(&session));
+        assert_eq!(
+            scratch.files(),
+            [format!("{key}.lock")],
+            "held while running"
+        );
+        drop(autosave);
         assert!(scratch.files().is_empty());
     }
 
@@ -437,14 +627,15 @@ mod tests {
         let scratch = Scratch::new();
         let mut running = Autosave::new(scratch.0.clone(), 0.0, 0.0);
         running.tick(1.0, Some(&edited()));
-
         let other = format!("{}-other", running.key());
-        assert!(
-            scratch.0.orphans(&other, 60).is_empty(),
-            "heartbeat is fresh"
-        );
 
-        let found = scratch.0.orphans(&other, 0);
+        // Its lock says it runs, even with a heartbeat that looks stale.
+        assert!(scratch.0.orphans(&other, 0).is_empty());
+
+        // The process ends without closing: the system drops the lock and
+        // the file stays. The copy is offered at once, heartbeat or not.
+        drop(running.lock.take());
+        let found = scratch.0.orphans(&other, 3600);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].name, "Recovered pump");
         assert_eq!(found[0].original, None);
@@ -454,7 +645,58 @@ mod tests {
         assert!(scratch.0.orphans(running.key(), 0).is_empty(), "own copy");
 
         found[0].discard();
+        assert!(scratch.files().is_empty(), "{:?}", scratch.files());
+    }
+
+    #[test]
+    fn without_a_lock_file_the_heartbeat_decides() {
+        let scratch = Scratch::new();
+        let mut running = Autosave::new(scratch.0.clone(), 0.0, 0.0);
+        running.tick(1.0, Some(&edited()));
+        let other = format!("{}-other", running.key());
+        drop(running.lock.take());
+        fs::remove_file(scratch.0.lock_path(running.key())).unwrap();
+
+        assert!(
+            scratch.0.orphans(&other, 3600).is_empty(),
+            "fresh heartbeat"
+        );
+        assert_eq!(scratch.0.orphans(&other, 0).len(), 1, "stale heartbeat");
+    }
+
+    #[test]
+    fn a_panic_writes_the_newest_changes_and_they_are_offered_at_once() {
+        let scratch = Scratch::new();
+        // A long interval: no regular copy is written yet.
+        let mut autosave = Autosave::new(scratch.0.clone(), 3600.0, 0.0);
+        autosave.tick(1.0, Some(&edited()));
         assert!(scratch.files().is_empty());
+
+        autosave.panic_copy().write_now();
+
+        let other = format!("{}-other", autosave.key());
+        let found = scratch.0.orphans(&other, 3600);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "Recovered pump");
+    }
+
+    #[test]
+    fn a_panic_with_nothing_unsaved_writes_nothing() {
+        let scratch = Scratch::new();
+        let mut autosave = Autosave::new(scratch.0.clone(), 0.0, 0.0);
+        let mut session = edited();
+        autosave.tick(1.0, Some(&session));
+        session.mark_saved();
+        autosave.tick(2.0, Some(&session));
+
+        autosave.panic_copy().write_now();
+
+        let copies: Vec<String> = scratch
+            .files()
+            .into_iter()
+            .filter(|name| !name.ends_with(".lock"))
+            .collect();
+        assert!(copies.is_empty(), "{copies:?}");
     }
 
     #[test]

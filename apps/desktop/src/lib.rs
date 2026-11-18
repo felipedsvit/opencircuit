@@ -30,6 +30,8 @@ mod icons;
 mod inspector;
 mod palette;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod project_lock;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod recovery;
 pub mod session;
 mod theme;
