@@ -214,6 +214,58 @@ fn sync_parent(path: &Path) {
 #[cfg(not(unix))]
 fn sync_parent(_path: &Path) {}
 
+/// Most backups kept next to a project.
+pub const MAX_BACKUPS: u8 = 9;
+
+/// The path of backup `number` of `path`: `pump.ocircuit.bak1` for 1.
+#[must_use]
+pub fn backup_path(path: &Path, number: u8) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".bak{number}"));
+    path.with_file_name(name)
+}
+
+/// Keep the file at `path` as backup 1 before it is replaced (M9.1): backup
+/// 1 becomes 2 and so on, and the oldest beyond `keep` is removed. Nothing
+/// happens when `keep` is 0 or the file does not exist yet. A backup is a
+/// new file: a link at a backup name is moved along or removed, never
+/// written through.
+///
+/// # Errors
+///
+/// Returns [`FileError`] when a backup cannot be renamed or written; the
+/// project file itself is never touched.
+pub fn rotate_backups(path: &Path, keep: u8) -> Result<(), FileError> {
+    let keep = keep.min(MAX_BACKUPS);
+    if keep == 0 || fs::symlink_metadata(path).is_err() {
+        return Ok(());
+    }
+    let error = |at: PathBuf| move |source| FileError { path: at, source };
+    let oldest = backup_path(path, keep);
+    match fs::remove_file(&oldest) {
+        Ok(()) => {}
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+        Err(source) => return Err(error(oldest)(source)),
+    }
+    for number in (1..keep).rev() {
+        let from = backup_path(path, number);
+        if fs::symlink_metadata(&from).is_ok() {
+            let to = backup_path(path, number.saturating_add(1));
+            fs::rename(&from, &to).map_err(error(from.clone()))?;
+        }
+    }
+    let first = backup_path(path, 1);
+    let bytes = fs::read(path).map_err(error(path.to_path_buf()))?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&first)
+        .map_err(error(first.clone()))?;
+    file.write_all(&bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(error(first))
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -383,5 +435,40 @@ mod tests {
         let file = TempFile::with(&[0xff, 0xfe]);
 
         assert!(read_text(&file.0, 10).is_err());
+    }
+
+    #[test]
+    fn backups_rotate_and_the_oldest_beyond_the_limit_goes() {
+        let file = TempFile::with(b"v1");
+        let read = |number: u8| std::fs::read_to_string(backup_path(&file.0, number)).ok();
+        // Nothing is kept with backups off.
+        rotate_backups(&file.0, 0).unwrap();
+        assert_eq!(read(1), None);
+        for version in ["v1", "v2", "v3", "v4"] {
+            std::fs::write(&file.0, version).unwrap();
+            rotate_backups(&file.0, 3).unwrap();
+        }
+        assert_eq!(read(1).as_deref(), Some("v4"));
+        assert_eq!(read(2).as_deref(), Some("v3"));
+        assert_eq!(read(3).as_deref(), Some("v2"));
+        assert_eq!(read(4), None);
+        assert_eq!(std::fs::read_to_string(&file.0).unwrap(), "v4");
+        for number in 1..=4 {
+            let _ = std::fs::remove_file(backup_path(&file.0, number));
+        }
+    }
+
+    #[test]
+    fn a_file_that_does_not_exist_has_no_backup() {
+        let path = std::env::temp_dir().join(format!(
+            "opencircuit-desktop-test-{}-none.ocircuit",
+            std::process::id()
+        ));
+        rotate_backups(&path, 3).unwrap();
+        assert!(!backup_path(&path, 1).exists());
+        assert_eq!(
+            backup_path(Path::new("/a/pump.ocircuit"), 2),
+            Path::new("/a/pump.ocircuit.bak2")
+        );
     }
 }

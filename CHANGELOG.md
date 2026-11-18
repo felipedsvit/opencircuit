@@ -28,6 +28,14 @@ here when it lands.
   system releases however the process ends, so a copy is offered as soon as
   the window is gone. A panic in the window writes the newest changes before
   the process ends.
+- **Autosave in the browser build**: a project with unsaved changes is kept
+  in the browser storage of the page, and the next page opened offers to
+  recover it or discard it; the status bar says when the copy is current.
+- **Backups next to the project** (File > Backups next to the project, off by
+  default): each save keeps the file it replaces as `name.ocircuit.bak1`,
+  moving older ones to `bak2`, `bak3`… and keeping the last 1, 3 or 5. A
+  backup that fails does not stop the save. The setting is kept with the
+  workspace.
 - **Version history** (File > Version history): every save that changes the
   project keeps a version in the user's data folder (the newest 20 per
   project). The window lists them with their date (UTC) and how many elements

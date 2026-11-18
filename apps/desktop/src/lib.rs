@@ -18,6 +18,7 @@
 #![cfg_attr(not(test), deny(clippy::indexing_slicing))]
 
 pub mod app;
+pub mod browser_recovery;
 pub mod camera;
 mod canvas;
 pub mod clock;
