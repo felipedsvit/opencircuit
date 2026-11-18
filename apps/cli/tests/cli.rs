@@ -2500,3 +2500,29 @@ fn a_simulation_gives_the_same_trace_with_a_layer_hidden_or_locked() {
     assert!(!plain.is_empty());
     assert_eq!(plain, hidden);
 }
+
+#[test]
+fn the_plc_and_comments_reports_list_the_documentation_of_schema_5() {
+    let panel = root().join("examples/panel-documentation/panel.ocircuit");
+    let path = panel.to_str().expect("utf-8 path");
+    let output = opencircuit(&["report", path, "--kind", "plc", "--format", "csv"]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let expected =
+        fs::read_to_string(root().join("examples/panel-documentation/plc.csv")).expect("golden");
+    assert_eq!(stdout(&output), expected);
+
+    let output = opencircuit(&["report", path, "--kind", "all", "--format", "json"]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let document: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
+    let kinds: Vec<&str> = document["reports"]
+        .as_array()
+        .expect("reports")
+        .iter()
+        .map(|report| report["kind"].as_str().expect("kind"))
+        .collect();
+    assert_eq!(kinds.last(), Some(&"plc"));
+    assert!(kinds.contains(&"comments"));
+    // It validates with no warning, and simulates as the starter does.
+    let validate = opencircuit(&["validate", path, "--deny-warnings"]);
+    assert_eq!(code(&validate), 0, "{}", stdout(&validate));
+}

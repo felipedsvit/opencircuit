@@ -173,6 +173,7 @@ elements with their kind and ID.
 | `add_view` | `device`, `at`, `size`, `as` | shows a device again on a panel layout or single-line sheet; `size` is `[width, height]`, `[6, 8]` by default |
 | `add_plc` | `name`, `description`, `at`, `channels` | a PLC module; a channel is `{ "address", "direction": "input" or "output", "device", "label" }`; `at` places the box that lists them |
 | `set_plc` | `plc` (its name), `description`, `at`, `channels` | changes a PLC module: what is given replaces what it has; `"at": null` takes the box off the drawing |
+| `import_catalog` | `csv` | the catalog data of devices from CSV text: a header with `reference` and any of `manufacturer`, `part_no`, `description`, `location` and `datasheet` (RFC 4180 quoting), one row per device; an empty cell keeps the field, and a row for a designator the project does not have refuses the file |
 
 A name given with `as` lasts for the one file; a later file refers to a note or
 a wire by its ID (the layers also by their own name). An operation that changes
@@ -298,7 +299,7 @@ canvas. Text is set in Liberation Mono, embedded in the PDF as a subset
 
 ## Reports
 
-`opencircuit report <project> --kind bom|wires|terminals|strips|xref|io|problems|devices|all`
+`opencircuit report <project> --kind bom|wires|terminals|strips|xref|io|problems|devices|comments|plc|all`
 derives tables from the project, and writes them as text, JSON (`--format`)
 or, for one table, CSV. With `--output <file>` the extension picks the format
 (`.csv`, `.json`, `.txt` or `.pdf`) and `--format` says how the
@@ -308,13 +309,15 @@ confirmation is written. Nothing is stored in the project: the tables are a func
 | Kind | One row per |
 | --- | --- |
 | `bom` | kind of part: model and version, manufacturer, part number and description; supply taps are not parts |
-| `wires` | net with a wire, in numbering order: number, sheet, `From`, `To` and the other terminals under `Also` |
+| `wires` | net with a wire, in numbering order: number, sheet, `From`, `To` and the other terminals under `Also`; in a project where a wire has data (ADR-0018), also its colour, cross-section, type, material and insulation, each distinct value of the net once |
 | `terminals` | terminal of every symbol, with the number of its wire and the terminals it meets |
 | `strips` | terminal of a terminal strip (class `terminal_block`, parameters `strip` and `number`), by strip and number: the wire and the terminals on each side. It is the terminal plan, and its CSV is the table for a manufacturer's import |
 | `xref` | exception: a coil with no contact, contacts whose coil is not drawn, a symbol outside every sheet |
 | `io` | address of the Modbus map |
 | `problems` | diagnostic of the project, compiled |
-| `devices` | device, in natural order of designators: model and version, how many symbols draw it, the sheets they are on, manufacturer, part number and description; supply taps and signal arrows are not devices here. Unlike `bom`, two devices of one part are two rows |
+| `devices` | device, in natural order of designators: model and version, how many symbols draw it, the sheets they are on, manufacturer, part number, description, datasheet and the sheets of its views (ADR-0018); supply taps and signal arrows are not devices here. Unlike `bom`, two devices of one part are two rows |
+| `comments` | comment (ADR-0018): what it is about, a name for it, the author and the text. In `all` only for a project with comments |
+| `plc` | channel of a PLC module (ADR-0018): module, address, direction, device, label and where the device is in the Modbus map (`coil 3`, `discrete input 0`). In `all` only for a project with PLC modules |
 
 A PDF sets each table on A4 landscape pages in the embedded font (ADR-0012):
 the title, the headings (repeated on every page), a rule, one line per row and

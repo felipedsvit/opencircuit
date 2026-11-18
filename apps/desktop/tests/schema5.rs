@@ -178,3 +178,35 @@ fn a_comment_is_added_and_deleted_in_the_comments_section() {
     harness.run();
     assert!(document(&harness).comments.is_empty());
 }
+
+#[test]
+fn catalog_data_is_imported_from_csv_in_one_step() {
+    let mut harness = starter();
+    harness.state_mut().import_catalog_text(
+        "reference,manufacturer,datasheet\nK1,Acme,https://example.com/k1.pdf\nZ9,None,\n",
+    );
+    harness.run();
+    let doc = document(&harness);
+    let k1 = doc
+        .devices
+        .iter()
+        .find(|device| device.reference.0 == "K1")
+        .and_then(|device| device.info.clone())
+        .expect("data");
+    assert_eq!(k1.manufacturer.as_deref(), Some("Acme"));
+    assert_eq!(k1.datasheet.as_deref(), Some("https://example.com/k1.pdf"));
+    assert!(
+        harness
+            .state()
+            .command_log()
+            .iter()
+            .any(|line| line.contains("Z9"))
+    );
+    command(&mut harness, "undo");
+    assert!(document(&harness).devices.iter().all(|device| {
+        device
+            .info
+            .as_ref()
+            .is_none_or(|info| info.datasheet.is_none())
+    }));
+}

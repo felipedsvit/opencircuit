@@ -96,11 +96,12 @@ for the milestone, so every field is decided here before any is written.
   the columns `reference` (required), `manufacturer`, `part_no`,
   `description`, `location` and `datasheet`, in any order and case; quoting
   follows RFC 4180. Each row sets the catalog data of the device with that
-  designator: a filled cell replaces the field, an empty cell leaves it. A
-  row for a designator the project does not have is reported and skipped.
-  The import is one undoable step, refused as a whole when the CSV cannot be
-  read (at most 10 000 rows). The core reads text only; the command line and
-  the window read the file.
+  designator: a filled cell replaces the field, an empty cell leaves it. The
+  window reports a row for a designator the project does not have and skips
+  it; an edit file (`import_catalog`) refuses it, as it refuses anything it
+  cannot apply. The import is one undoable step, refused as a whole when the
+  CSV cannot be read (at most 10 000 rows). The core reads text only; the
+  window reads the file.
 
 ### Sheet kinds and device views
 
@@ -138,11 +139,14 @@ for the milestone, so every field is decided here before any is written.
   anything in the simulation.
 - Two channels of one module with the same address, or a device given to two
   channels of the same direction, is the warning `OC-STR-025`.
-- **The `io` report** has one row per channel: module, address, direction,
+- **The `plc` report** has one row per channel: module, address, direction,
   device, label, and the Modbus table and address of that device in the map
   of ADR-0009 (`coil` for an operable input such as a pushbutton,
-  `discrete_input` for an observable output such as a coil), empty when the
-  device is not in the map.
+  `discrete input` for an observable output such as a coil), empty when the
+  device is not in the map. The `io` report stays the Modbus map. A
+  `comments` report lists the comments. Both join `opencircuit report --kind
+  all` only for a project that has comments or PLC modules, so the reports of
+  any other project are as before.
 
 ### Diagnostics
 

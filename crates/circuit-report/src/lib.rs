@@ -66,11 +66,15 @@ pub enum Kind {
     Problems,
     /// [`devices`].
     Devices,
+    /// [`comments`].
+    Comments,
+    /// [`plc`].
+    Plc,
 }
 
 impl Kind {
     /// Every report, in the order the command line lists them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Bom,
         Self::Wires,
         Self::Terminals,
@@ -79,10 +83,12 @@ impl Kind {
         Self::Io,
         Self::Problems,
         Self::Devices,
+        Self::Comments,
+        Self::Plc,
     ];
 
     /// The name of the report: `bom`, `wires`, `terminals`, `strips`, `xref`,
-    /// `io`, `problems` or `devices`.
+    /// `io`, `problems`, `devices`, `comments` or `plc`.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -94,6 +100,8 @@ impl Kind {
             Self::Io => "io",
             Self::Problems => "problems",
             Self::Devices => "devices",
+            Self::Comments => "comments",
+            Self::Plc => "plc",
         }
     }
 
@@ -297,6 +305,15 @@ pub fn devices(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
         sheets.sort_unstable();
         sheets.dedup();
         let info = device.info.clone().unwrap_or_default();
+        // The sheets the device is shown on again (ADR-0018).
+        let mut views: Vec<u32> = doc
+            .views
+            .iter()
+            .filter(|view| view.device_id == device.id)
+            .filter_map(|view| sheet_at(doc, view.position).map(|sheet| sheet.number))
+            .collect();
+        views.sort_unstable();
+        views.dedup();
         rows.push((
             natural(&device.reference.0),
             device.id,
@@ -312,6 +329,12 @@ pub fn devices(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
                 info.manufacturer.unwrap_or_default(),
                 info.part_no.unwrap_or_default(),
                 info.description.unwrap_or_default(),
+                info.datasheet.unwrap_or_default(),
+                views
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" "),
             ],
         ));
     }
@@ -326,6 +349,8 @@ pub fn devices(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
             "Manufacturer",
             "Part no",
             "Description",
+            "Datasheet",
+            "Views",
         ],
     );
     for (_, _, cells) in rows {
@@ -643,6 +668,113 @@ pub fn io(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
             entry.name,
             entry.meaning.to_owned(),
         ]);
+    }
+    table
+}
+
+/// The comments of the project (ADR-0018), one row each in ID order: what
+/// it is about, a name a person recognizes, the author and the text.
+#[must_use]
+pub fn comments(doc: &Schematic) -> Table {
+    let mut table = Table::new("Comments", &["Subject", "Name", "Author", "Comment"]);
+    let mut comments: Vec<&circuit_model::Comment> = doc.comments.iter().collect();
+    comments.sort_by_key(|comment| comment.id);
+    let designator = |device: DeviceId| {
+        doc.devices
+            .iter()
+            .find(|candidate| candidate.id == device)
+            .map(|device| device.reference.0.clone())
+            .unwrap_or_default()
+    };
+    for comment in comments {
+        let name = match &comment.subject {
+            circuit_model::Subject::Device(id) => designator(*id),
+            circuit_model::Subject::Symbol(id) => doc
+                .symbols
+                .iter()
+                .find(|symbol| symbol.id == *id)
+                .map(|symbol| designator(symbol.device_id))
+                .unwrap_or_default(),
+            circuit_model::Subject::Wire(id) => doc
+                .wires
+                .iter()
+                .find(|wire| wire.id == *id)
+                .and_then(|wire| wire.number.clone())
+                .unwrap_or_default(),
+            circuit_model::Subject::Sheet(id) => doc
+                .sheets
+                .iter()
+                .find(|sheet| sheet.id == *id)
+                .map(|sheet| sheet.title.clone())
+                .unwrap_or_default(),
+            circuit_model::Subject::Document => doc.project.name.clone(),
+            _ => String::new(),
+        };
+        table.push(vec![
+            comment.subject.to_string(),
+            name,
+            comment.author.clone().unwrap_or_default(),
+            comment.text.clone(),
+        ]);
+    }
+    table
+}
+
+/// The I/O mapping of the PLC modules (ADR-0018): one row per channel, by
+/// module name then in channel order, with the device it reads or drives
+/// and where that device is in the Modbus map of ADR-0009 (empty when it is
+/// not in the map).
+#[must_use]
+pub fn plc(doc: &Schematic, catalog: &ComponentCatalog) -> Table {
+    let mut table = Table::new(
+        "PLC I/O",
+        &[
+            "Module",
+            "Address",
+            "Direction",
+            "Device",
+            "Label",
+            "Modbus",
+        ],
+    );
+    let map = IoMap::new(doc, catalog).entries();
+    let mut modules: Vec<&circuit_model::PlcModule> = doc.plcs.iter().collect();
+    modules.sort_by(|a, b| {
+        natural(&a.name)
+            .cmp(&natural(&b.name))
+            .then(a.id.cmp(&b.id))
+    });
+    for module in modules {
+        for channel in &module.channels {
+            let device = channel
+                .device
+                .and_then(|id| doc.devices.iter().find(|device| device.id == id))
+                .map(|device| device.reference.0.clone())
+                .unwrap_or_default();
+            let modbus: Vec<String> = if device.is_empty() {
+                Vec::new()
+            } else {
+                map.iter()
+                    .filter(|entry| entry.name == device)
+                    .map(|entry| {
+                        let table = match entry.table {
+                            circuit_io::Table::Coil => "coil",
+                            circuit_io::Table::DiscreteInput => "discrete input",
+                            circuit_io::Table::InputRegister => "input register",
+                        };
+                        format!("{table} {}", entry.address)
+                    })
+                    .collect()
+            };
+            table.push(vec![
+                module.name.clone(),
+                channel.address.clone(),
+                channel.direction.name().to_owned(),
+                device,
+                channel.label.clone().unwrap_or_default(),
+                modbus.join(", "),
+            ]);
+        }
     }
     table
 }

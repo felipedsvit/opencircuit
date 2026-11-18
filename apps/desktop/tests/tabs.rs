@@ -119,6 +119,10 @@ fn a_project_opened_in_a_new_tab_leaves_the_first_open() {
     assert_eq!(harness.state().active_tab(), 1);
     assert_eq!(harness.state().tab_names(), [first.clone(), second.clone()]);
 
+    // Each tab has a button that closes it, named after its project.
+    assert!(harness.query_by_label(&format!("Close {first}")).is_some());
+    assert!(harness.query_by_label_contains("{").is_none());
+
     // A click on the other tab shows its project.
     harness.get_by_label(&first).click();
     harness.run();

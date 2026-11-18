@@ -1,0 +1,4 @@
+Module,Address,Direction,Device,Label,Modbus
+A1,I0.0,input,S1,start,coil 3
+A1,I0.1,input,S2,stop,coil 2
+A1,Q0.0,output,K1,run,discrete input 0

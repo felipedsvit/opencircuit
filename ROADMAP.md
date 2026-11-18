@@ -439,12 +439,15 @@ Decisions, to be confirmed in #118:
 - [x] Groups of elements, and mirrored symbols (Modify menu, M,
   `group`/`ungroup`/`mirror`).
 - [x] QR codes as annotations (`qrcodegen`, `qr` command).
-- [ ] Manufacturer data imported from CSV into the catalog data of devices, and
-  a datasheet link per device opened by the system.
-- [ ] Sheet kinds: single-line diagram and panel layout, with cross-references
-  to the schematic.
-- [ ] PLC modules with channels and an I/O mapping report (with the Modbus
-  map).
+- [x] Manufacturer data imported from CSV into the catalog data of devices, and
+  a datasheet link per device opened by the system
+  (`circuit_commands::catalog_csv`, Modify > Import catalog data,
+  `import_catalog`; inspector Catalog data > Open datasheet).
+- [x] Sheet kinds: single-line diagram and panel layout, with cross-references
+  to the schematic (device views with the schematic place of their device;
+  `OC-STR-024`; `examples/panel-documentation`).
+- [x] PLC modules with channels and an I/O mapping report (with the Modbus
+  map): `opencircuit report --kind plc`, `OC-STR-025`.
 
 ### M9.4 — Symbols and exchange
 

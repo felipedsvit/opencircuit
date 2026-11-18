@@ -422,7 +422,11 @@ fn devices_lists_the_sheets_their_symbols_are_on() {
     assert!(table.rows.iter().all(|row| row[3].is_empty()), "no sheets");
     assert_eq!(table.rows.len(), 3);
     assert!(Kind::parse("devices") == Some(Kind::Devices));
-    assert_eq!(Kind::ALL.last(), Some(&Kind::Devices));
+    // The reports of ADR-0018 come after it.
+    assert_eq!(
+        Kind::ALL[Kind::ALL.len() - 3..],
+        [Kind::Devices, Kind::Comments, Kind::Plc]
+    );
 }
 
 #[test]

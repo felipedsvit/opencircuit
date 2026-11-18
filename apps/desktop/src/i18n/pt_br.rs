@@ -73,14 +73,18 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "No máximo 16 espaços de trabalho são mantidos; exclua um primeiro.",
     ),
     (
-        "At most {} projects are open at once.",
-        "No máximo {} projetos ficam abertos ao mesmo tempo.",
+        "At most {0} projects are open at once.",
+        "No máximo {0} projetos ficam abertos ao mesmo tempo.",
     ),
     ("Author", "Autor"),
     ("Automation and logic", "Automação e lógica"),
     ("Bottom", "Base"),
     ("Cancel", "Cancelar"),
     ("Catalog data", "Dados de catálogo"),
+    (
+        "Catalog data of {0} device(s) imported.",
+        "Dados de catálogo de {0} dispositivo(s) importados.",
+    ),
     (
         "Catalog data of {0} devices",
         "Dados de catálogo de {0} dispositivos",
@@ -104,7 +108,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("Client", "Cliente"),
     ("Close tab", "Fechar aba"),
-    ("Close {}", "Fechar {}"),
+    ("Close {0}", "Fechar {0}"),
     ("Colour", "Cor"),
     ("Comma-separated values", "Valores separados por vírgula"),
     ("Command palette", "Paleta de comandos"),
@@ -194,6 +198,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Group selection", "Agrupar a seleção"),
     ("Help", "Ajuda"),
     ("Ignore", "Ignorar"),
+    (
+        "Import catalog data (CSV)…",
+        "Importar dados de catálogo (CSV)…",
+    ),
     ("Insulation", "Isolação"),
     ("Join them with a wire", "Ligá-los com um fio"),
     ("Keep it", "Manter"),
@@ -224,6 +232,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("M", "M"),
     ("Manufacturer", "Fabricante"),
     (
+        "Manufacturer, part number, description, location and datasheet of each device, by designator",
+        "Fabricante, código, descrição, local e folha de dados de cada dispositivo, pelo designador",
+    ),
+    (
         "Matches the text exactly, with its case.",
         "Compara o texto exatamente, com maiúsculas e minúsculas.",
     ),
@@ -245,6 +257,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("New tab", "Nova aba"),
     ("Next page", "Próxima página"),
     ("No comment", "Nenhum comentário"),
+    ("No device for: {0}", "Nenhum dispositivo para: {0}"),
     (
         "No diagnostics: the project compiles.",
         "Sem diagnósticos: o projeto compila.",
@@ -601,10 +614,15 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("x,y or @dx,dy", "x,y ou @dx,dy"),
     ("zoom", "zoom"),
     ("{0} ({1})", "{0} ({1})"),
+    ("{0} already does: {1}.", "{0} já faz: {1}."),
     ("{0} changes", "{0} alterações"),
     ("{0} differences", "{0} diferenças"),
     ("{0} elements selected", "{0} elementos selecionados"),
     ("{0} elements selected.", "{0} elementos selecionados."),
+    (
+        "{0} is kept for its usual use.",
+        "{0} fica com o seu uso habitual.",
+    ),
     (
         "{0} is no longer there; it was taken off the list.",
         "{0} não existe mais; foi retirado da lista.",
@@ -624,10 +642,5 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("{0}: {1} of {2}", "{0}: {1} de {2}"),
     ("{0}: {1} parts", "{0}: {1} peças"),
-    ("{} already does: {}.", "{} já faz: {}."),
-    (
-        "{} is kept for its usual use.",
-        "{} fica com o seu uso habitual.",
-    ),
     ("… and {0} more", "… e mais {0}"),
 ];

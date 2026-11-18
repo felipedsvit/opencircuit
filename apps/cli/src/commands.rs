@@ -825,7 +825,16 @@ fn report(
     };
     let kinds: Vec<circuit_report::Kind> = match request.which {
         ReportChoice::One(kind) => vec![kind],
-        ReportChoice::All => circuit_report::Kind::ALL.to_vec(),
+        // The reports of ADR-0018 join `all` only for a project that has
+        // comments or PLC modules: any other project reports as before.
+        ReportChoice::All => circuit_report::Kind::ALL
+            .into_iter()
+            .filter(|kind| match kind {
+                circuit_report::Kind::Comments => !doc.comments.is_empty(),
+                circuit_report::Kind::Plc => !doc.plcs.is_empty(),
+                _ => true,
+            })
+            .collect(),
     };
     let tables: Vec<(circuit_report::Kind, circuit_model::Table)> = kinds
         .into_iter()
@@ -838,6 +847,8 @@ fn report(
                 circuit_report::Kind::Xref => circuit_report::xref(&doc, catalog),
                 circuit_report::Kind::Io => circuit_report::io(&doc, catalog),
                 circuit_report::Kind::Devices => circuit_report::devices(&doc, catalog),
+                circuit_report::Kind::Comments => circuit_report::comments(&doc),
+                circuit_report::Kind::Plc => circuit_report::plc(&doc, catalog),
                 circuit_report::Kind::Problems => {
                     circuit_report::problems(&doc, &compile(&doc, catalog).diagnostics)
                 }

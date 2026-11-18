@@ -279,6 +279,10 @@ enum Operation {
         #[serde(rename = "as")]
         name: Option<String>,
     },
+    /// Set the catalog data of devices from CSV text (ADR-0018): a header
+    /// with `reference` and any of `manufacturer`, `part_no`, `description`,
+    /// `location` and `datasheet`, then one row per device.
+    ImportCatalog { csv: String },
     /// Make a group of elements.
     Group {
         name: String,
@@ -374,6 +378,7 @@ impl Operation {
             Self::AssignLayer { .. } => "assign_layer",
             Self::AddShape { .. } => "add_shape",
             Self::AddComment { .. } => "add_comment",
+            Self::ImportCatalog { .. } => "import_catalog",
             Self::Group { .. } => "group",
             Self::Ungroup { .. } => "ungroup",
             Self::Mirror { .. } => "mirror",
@@ -1060,6 +1065,16 @@ impl Run<'_> {
                 self.commit(&tx)?;
                 self.remember(name.as_deref(), Some(Created::Comment(id)))
             }
+            Operation::ImportCatalog { csv } => {
+                let (tx, imported) = crate::catalog_csv::import(&self.doc, csv).map_err(refused)?;
+                if let Some(first) = imported.unknown.first() {
+                    return Err(format!(
+                        "the project has no device `{first}` ({} row(s) name no device)",
+                        imported.unknown.len()
+                    ));
+                }
+                self.commit(&tx)
+            }
             Operation::Group {
                 name,
                 elements,
@@ -1628,6 +1643,29 @@ mod tests {
             r#"{ "op": "add_shape", "shape": { "star": {} } }"#,
         ));
         assert!(message.contains("star"), "{message}");
+    }
+
+    #[test]
+    fn import_catalog_sets_the_data_of_the_devices_and_refuses_an_unknown_one() {
+        let doc = documented(
+            r#"{ "op": "import_catalog", "csv": "reference,part_no,datasheet\nS7,3SB3,docs/s7.pdf\nS8,3SB4,\n" }"#,
+        )
+        .expect("the import applies")
+        .doc;
+        let info = |reference: &str| {
+            doc.devices
+                .iter()
+                .find(|device| device.reference.0 == reference)
+                .and_then(|device| device.info.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(info("S7").part_no.as_deref(), Some("3SB3"));
+        assert_eq!(info("S7").datasheet.as_deref(), Some("docs/s7.pdf"));
+        assert_eq!(info("S8").part_no.as_deref(), Some("3SB4"));
+        let (_, message) = refused(documented(
+            r#"{ "op": "import_catalog", "csv": "reference,part_no\nK42,1\n" }"#,
+        ));
+        assert!(message.contains("K42"), "{message}");
     }
 
     #[test]

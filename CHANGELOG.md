@@ -134,6 +134,17 @@ here when it lands.
   devices they read or drive (`add_plc`, `set_plc`). `OC-STR-024` warns about
   a view off those sheets or a symbol on them, and `OC-STR-025` about two
   channels on one address or one device.
+- **Reports `comments` and `plc`** (`opencircuit report --kind comments|plc`):
+  the comments of a project, and one row per PLC channel with its device and
+  where that device is in the Modbus map. The `devices` report gets the
+  columns Datasheet and Views. A new example,
+  `examples/panel-documentation`, has a single-line diagram, a panel layout,
+  a PLC module, wire data, a revision cloud, a comment and a QR code, with its
+  reports.
+- **Import of catalog data from CSV** (Modify > Import catalog data;
+  `{ "op": "import_catalog" }` in edit files): manufacturer, part number,
+  description, location and datasheet of each device, by designator, in one
+  undoable step.
 - **Report `devices`**: one row per device (model, symbols, sheets and catalog
   data), in `opencircuit report --kind devices` and in `--kind all`, where it
   is the last table.
