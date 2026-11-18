@@ -35,6 +35,8 @@ pub mod project_lock;
 pub mod recovery;
 pub mod session;
 mod theme;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod versions;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
