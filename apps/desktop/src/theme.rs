@@ -94,6 +94,13 @@ pub struct Tokens {
     pub icon: Color32,
     /// What is selected, on and focused.
     pub accent: Color32,
+    /// The fill of the main button of a dialog: the accent, dark enough for
+    /// [`Tokens::on_accent`] text to read at 4.5:1.
+    pub accent_fill: Color32,
+    /// Text over [`Tokens::accent_fill`].
+    pub on_accent: Color32,
+    /// An error, and what cannot be undone.
+    pub danger: Color32,
     /// A message to read twice.
     pub warn: Color32,
     /// The cursor cross over the drawing.
@@ -123,6 +130,9 @@ impl Tokens {
         text_faint: Color32::from_rgb(0x7e, 0x87, 0x93),
         icon: Color32::from_rgb(0xd2, 0xd8, 0xe0),
         accent: Color32::from_rgb(0x36, 0x9c, 0xd8),
+        accent_fill: Color32::from_rgb(0x28, 0x78, 0xb5),
+        on_accent: Color32::WHITE,
+        danger: Color32::from_rgb(0xff, 0x7b, 0x72),
         warn: Color32::from_rgb(0xf2, 0xc5, 0x6b),
         crosshair: Color32::from_rgb(0xe9, 0xec, 0xf0),
         window_select: Color32::from_rgb(0x5f, 0xa8, 0xf5),
@@ -146,6 +156,9 @@ impl Tokens {
         text_faint: Color32::from_rgb(0x6b, 0x73, 0x7f),
         icon: Color32::from_rgb(0x34, 0x3b, 0x46),
         accent: Color32::from_rgb(0x1f, 0x7f, 0xc0),
+        accent_fill: Color32::from_rgb(0x1a, 0x6f, 0xa8),
+        on_accent: Color32::WHITE,
+        danger: Color32::from_rgb(0xb7, 0x1c, 0x1c),
         warn: Color32::from_rgb(0x94, 0x5c, 0x00),
         crosshair: Color32::from_rgb(0x2a, 0x2f, 0x36),
         window_select: Color32::from_rgb(0x1d, 0x6f, 0xd1),
@@ -177,7 +190,13 @@ impl Tokens {
         visuals.faint_bg_color = self.chrome_dark;
         visuals.override_text_color = Some(self.text);
         visuals.window_stroke = Stroke::new(1.0, self.border);
-        visuals.window_corner_radius = CornerRadius::same(6);
+        visuals.window_corner_radius = CornerRadius::same(window_radius());
+        visuals.window_shadow = Shadow {
+            offset: [0, 8],
+            blur: 24,
+            spread: 0,
+            color: Color32::from_black_alpha(if dark_mode { 110 } else { 50 }),
+        };
         visuals.menu_corner_radius = CornerRadius::same(5);
         visuals.popup_shadow = Shadow {
             offset: [0, 4],
@@ -217,6 +236,20 @@ impl Tokens {
             state.corner_radius = CornerRadius::same(4);
         }
         visuals
+    }
+}
+
+/// The corner radius of windows and dialogs, in points: what each system
+/// draws its own (8 on Windows, 10 on macOS, 12 on the GNOME and KDE desktops
+/// of Linux).
+#[must_use]
+pub const fn window_radius() -> u8 {
+    if cfg!(target_os = "windows") {
+        8
+    } else if cfg!(target_os = "macos") {
+        10
+    } else {
+        12
     }
 }
 
@@ -432,6 +465,11 @@ mod tests {
             pairs.push(("warn", tokens.warn, tokens.chrome));
             pairs.push(("warn", tokens.warn, tokens.panel));
             pairs.push(("text_faint", tokens.text_faint, tokens.canvas));
+            // The main button of a dialog, and the danger colour over the
+            // surface of a dialog.
+            pairs.push(("on_accent", tokens.on_accent, tokens.accent_fill));
+            pairs.push(("danger", tokens.danger, tokens.panel));
+            pairs.push(("danger", tokens.danger, tokens.chrome));
             // Selected text: the selection fill is the accent at 45 %.
             for surface in [tokens.chrome, tokens.panel] {
                 let blend = |accent: u8, base: u8| {

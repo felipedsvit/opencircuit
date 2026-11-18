@@ -160,6 +160,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Direct-online starter", "Partida direta"),
     ("Discard", "Descartar"),
     ("Discard changes", "Descartar alterações"),
+    ("Dismiss", "Dispensar"),
     ("Distribute", "Distribuir"),
     ("Down", "Na vertical"),
     ("Draw a wire (W)", "Desenhar um fio (W)"),

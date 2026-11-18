@@ -28,6 +28,7 @@ use crate::camera::{Camera, DEFAULT_ZOOM};
 use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
 use crate::cmdline::CommandLine;
+use crate::dialog::{self, Choice, Dialog, Kind};
 use crate::dialogs;
 use crate::documentation;
 use crate::i18n::{self, Language, tr, trf, trn};
@@ -467,26 +468,32 @@ impl DesktopApp {
         if self.confirm.is_some() {
             return;
         }
-        let mut answer = None;
-        egui::Modal::new(egui::Id::unique("recover the page copy")).show(ui.ctx(), |ui| {
-            ui.heading(tr("Recover unsaved work"));
-            ui.label(tr(
+        let choices = [
+            Choice::primary(tr("Recover")),
+            Choice::destructive(tr("Discard")),
+        ];
+        let outcome = Dialog {
+            id: egui::Id::unique("recover the page copy"),
+            kind: Kind::Question,
+            title: tr("Recover unsaved work"),
+            message: tr(
                 "The last page closed without saving this project. A copy was kept in the browser.",
-            ));
+            ),
+            choices: &choices,
+        }
+        .show(ui.ctx(), |ui| {
             let place = found
                 .origin
                 .clone()
                 .unwrap_or_else(|| tr("never saved").to_owned());
-            ui.label(format!("{} — {place}", found.name));
-            ui.horizontal(|ui| {
-                if ui.button(tr("Recover")).clicked() {
-                    answer = Some(true);
-                }
-                if ui.button(tr("Discard")).clicked() {
-                    answer = Some(false);
-                }
-            });
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(format!("{} — {place}", found.name)).strong());
         });
+        let answer = match outcome.chosen {
+            Some(0) => Some(true),
+            Some(_) => Some(false),
+            None => None,
+        };
         let Some(recover) = answer else {
             return;
         };
@@ -749,7 +756,7 @@ impl DesktopApp {
             .order(egui::Order::Foreground)
             .fixed_pos(*at)
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                dialog::popup_card(ui.style()).show(ui, |ui| {
                     let label = ui.label(tr("Point"));
                     let field = ui
                         .add(
@@ -935,7 +942,7 @@ impl DesktopApp {
             .order(egui::Order::Foreground)
             .fixed_pos(at)
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                dialog::popup_card(ui.style()).show(ui, |ui| {
                     let label = ui.label(tr("Label"));
                     let field = ui
                         .add(
@@ -1932,41 +1939,43 @@ impl DesktopApp {
             return;
         }
         let mut chosen: Option<(usize, bool)> = None;
-        let mut later = false;
-        egui::Modal::new(egui::Id::unique("recover unsaved work")).show(ui.ctx(), |ui| {
-            ui.heading(tr("Recover unsaved work"));
-            ui.label(tr(
+        let choices = [Choice::secondary(tr("Later"))];
+        let outcome = Dialog {
+            id: egui::Id::unique("recover unsaved work"),
+            kind: Kind::Question,
+            title: tr("Recover unsaved work"),
+            message: tr(
                 "OpenCircuit ended without saving these projects. A copy of each was kept.",
-            ));
+            ),
+            choices: &choices,
+        }
+        .show(ui.ctx(), |ui| {
             for (index, entry) in self.recover_offer.iter().enumerate() {
                 ui.separator();
                 let place = entry.original.as_ref().map_or_else(
                     || tr("never saved").to_owned(),
                     |path| path.display().to_string(),
                 );
-                ui.label(format!("{} — {place}", entry.name));
+                ui.label(egui::RichText::new(format!("{} — {place}", entry.name)).strong());
                 ui.horizontal(|ui| {
-                    let button = |ui: &mut Ui, text: &str| {
-                        let response = ui.button(text);
-                        let label = format!("{text} {}", entry.name);
-                        response.widget_info(|| {
-                            egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
-                        });
-                        response
-                    };
-                    if button(ui, tr("Recover")).clicked() {
+                    let recover = tr("Recover");
+                    let discard = tr("Discard");
+                    let recover_name = format!("{recover} {}", entry.name);
+                    let discard_name = format!("{discard} {}", entry.name);
+                    if dialog::choice_button(ui, Choice::primary(recover).named(&recover_name))
+                        .clicked()
+                    {
                         chosen = Some((index, true));
                     }
-                    if button(ui, tr("Discard")).clicked() {
+                    if dialog::choice_button(ui, Choice::destructive(discard).named(&discard_name))
+                        .clicked()
+                    {
                         chosen = Some((index, false));
                     }
                 });
             }
-            ui.separator();
-            if ui.button(tr("Later")).clicked() {
-                later = true;
-            }
         });
+        let later = outcome.chosen.is_some();
         if later {
             self.recover_offer.clear();
             return;
@@ -2006,35 +2015,32 @@ impl DesktopApp {
         let Some(pending) = self.confirm.clone() else {
             return;
         };
-        let mut answer = None;
-        let modal = egui::Modal::new(egui::Id::unique("unsaved changes")).show(ui.ctx(), |ui| {
-            ui.heading(tr("Unsaved changes"));
-            ui.label(tr("The project has changes that are not saved."));
-            ui.horizontal(|ui| {
-                if ui.button(tr("Save and continue")).clicked() {
-                    answer = Some("save");
-                }
-                if ui.button(tr("Discard changes")).clicked() {
-                    answer = Some("discard");
-                }
-                if ui.button(tr("Cancel")).clicked() {
-                    answer = Some("cancel");
-                }
-            });
-        });
-        match answer {
-            Some("save") => {
+        let choices = [
+            Choice::primary(tr("Save and continue")),
+            Choice::destructive(tr("Discard changes")),
+            Choice::secondary(tr("Cancel")),
+        ];
+        let outcome = Dialog {
+            id: egui::Id::unique("unsaved changes"),
+            kind: Kind::Warning,
+            title: tr("Unsaved changes"),
+            message: tr("The project has changes that are not saved."),
+            choices: &choices,
+        }
+        .show(ui.ctx(), |_| {});
+        match outcome.chosen {
+            Some(0) => {
                 if self.save() {
                     self.confirm = None;
                     self.perform(pending);
                 }
             }
-            Some("discard") => {
+            Some(1) => {
                 self.confirm = None;
                 self.perform(pending);
             }
             Some(_) => self.confirm = None,
-            None if modal.should_close() => self.confirm = None,
+            None if outcome.dismissed => self.confirm = None,
             None => {}
         }
     }
@@ -2590,6 +2596,7 @@ impl DesktopApp {
                 palette_panel("palette")
                     .resizable(true)
                     .default_size(260.0)
+                    .size_range(palette::MIN_WIDTH..=palette::MAX_WIDTH)
                     .show(ui, |ui| {
                         if let Some(session) = &self.session {
                             palette::show(
@@ -3640,8 +3647,12 @@ impl DesktopApp {
                 }
             }
         }
-        if let Some(error) = &self.error {
-            ui.colored_label(ui.visuals().error_fg_color, error);
+        let dismissed = self
+            .error
+            .as_deref()
+            .is_some_and(|error| dialog::error_banner(ui, error, tr("Dismiss")));
+        if dismissed {
+            self.error = None;
         }
     }
 

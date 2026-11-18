@@ -183,6 +183,21 @@ file dialogs.
 
 ### Changed
 
+- **The library in the left column is responsive** (ADR-0019): a part's
+  symbols are drawn in rows of four, never larger than before, and shrink in
+  proportion when the column is narrower (down to about half the size), as do
+  the eight category icons, so nothing breaks into another line and nothing goes
+  past the edge of the column. The column goes from about 174 points to a few
+  points past four full cells. The default width is as it was, so a new window
+  shows four smaller cells in a row where it showed three.
+- **Dialogs and errors have a modern look** (ADR-0019): the question about
+  unsaved changes and the offers to recover work have an icon, a title, a
+  message and buttons by importance (the main one filled, the one that loses
+  work outlined in red), a corner radius and a button order of the system the
+  window runs on, the main button with the keyboard, and Escape to dismiss.
+  An error is a banner with a button that clears it. File pickers stay native.
+  Every window of the application gets the corner radius and the shadow of the
+  system too.
 - **The window reads its keymap in place** instead of copying it three times a
   frame, and `tests/compat/v0.0.2` freezes the examples, library, scenarios,
   golden traces and edit files of this release (schema version 5), so that a

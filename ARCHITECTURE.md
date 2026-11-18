@@ -234,5 +234,8 @@ another language changes the words and not the state. A colour of text is
 checked against the surfaces it is drawn on at 4.5:1 in both themes
 (`theme::tests`), and a new text goes through `tr` so that the catalog test
 fails the build when its translation is missing (the command line and its
-label stay English, ADR-0017).
+label stay English, ADR-0017). Files are chosen with the dialogs of the system;
+a question or an error is drawn by `dialog.rs` from the tokens of the theme, so
+it follows the theme, the language and the conventions of the system, and the
+window tests can answer it (ADR-0019).
 
