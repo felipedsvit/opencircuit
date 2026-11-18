@@ -184,6 +184,12 @@ impl History {
         self.saved_revision = Some(self.revision());
     }
 
+    /// Record that no revision is saved: the document came from somewhere
+    /// other than its file (a recovery copy) and is unsaved until saved.
+    pub fn forget_saved(&mut self) {
+        self.saved_revision = None;
+    }
+
     /// Whether the document differs from the last saved one.
     #[must_use]
     pub fn is_dirty(&self) -> bool {
@@ -283,6 +289,18 @@ mod tests {
             (history.undo_label(), history.revision()),
             (Some("junction 0"), 1)
         );
+    }
+
+    #[test]
+    fn a_document_whose_save_is_forgotten_is_dirty_until_saved_again() {
+        let mut history = History::new();
+        assert!(!history.is_dirty());
+
+        history.forget_saved();
+        assert!(history.is_dirty());
+
+        history.mark_saved();
+        assert!(!history.is_dirty());
     }
 
     #[test]

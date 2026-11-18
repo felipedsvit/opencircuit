@@ -303,6 +303,12 @@ impl Session {
         self.history.mark_saved();
     }
 
+    /// Record that the document is not saved in its file: it was recovered
+    /// from a copy, and closing it asks first.
+    pub fn mark_unsaved(&mut self) {
+        self.history.forget_saved();
+    }
+
     fn write(&mut self, path: &Path) -> Result<(), SaveError> {
         let text = circuit_project::to_string(&self.doc).map_err(SaveError::Project)?;
         write_atomic(path, &text).map_err(SaveError::File)?;

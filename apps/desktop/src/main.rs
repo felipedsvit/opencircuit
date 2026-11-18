@@ -34,6 +34,7 @@ mod native {
     use std::process::ExitCode;
 
     use eframe::egui;
+    use opencircuit_desktop::recovery::{DEFAULT_INTERVAL_SECONDS, RecoveryStore};
     use opencircuit_desktop::{DesktopApp, Language};
 
     const USAGE: &str = "usage: opencircuit-desktop [PROJECT.ocircuit]";
@@ -71,6 +72,11 @@ mod native {
                 // The language of the environment, read once, here and not in
                 // the window: a test of the window is always in English.
                 app.set_language(Language::from_environment(|name| std::env::var(name).ok()));
+                // Autosave into the user's data folder, chosen here and not in
+                // the window: a test of the window never touches it.
+                if let Some(store) = RecoveryStore::in_user_data() {
+                    app.enable_recovery(store, DEFAULT_INTERVAL_SECONDS);
+                }
                 Ok(Box::new(app))
             }),
         );

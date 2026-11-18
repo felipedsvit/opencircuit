@@ -364,8 +364,10 @@ Decisions, to be confirmed in #118:
 
 ### M9.1 — Work safety (window and command line, no schema change)
 
-- [ ] Autosave to a recovery copy, recovery offered after an unexpected exit,
-  and an indicator in the status bar.
+- [x] Autosave to a recovery copy, recovery offered after an unexpected exit,
+  and an indicator in the status bar (native window;
+  `apps/desktop/tests/recovery.rs`).
+- [ ] Autosave in the browser build, into browser storage.
 - [ ] A panic in the window writes the recovery copy before the process ends.
 - [ ] Optional rotating backups next to the project.
 - [ ] Project lock: a second window or process on the same file is warned; a
