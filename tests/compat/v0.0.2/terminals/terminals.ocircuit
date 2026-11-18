@@ -1,0 +1,373 @@
+{
+  "schema_version": 5,
+  "next_id": 29,
+  "project": {
+    "name": "Control circuit through a terminal strip",
+    "grid_unit": 10,
+    "author": null,
+    "company": null,
+    "revision": null,
+    "date": null
+  },
+  "sheets": [],
+  "supplies": [
+    {
+      "id": 1,
+      "kind": "dc",
+      "nominal_voltage_mv": 24000,
+      "phase_voltage_mv": null,
+      "frequency_millihz": null,
+      "phase_sequence": null
+    }
+  ],
+  "devices": [
+    {
+      "id": 2,
+      "reference": "P24",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_pos",
+        "supply": 1
+      }
+    },
+    {
+      "id": 4,
+      "reference": "P0",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_neg",
+        "supply": 1
+      }
+    },
+    {
+      "id": 6,
+      "reference": "XT1",
+      "model": {
+        "id": "std.terminal_block",
+        "version": 1
+      },
+      "params": {
+        "number": 1,
+        "strip": "X1"
+      }
+    },
+    {
+      "id": 8,
+      "reference": "S2",
+      "model": {
+        "id": "pushbutton_nc",
+        "version": 1
+      },
+      "params": {}
+    },
+    {
+      "id": 10,
+      "reference": "S1",
+      "model": {
+        "id": "pushbutton_no",
+        "version": 1
+      },
+      "params": {}
+    },
+    {
+      "id": 12,
+      "reference": "K1",
+      "model": {
+        "id": "contactor.generic",
+        "version": 1
+      },
+      "params": {
+        "connection": "dc",
+        "rated_voltage_mv": 24000
+      }
+    },
+    {
+      "id": 15,
+      "reference": "XT2",
+      "model": {
+        "id": "std.terminal_block",
+        "version": 1
+      },
+      "params": {
+        "number": 2,
+        "strip": "X1"
+      }
+    }
+  ],
+  "symbols": [
+    {
+      "id": 3,
+      "device_id": 2,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 5,
+      "device_id": 4,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 7,
+      "device_id": 6,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 4
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 9,
+      "device_id": 8,
+      "symbol_key": "contact",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 10
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 11,
+      "device_id": 10,
+      "symbol_key": "contact",
+      "slot": null,
+      "position": {
+        "x": -4,
+        "y": 17
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 13,
+      "device_id": 12,
+      "symbol_key": "coil",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 26
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 14,
+      "device_id": 12,
+      "symbol_key": "aux_no",
+      "slot": 1,
+      "position": {
+        "x": 4,
+        "y": 17
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 16,
+      "device_id": 15,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 34
+      },
+      "rotation": "deg0"
+    }
+  ],
+  "junctions": [
+    {
+      "id": 17,
+      "position": {
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "id": 18,
+      "position": {
+        "x": 0,
+        "y": 22
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 19,
+      "from": {
+        "terminal": {
+          "symbol_id": 3,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 7,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 20,
+      "from": {
+        "terminal": {
+          "symbol_id": 7,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 9,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 21,
+      "from": {
+        "terminal": {
+          "symbol_id": 9,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 17
+      },
+      "route": []
+    },
+    {
+      "id": 22,
+      "from": {
+        "junction": 17
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 11,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": -4,
+          "y": 14
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "from": {
+        "junction": 17
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 14,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": 4,
+          "y": 14
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "from": {
+        "terminal": {
+          "symbol_id": 11,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 18
+      },
+      "route": [
+        {
+          "x": -4,
+          "y": 22
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "from": {
+        "terminal": {
+          "symbol_id": 14,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "junction": 18
+      },
+      "route": [
+        {
+          "x": 4,
+          "y": 22
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "from": {
+        "junction": 18
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 13,
+          "terminal": "a1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 27,
+      "from": {
+        "terminal": {
+          "symbol_id": 13,
+          "terminal": "a2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 16,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 28,
+      "from": {
+        "terminal": {
+          "symbol_id": 16,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 5,
+          "terminal": "out"
+        }
+      },
+      "route": []
+    }
+  ]
+}

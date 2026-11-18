@@ -10,11 +10,14 @@ may change anything, and what changes in a file format is listed under
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-11-18
+
 Version 0.0.2 closes M9 (`ROADMAP.md`): resilience, work safety,
-productivity, schema version 5 and new document views. Two items of M9.0 are
-left for their own pull requests: the CI changes (clippy on Windows, pinned
-actions, a release-mode test job, a coverage threshold) and the macOS file
-dialogs.
+productivity, schema version 5, new document views, and an audit of the
+window (M9.5). It includes everything of 0.0.2-dev below. Two items of M9.0
+are left for their own pull requests: the CI changes (clippy on Windows,
+pinned actions, a release-mode test job, a coverage threshold) and the macOS
+file dialogs.
 
 ### Added
 
@@ -180,6 +183,25 @@ dialogs.
 
 ### Changed
 
+- **The library in the left column is responsive** (ADR-0019): a part's
+  symbols are drawn in rows of four, never larger than before, and shrink in
+  proportion when the column is narrower (down to about half the size), as do
+  the eight category icons, so nothing breaks into another line and nothing goes
+  past the edge of the column. The column goes from about 174 points to a few
+  points past four full cells. The default width is as it was, so a new window
+  shows four smaller cells in a row where it showed three.
+- **Dialogs and errors have a modern look** (ADR-0019): the question about
+  unsaved changes and the offers to recover work have an icon, a title, a
+  message and buttons by importance (the main one filled, the one that loses
+  work outlined in red), a corner radius and a button order of the system the
+  window runs on, the main button with the keyboard, and Escape to dismiss.
+  An error is a banner with a button that clears it. File pickers stay native.
+  Every window of the application gets the corner radius and the shadow of the
+  system too.
+- **The window reads its keymap in place** instead of copying it three times a
+  frame, and `tests/compat/v0.0.2` freezes the examples, library, scenarios,
+  golden traces and edit files of this release (schema version 5), so that a
+  later build must open and simulate them as this one does.
 - **Project files are schema version 5** (ADR-0018). A version 4 file opens and
   is saved as version 5; the migration only raises the version, because every
   new field is optional and left out when empty. A version 5 file does not
@@ -188,6 +210,18 @@ dialogs.
 
 ### Fixed
 
+- **A disabled icon shows its tooltip**: the undo and redo icons of a window
+  with nothing to undo said nothing when the pointer rested on them, because
+  egui shows the hover text of an enabled widget only. Every icon button now
+  names itself, enabled or not.
+- **Open sections and windows keep their state when the language changes**: the
+  sections of the inspector, the Find and replace, Command palette, Print
+  preview, Version history, Symbol editor, shortcut and About windows took
+  their identity from their translated title, so choosing another language
+  closed the sections and moved the windows back to their first place.
+- **Contrast**: the secondary text over the drawing (zoom, rulers) in the dark
+  theme and the "no sim" warning in the light theme now reach 4.5:1 (WCAG AA);
+  two colours moved a few steps and nothing else in the palette changed.
 - **A command no longer writes over a file it reads**: `simulate --trace` or
   `--snapshot-json` naming the project, the scenario, a library or the other
   output, `edit --output` naming the edit file or a library, and
@@ -307,5 +341,7 @@ and the command line (`opencircuit`).
 - Packages for Windows (`.zip`), macOS (`.dmg`), Debian and Ubuntu (`.deb`),
   Fedora (`.rpm`) and any Linux (AppImage and `.tar.gz`).
 
+[Unreleased]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2-dev...v0.0.2
 [0.0.2-dev]: https://github.com/felipedsvit/opencircuit/compare/v0.0.1...v0.0.2-dev
 [0.0.1]: https://github.com/felipedsvit/opencircuit/releases/tag/v0.0.1

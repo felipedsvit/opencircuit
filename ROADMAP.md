@@ -311,7 +311,7 @@ colour, colours and line types per layer, a "current layer", rotated or
 several-line text, other languages and a stored language setting, and a
 translated command line. New work starts with an issue.
 
-## M9 — Work safety, productivity and new document views (implemented, except two items of M9.0; version 0.0.2)
+## M9 — Work safety, productivity and new document views (implemented, except two items of M9.0; version 0.0.2, interface audited in M9.5)
 
 Tracking issue #118. Version 0.0.2 closes M9. The scope comes from a triage of the features of
 electrical CAD tools against this repository: what already exists was left
@@ -464,6 +464,47 @@ Decisions (taken by default, open to change in #118):
 - [x] DXF export from the neutral scene (`circuit_export::dxf`, AutoCAD R12;
   `opencircuit export --output file.dxf`, `--to dxf`; Export > DXF in the
   window).
+
+### M9.5 — Interface audit and the release of 0.0.2 (done)
+
+An audit of the window against egui 0.37, with the skills `egui`,
+`egui-review`, `egui-ui-design`, `egui-kittest` and `egui-profiler` (pinned in
+`skills-lock.json`; MIT). It changes no design: it fixes what was broken or
+inconsistent, and a fresh window looks and behaves as before.
+
+- [x] No deprecated egui 0.37 API (`cargo clippy -D warnings` is clean), no
+  blocking call in the frame, and no repaint that is not asked for: the window
+  repaints continuously only while a simulation runs, and otherwise at the
+  time something waits for (an autosave, a retry of a project lock).
+- [x] Every text the window draws goes through the catalog (menus, sections,
+  dialogs, hints, the keyboard list); what is left in English is what ADR-0017
+  keeps in English by design (the command line and its label, diagnostics,
+  names of parts and terminals).
+- [x] The sections of the inspector and the windows keep their open state and
+  place when the language changes: their identifiers come from the English
+  text, not from the translated title (`Id::unique`, `id_salt`).
+- [x] Every icon says what it is: the tooltip of a disabled icon (undo and redo
+  of a window with no history) was never shown, and now is.
+- [x] A responsive library: cells never larger than before, four to a row,
+  shrinking in proportion with the column (and the category icons with them,
+  with no line break), a column that stops a few points past four full cells (`apps/desktop/tests/responsive.rs`, ADR-0019).
+- [x] One look for the dialogs and errors, with the radius and the button order
+  of each system and native file pickers (`apps/desktop/src/dialog.rs`,
+  `apps/desktop/tests/dialogs_look.rs`, ADR-0019).
+- [x] The keymap is read in place; three copies per frame are gone.
+- [x] Contrast: text, secondary text, the warning and the notes over the
+  canvas reach 4.5:1 (WCAG AA) in both themes
+  (`theme::tests::text_meets_the_aa_contrast_on_the_surfaces_it_is_drawn_on`);
+  two tokens moved a few steps, the rest of the palette is as it was.
+- [x] No control is pushed past the side of a window of 800×600, 1024×700 or
+  1366×768, in English or in Portuguese.
+- [x] The files of the release are frozen in `tests/compat/v0.0.2` (schema
+  version 5) and `apps/cli/tests/compat.rs` opens, validates, re-saves and
+  simulates them, as `docs/releasing.md` asks before a version without `-dev`.
+- [x] The version is `0.0.2` and `CHANGELOG.md` has its section.
+
+Not done and still open: the two items of M9.0 above, and running the whole CI
+on the merge commit before the tag (`docs/releasing.md`).
 
 **Exit criterion:** a project is drawn in the window with autosave on; the
 process is killed and the project is recovered with no edit lost; a second

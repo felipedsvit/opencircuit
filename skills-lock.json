@@ -1,6 +1,41 @@
 {
   "version": 2,
   "skills": {
+    "egui": {
+      "source": "gregorycarnegie/egui-agent-skills",
+      "commit": "82b329557a2921dd9c9455de1a87e76aea75abed",
+      "sourceType": "github",
+      "skillPath": "skills/egui/SKILL.md",
+      "computedHash": "679a092066b3ebff603f5b6d271f91ec5b5337d16749ba8106683f35bed34a1e"
+    },
+    "egui-kittest": {
+      "source": "gregorycarnegie/egui-agent-skills",
+      "commit": "82b329557a2921dd9c9455de1a87e76aea75abed",
+      "sourceType": "github",
+      "skillPath": "skills/egui-kittest/SKILL.md",
+      "computedHash": "7ad9c85daf77bb29593643659f812702ea255948d158e80eb663c640e127f235"
+    },
+    "egui-profiler": {
+      "source": "gregorycarnegie/egui-agent-skills",
+      "commit": "82b329557a2921dd9c9455de1a87e76aea75abed",
+      "sourceType": "github",
+      "skillPath": "skills/egui-profiler/SKILL.md",
+      "computedHash": "73cf9eda0b20c4fe11c4173fe33426f0a9faabfaba8f4d7dd6db1b582d7b48c1"
+    },
+    "egui-review": {
+      "source": "gregorycarnegie/egui-agent-skills",
+      "commit": "82b329557a2921dd9c9455de1a87e76aea75abed",
+      "sourceType": "github",
+      "skillPath": "skills/egui-review/SKILL.md",
+      "computedHash": "daf47d329a9a1358a900d4e6252f79a4179189783716d879976e3bb2b7fb96e8"
+    },
+    "egui-ui-design": {
+      "source": "gregorycarnegie/egui-agent-skills",
+      "commit": "82b329557a2921dd9c9455de1a87e76aea75abed",
+      "sourceType": "github",
+      "skillPath": "skills/egui-ui-design/SKILL.md",
+      "computedHash": "df6103ed978af044bf73ffb1eaeb5801693bcb1a360839cd3266e996c1af9a92"
+    },
     "rust-best-practices": {
       "source": "apollographql/skills",
       "sourceType": "github",

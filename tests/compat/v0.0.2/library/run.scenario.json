@@ -1,0 +1,11 @@
+{
+  "schema_version": 2,
+  "circuit": "acme-lamp.ocircuit",
+  "libraries": ["acme.oclib"],
+  "events": [
+    { "tick": 2, "action": "press", "device": "S1" },
+    { "tick": 5, "action": "release", "device": "S1" }
+  ],
+  "until_tick": 8,
+  "expect": { "trace": "run.trace", "diagnostics": [] }
+}

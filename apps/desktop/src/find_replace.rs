@@ -58,6 +58,7 @@ impl FindReplace {
         let mut open = true;
         let mut request = None;
         egui::Window::new(tr("Find and replace"))
+            .id(egui::Id::unique("Find and replace"))
             .open(&mut open)
             .collapsible(false)
             .resizable(false)

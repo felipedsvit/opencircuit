@@ -141,6 +141,7 @@ impl PaletteState {
         let mut choice = None;
         let mut open = true;
         egui::Window::new(tr("Command palette"))
+            .id(egui::Id::unique("Command palette"))
             .open(&mut open)
             .collapsible(false)
             .resizable(false)

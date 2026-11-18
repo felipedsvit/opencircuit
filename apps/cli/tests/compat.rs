@@ -5,12 +5,17 @@
 //! wrote them (schema version 2). A person who saved a project with a
 //! released build must be able to open it, simulate it and get the same
 //! trace; these tests fail when a change breaks that promise.
+//!
+//! `tests/compat/v0.0.2` is the same for the `v0.0.2` release (schema version
+//! 5): its examples, library, scenarios, golden traces and edit files, with
+//! no drawing (SVG, PDF, DXF) because drawings may change.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const V0_0_1: &str = "tests/compat/v0.0.1";
+const V0_0_2: &str = "tests/compat/v0.0.2";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -174,6 +179,102 @@ fn a_truncated_project_is_refused_never_read_as_a_different_document() {
 fn compatibility_files_contain_no_carriage_return() {
     // The same rule as the examples: goldens are compared byte for byte.
     let offenders: Vec<PathBuf> = files_ending_with(&root().join(V0_0_1), "")
+        .into_iter()
+        .filter(|path| fs::read(path).expect("file is readable").contains(&b'\r'))
+        .collect();
+
+    assert_eq!(offenders, Vec::<PathBuf>::new());
+}
+
+#[test]
+fn scenarios_of_0_0_2_reproduce_their_golden_traces() {
+    let output = opencircuit(&["test", V0_0_2]);
+
+    assert_eq!(output.status.code(), Some(0), "{}", report(&output));
+    assert!(
+        report(&output).ends_with("22 scenario(s), 0 failed\n"),
+        "{}",
+        report(&output)
+    );
+}
+
+#[test]
+fn projects_of_0_0_2_validate_without_errors() {
+    let library = root().join(V0_0_2).join("library/acme.oclib");
+    let projects = files_ending_with(&root().join(V0_0_2), ".ocircuit");
+    assert_eq!(projects.len(), 14);
+
+    for project in projects {
+        let project = project.to_string_lossy().into_owned();
+        let library = library.to_string_lossy().into_owned();
+        let output = opencircuit(&["validate", &project, "--library", &library]);
+
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{project}: {}",
+            report(&output)
+        );
+    }
+}
+
+#[test]
+fn projects_of_0_0_2_load_and_save_to_one_stable_current_document() {
+    for path in files_ending_with(&root().join(V0_0_2), ".ocircuit") {
+        let text = fs::read_to_string(&path).expect("project is readable");
+        assert!(text.contains("\"schema_version\": 5"), "{}", path.display());
+
+        let loaded = circuit_project::from_str(&text).expect("a 0.0.2 project loads");
+        let saved = circuit_project::to_string(&loaded).expect("it saves");
+        let reloaded = circuit_project::from_str(&saved).expect("the saved text loads");
+
+        assert!(
+            saved.contains(&format!(
+                "\"schema_version\": {}",
+                circuit_model::CURRENT_SCHEMA_VERSION
+            )),
+            "{}",
+            path.display()
+        );
+        assert_eq!(reloaded, loaded, "{}", path.display());
+        assert_eq!(
+            circuit_project::to_string(&reloaded).expect("it saves again"),
+            saved,
+            "{}: a second save changed the bytes",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn edit_files_of_0_0_2_still_build_valid_projects() {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("compat-edit-0.0.2");
+    let _ = fs::remove_dir_all(&directory);
+    fs::create_dir_all(&directory).expect("scratch directory");
+
+    for name in ["starter-sheets", "documentation"] {
+        let project = directory.join(format!("{name}.ocircuit"));
+        let project = project.to_str().expect("UTF-8 path");
+        let edit = format!("{V0_0_2}/edit/{name}.edit.json");
+
+        let created = opencircuit(&["new", project]);
+        let edited = opencircuit(&["edit", project, "--apply", &edit]);
+        let validated = opencircuit(&["validate", project]);
+
+        assert_eq!(created.status.code(), Some(0), "{}", report(&created));
+        assert_eq!(edited.status.code(), Some(0), "{name}: {}", report(&edited));
+        assert_eq!(
+            validated.status.code(),
+            Some(0),
+            "{name}: {}",
+            report(&validated)
+        );
+    }
+}
+
+#[test]
+fn compatibility_files_of_0_0_2_contain_no_carriage_return() {
+    let offenders: Vec<PathBuf> = files_ending_with(&root().join(V0_0_2), "")
         .into_iter()
         .filter(|path| fs::read(path).expect("file is readable").contains(&b'\r'))
         .collect();

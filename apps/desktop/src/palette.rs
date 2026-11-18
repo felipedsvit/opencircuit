@@ -36,10 +36,79 @@ pub(crate) const KEYS: &[(&str, &str)] = &[
     ("Alt+Left", "previous view"),
 ];
 
-/// Width and height of the cell of one symbol, in points.
+/// Width and height of the cell of one symbol at its full size, in points:
+/// the most a cell is ever drawn.
 const CELL: egui::Vec2 = egui::vec2(70.0, 62.0);
-/// Height of the drawing in a cell, in points.
+/// Height of the drawing in a cell at its full size, in points.
 const DRAWING_HEIGHT: f32 = 40.0;
+/// Most cells in a row.
+const MAX_COLUMNS: usize = 4;
+/// Space between cells, in points.
+const GAP: f32 = 4.0;
+/// Narrowest a cell is drawn, in points (about half its full size): the
+/// column cannot be made narrower than four of them, so a row never loses a
+/// cell to a line break, it shrinks.
+const MIN_CELL_WIDTH: f32 = 36.0;
+/// Space between the edge of the palette and its content, on each side, in
+/// points: the inner margin of a side panel.
+const PANEL_MARGIN: f32 = 8.0;
+/// Points the widest palette has over what four full cells need, so that
+/// they fit with a little air and no more.
+const PANEL_SLACK: f32 = 6.0;
+/// Side of a category icon at its full size, and the narrowest it is drawn, in
+/// points.
+const ICON: f32 = 26.0;
+const MIN_ICON: f32 = 18.0;
+/// Space between category icons, in points.
+const ICON_GAP: f32 = 2.0;
+/// How many category icons share a row.
+const ICONS: usize = Category::ALL.len();
+
+/// The width the content of the narrowest column has: four cells at their
+/// narrowest and the eight category icons at their smallest, whichever needs
+/// more.
+const MIN_CONTENT: f32 = {
+    let cells = MAX_COLUMNS as f32 * MIN_CELL_WIDTH + (MAX_COLUMNS - 1) as f32 * GAP;
+    let icons = ICONS as f32 * MIN_ICON + (ICONS - 1) as f32 * ICON_GAP;
+    if cells > icons { cells } else { icons }
+};
+/// The narrowest the palette column goes, in points: what its content needs
+/// to keep four cells in a row and eight icons in a row.
+pub(crate) const MIN_WIDTH: f32 = MIN_CONTENT + 2.0 * PANEL_MARGIN;
+/// The widest the palette column goes, in points: four cells at their full
+/// size, their gaps, the margins and a little air.
+pub(crate) const MAX_WIDTH: f32 =
+    MAX_COLUMNS as f32 * CELL.x + (MAX_COLUMNS - 1) as f32 * GAP + 2.0 * PANEL_MARGIN + PANEL_SLACK;
+
+/// The side of a category icon in a row `width` points wide: full size when
+/// the eight fit, smaller in proportion when they do not.
+fn icon_size(width: f32) -> f32 {
+    if !width.is_finite() {
+        return ICON;
+    }
+    ((width - ICON_GAP * (ICONS - 1) as f32) / ICONS as f32).clamp(MIN_ICON, ICON)
+}
+
+/// The width of each of `columns` cells in a row `width` points wide.
+fn cell_width(width: f32, columns: usize) -> f32 {
+    (width - GAP * columns.saturating_sub(1) as f32) / columns.max(1) as f32
+}
+
+/// The cells of one row of the library, for a row `width` points wide: how
+/// many, and how wide each is (the height follows). A cell is never wider than
+/// [`CELL`], never more than four share a row, and a row takes as many as keep
+/// each at [`MIN_CELL_WIDTH`] or more; narrower than that, one is left out and
+/// the others grow back.
+pub(crate) fn grid(width: f32) -> (usize, f32) {
+    if !width.is_finite() || width <= 0.0 {
+        return (1, MIN_CELL_WIDTH);
+    }
+    let mut columns = MAX_COLUMNS;
+    while columns > 1 && cell_width(width, columns) < MIN_CELL_WIDTH {
+        columns -= 1;
+    }
+    (columns, cell_width(width, columns).clamp(24.0, CELL.x))
+}
 /// Most points one subunit of a drawing takes: small symbols are not blown
 /// up beyond what a sheet shows at the default zoom.
 const MAX_SCALE: f32 = 0.9;
@@ -131,8 +200,10 @@ pub fn show(
         }
     });
     ui.separator();
+    // One row of eight icons, as large as the column allows.
+    let icon_side = icon_size(ui.available_width());
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.spacing_mut().item_spacing = egui::vec2(ICON_GAP, ICON_GAP);
         for category in Category::ALL {
             let count = catalog
                 .latest()
@@ -141,7 +212,8 @@ pub fn show(
             let label = tr(category.label());
             let hint = trf("{0} ({1})", &[&label, &count]);
             let open = state.search.is_empty() && state.tab == category;
-            if icons::button_hint(ui, tab_icon(category), label, &hint, open).clicked() {
+            if icons::button_sized(ui, tab_icon(category), label, &hint, open, icon_side).clicked()
+            {
                 state.tab = category;
                 state.search.clear();
             }
@@ -253,7 +325,7 @@ fn part(
 ) {
     let tokens = Tokens::of(ui);
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(egui::RichText::new(model.title()).strong());
         if model.class() == DeviceClass::Symbolic {
             ui.label(egui::RichText::new(tr("no sim")).small().color(tokens.warn))
@@ -273,33 +345,40 @@ fn part(
         hover.push('\n');
         hover.push_str(note);
     }
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-        for symbol in model.symbols() {
-            let current = matches!(
-                tool,
-                Tool::Place { model: m, symbol: s, .. }
-                    if m.id == model.id() && m.version == model.version() && s == symbol.key()
-            );
-            let label = format!("{} · {}", model.id(), symbol.key().0);
-            let scene = symbol_preview(model, symbol.key());
-            let clicked = cell(ui, &label, &symbol.key().0, scene.as_ref(), current)
-                .on_hover_text(&hover)
-                .clicked();
-            if clicked {
-                let chosen = ModelRef {
-                    id: model.id().to_owned(),
-                    version: model.version(),
-                };
-                remember(recent, &chosen, symbol.key());
-                editor.set_tool(Tool::Place {
-                    model: chosen,
-                    symbol: symbol.key().clone(),
-                    rotation: QuarterTurn::Deg0,
-                });
+    // Rows of at most four cells that share the width of the column; the
+    // cells shrink, in proportion, when the column does.
+    let (columns, width) = grid(ui.available_width());
+    let size = egui::vec2(width, width * CELL.y / CELL.x);
+    let symbols = model.symbols();
+    ui.spacing_mut().item_spacing = egui::vec2(GAP, GAP);
+    for row in symbols.chunks(columns) {
+        ui.horizontal(|ui| {
+            for symbol in row {
+                let current = matches!(
+                    tool,
+                    Tool::Place { model: m, symbol: s, .. }
+                        if m.id == model.id() && m.version == model.version() && s == symbol.key()
+                );
+                let label = format!("{} · {}", model.id(), symbol.key().0);
+                let scene = symbol_preview(model, symbol.key());
+                let clicked = cell(ui, &label, &symbol.key().0, scene.as_ref(), current, size)
+                    .on_hover_text(&hover)
+                    .clicked();
+                if clicked {
+                    let chosen = ModelRef {
+                        id: model.id().to_owned(),
+                        version: model.version(),
+                    };
+                    remember(recent, &chosen, symbol.key());
+                    editor.set_tool(Tool::Place {
+                        model: chosen,
+                        symbol: symbol.key().clone(),
+                        rotation: QuarterTurn::Deg0,
+                    });
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 /// The button of one symbol: its drawing, with its key under it.
@@ -309,8 +388,10 @@ fn cell(
     caption: &str,
     scene: Option<&Scene>,
     selected: bool,
+    size: egui::Vec2,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(CELL, Sense::click());
+    let scale = size.x / CELL.x;
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let enabled = ui.is_enabled();
     response
         .widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, label));
@@ -336,17 +417,20 @@ fn cell(
         );
     }
     let area = Rect::from_min_size(
-        rect.min + egui::vec2(4.0, 3.0),
-        egui::vec2(CELL.x - 8.0, DRAWING_HEIGHT),
+        rect.min + egui::vec2(4.0, 3.0) * scale,
+        egui::vec2(size.x - 8.0 * scale, DRAWING_HEIGHT * scale),
     );
     if let Some(scene) = scene {
         paint_preview(ui, area, scene);
     }
+    // The caption shrinks with the cell, but stays readable and as long as
+    // the cell has room for.
+    let characters = (12.0 * scale).round().clamp(6.0, 12.0) as usize;
     ui.painter().text(
-        Pos2::new(rect.center().x, rect.max.y - 8.0),
+        Pos2::new(rect.center().x, rect.max.y - 8.0 * scale),
         Align2::CENTER_CENTER,
-        shorten(caption, 12),
-        FontId::proportional(10.0),
+        shorten(caption, characters),
+        FontId::proportional((10.0 * scale).max(8.0)),
         tokens.text_dim,
     );
     response
@@ -486,5 +570,88 @@ mod tests {
                 .latest()
                 .any(|model| model.category() == PaletteState::default().tab())
         );
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::*;
+
+    #[test]
+    fn a_cell_is_never_wider_than_its_full_size_and_never_four_share_more_than_a_row() {
+        for tenths in 0_i16..4000 {
+            let width = f32::from(tenths) / 10.0;
+            let (columns, cell) = grid(width);
+
+            assert!((1..=MAX_COLUMNS).contains(&columns), "{columns} at {width}");
+            assert!(cell <= CELL.x, "{cell} at {width}");
+            assert!(cell >= 24.0, "{cell} at {width}");
+        }
+    }
+
+    #[test]
+    fn four_full_cells_fit_the_widest_column_and_the_cells_are_not_blown_up() {
+        let content = MAX_WIDTH - 2.0 * PANEL_MARGIN;
+
+        assert_eq!(grid(content), (4, CELL.x));
+        assert_eq!(grid(content + 500.0), (4, CELL.x));
+        // The column stops a few points past what four cells need, no more.
+        let needed = 4.0 * CELL.x + 3.0 * GAP;
+        assert!((0.0..=8.0).contains(&(content - needed)));
+    }
+
+    #[test]
+    fn cells_shrink_with_the_column_and_a_column_is_dropped_only_when_they_get_too_small() {
+        let mut last = grid(300.0);
+        for width in (60..300).rev() {
+            let now = grid(width as f32);
+            // Narrower never gives more columns, and, with the same number of
+            // columns, never a wider cell.
+            assert!(now.0 <= last.0, "{width}: {now:?} after {last:?}");
+            if now.0 == last.0 {
+                assert!(now.1 <= last.1 + 0.001, "{width}: {now:?} after {last:?}");
+            }
+            // The row always fits.
+            let used = now.1 * now.0 as f32 + GAP * (now.0 - 1) as f32;
+            assert!(
+                used <= width as f32 + 0.01 || now.0 == 1,
+                "{width}: {now:?}"
+            );
+            last = now;
+        }
+    }
+
+    #[test]
+    fn the_narrowest_column_still_has_four_cells_in_a_row_and_eight_icons() {
+        let content = MIN_WIDTH - 2.0 * PANEL_MARGIN;
+
+        let (columns, cell) = grid(content);
+        assert_eq!(columns, 4, "a cell is lost to a line break");
+        assert!(cell >= MIN_CELL_WIDTH - 0.01, "{cell}");
+        let icon = icon_size(content);
+        assert!(icon >= MIN_ICON - 0.01);
+        let used = ICONS as f32 * icon + (ICONS - 1) as f32 * ICON_GAP;
+        assert!(used <= content + 0.01, "the icons need {used} of {content}");
+    }
+
+    #[test]
+    fn category_icons_are_never_larger_than_before_and_shrink_with_the_column() {
+        assert_eq!(icon_size(500.0), ICON);
+        // At the default width of the column all eight fit at full size.
+        assert_eq!(icon_size(260.0 - 2.0 * PANEL_MARGIN), ICON);
+        let mut last = ICON;
+        for width in (100..300).rev() {
+            let now = icon_size(width as f32);
+            assert!(now <= last + 0.001 && (MIN_ICON..=ICON).contains(&now));
+            last = now;
+        }
+        assert_eq!(icon_size(f32::NAN), ICON);
+    }
+
+    #[test]
+    fn a_width_that_is_not_a_number_gives_one_narrow_column() {
+        assert_eq!(grid(f32::NAN).0, 1);
+        assert_eq!(grid(f32::INFINITY).0, 1);
+        assert_eq!(grid(-4.0).0, 1);
     }
 }

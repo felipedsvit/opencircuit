@@ -30,3 +30,4 @@ new ADR that supersedes the old one, not by rewriting history.
 | [0016](0016-names-and-terminals.md) | A name parameter, terminal blocks that always conduct and the terminal plan; names that join nets (signal arrows) |
 | [0017](0017-window-language.md) | The language of the window: English source, Brazilian Portuguese catalog, chosen from the environment and the Help menu |
 | [0018](0018-schema-5-documentation-views.md) | Schema 5: client, wire data, shapes, revision clouds, QR codes, comments, groups, mirrored symbols, datasheets, sheet kinds with device views, and PLC modules; documentation only |
+| [0019](0019-dialogs.md) | Dialogs: native file pickers, one egui component for the questions, errors as a banner; a library grid that shrinks with the column |

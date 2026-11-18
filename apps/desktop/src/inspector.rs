@@ -104,6 +104,7 @@ pub fn show(
     let mut request = None;
     ui.label(selection_summary(session, selection));
     egui::CollapsingHeader::new(tr("Properties"))
+        .id_salt("Properties")
         .default_open(true)
         .show(ui, |ui| {
             let mut selected = selection.iter();
@@ -120,6 +121,7 @@ pub fn show(
             }
         });
     egui::CollapsingHeader::new(tr("Supplies"))
+        .id_salt("Supplies")
         .default_open(true)
         .show(ui, |ui| {
             if let Some(change) = supplies_section(ui, session, state) {
@@ -127,6 +129,7 @@ pub fn show(
             }
         });
     egui::CollapsingHeader::new(tr("Sheets and title block"))
+        .id_salt("Sheets and title block")
         .default_open(true)
         .show(ui, |ui| {
             if let Some(change) = sheets_section(ui, session, state) {
@@ -141,6 +144,7 @@ pub fn show(
     match (selected.next(), selected.next()) {
         (Some(Subject::Symbol(symbol)), None) => {
             egui::CollapsingHeader::new(tr("Connections"))
+                .id_salt("Connections")
                 .default_open(false)
                 .show(ui, |ui| {
                     state.goto = documentation::connections_section(ui, session, *symbol)
@@ -166,6 +170,7 @@ pub fn show(
         _ => {}
     }
     egui::CollapsingHeader::new(tr("Project tree"))
+        .id_salt("Project tree")
         .default_open(false)
         .show(ui, |ui| {
             if let Some(go) = documentation::project_section(ui, session, selection) {
@@ -174,6 +179,7 @@ pub fn show(
             // The layers organise the project, and live in its section: the
             // inspector of a fresh window gets no new row (ADR-0015).
             egui::CollapsingHeader::new(tr("Layers"))
+                .id_salt("Layers")
                 .default_open(false)
                 .show(ui, |ui| {
                     if let Some(change) =
@@ -184,6 +190,7 @@ pub fn show(
                 });
             // The data of schema version 5 (ADR-0018), closed here too.
             egui::CollapsingHeader::new(tr("Project data"))
+                .id_salt("Project data")
                 .default_open(false)
                 .show(ui, |ui| {
                     if let Some(change) = project_data_section(ui, session, state) {
@@ -191,6 +198,7 @@ pub fn show(
                     }
                 });
             egui::CollapsingHeader::new(tr("Comments"))
+                .id_salt("Comments")
                 .default_open(false)
                 .show(ui, |ui| {
                     if let Some(change) = comments_section(ui, session, selection, state) {
@@ -515,6 +523,7 @@ fn selection_section(
         .collect();
     if devices.len() >= 2 {
         egui::CollapsingHeader::new(trf("Catalog data of {0} devices", &[&devices.len()]))
+            .id_salt("Catalog data of {0} devices")
             .default_open(false)
             .show(ui, |ui| {
                 for (field, label) in [

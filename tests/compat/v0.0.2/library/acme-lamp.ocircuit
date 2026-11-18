@@ -1,0 +1,288 @@
+{
+  "schema_version": 5,
+  "next_id": 23,
+  "project": {
+    "name": "Lamp switched by an ACME relay",
+    "grid_unit": 10,
+    "author": null,
+    "company": null,
+    "revision": null,
+    "date": null
+  },
+  "sheets": [],
+  "supplies": [
+    {
+      "id": 1,
+      "kind": "dc",
+      "nominal_voltage_mv": 24000,
+      "phase_voltage_mv": null,
+      "frequency_millihz": null,
+      "phase_sequence": null
+    }
+  ],
+  "devices": [
+    {
+      "id": 2,
+      "reference": "P24",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_pos",
+        "supply": 1
+      }
+    },
+    {
+      "id": 4,
+      "reference": "P0",
+      "model": {
+        "id": "supply.terminal",
+        "version": 1
+      },
+      "params": {
+        "conductor": "dc_neg",
+        "supply": 1
+      }
+    },
+    {
+      "id": 6,
+      "reference": "S1",
+      "model": {
+        "id": "pushbutton_no",
+        "version": 1
+      },
+      "params": {}
+    },
+    {
+      "id": 8,
+      "reference": "K1",
+      "model": {
+        "id": "acme.relay_r2",
+        "version": 1
+      },
+      "params": {
+        "connection": "dc",
+        "rated_voltage_mv": 24000
+      }
+    },
+    {
+      "id": 11,
+      "reference": "H1",
+      "model": {
+        "id": "lamp.generic",
+        "version": 1
+      },
+      "params": {
+        "connection": "dc",
+        "rated_voltage_mv": 24000
+      }
+    }
+  ],
+  "symbols": [
+    {
+      "id": 3,
+      "device_id": 2,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 5,
+      "device_id": 4,
+      "symbol_key": "terminal",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 16
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 7,
+      "device_id": 6,
+      "symbol_key": "contact",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 4
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 9,
+      "device_id": 8,
+      "symbol_key": "coil",
+      "slot": null,
+      "position": {
+        "x": 0,
+        "y": 10
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 10,
+      "device_id": 8,
+      "symbol_key": "no",
+      "slot": 1,
+      "position": {
+        "x": 8,
+        "y": 4
+      },
+      "rotation": "deg0"
+    },
+    {
+      "id": 12,
+      "device_id": 11,
+      "symbol_key": "lamp",
+      "slot": null,
+      "position": {
+        "x": 8,
+        "y": 10
+      },
+      "rotation": "deg0"
+    }
+  ],
+  "junctions": [
+    {
+      "id": 13,
+      "position": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "id": 14,
+      "position": {
+        "x": 0,
+        "y": 14
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": 15,
+      "from": {
+        "terminal": {
+          "symbol_id": 3,
+          "terminal": "out"
+        }
+      },
+      "to": {
+        "junction": 13
+      },
+      "route": []
+    },
+    {
+      "id": 16,
+      "from": {
+        "junction": 13
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 7,
+          "terminal": "p1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 17,
+      "from": {
+        "junction": 13
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 10,
+          "terminal": "p1"
+        }
+      },
+      "route": [
+        {
+          "x": 8,
+          "y": 1
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "from": {
+        "terminal": {
+          "symbol_id": 7,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 9,
+          "terminal": "a1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 19,
+      "from": {
+        "terminal": {
+          "symbol_id": 9,
+          "terminal": "a2"
+        }
+      },
+      "to": {
+        "junction": 14
+      },
+      "route": []
+    },
+    {
+      "id": 20,
+      "from": {
+        "terminal": {
+          "symbol_id": 10,
+          "terminal": "p2"
+        }
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 12,
+          "terminal": "x1"
+        }
+      },
+      "route": []
+    },
+    {
+      "id": 21,
+      "from": {
+        "terminal": {
+          "symbol_id": 12,
+          "terminal": "x2"
+        }
+      },
+      "to": {
+        "junction": 14
+      },
+      "route": [
+        {
+          "x": 8,
+          "y": 14
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "from": {
+        "junction": 14
+      },
+      "to": {
+        "terminal": {
+          "symbol_id": 5,
+          "terminal": "out"
+        }
+      },
+      "route": []
+    }
+  ]
+}

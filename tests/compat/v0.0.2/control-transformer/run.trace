@@ -1,0 +1,18 @@
+# opencircuit trace v1
+# fingerprint f75db9a878e765f8
+# tick_us=1000 pickup_ticks=1 dropout_ticks=1 fault_policy=halt
+t=0 load T1.primary on
+t=1 signal T1.powered 0->1
+t=2 input S1.pressed 0->1
+t=2 load K1.coil on
+t=3 signal K1.active 0->1
+t=3 load H1.lamp on
+t=3 load M1.motor forward
+t=4 input S1.pressed 1->0
+t=8 input Q1.closed 1->0
+t=8 load T1.primary off
+t=8 load M1.motor off
+t=9 signal T1.powered 1->0
+t=9 load K1.coil off
+t=9 load H1.lamp off
+t=10 signal K1.active 1->0

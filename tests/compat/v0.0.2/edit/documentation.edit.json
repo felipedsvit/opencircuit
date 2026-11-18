@@ -1,0 +1,600 @@
+{
+  "schema_version": 1,
+  "operations": [
+    {
+      "op": "project",
+      "name": "Partida direta",
+      "author": "OpenCircuit",
+      "company": "Exemplo",
+      "revision": "A",
+      "date": "2026-11-15"
+    },
+    {
+      "op": "add_supply",
+      "preset": "dc_24v",
+      "as": "control"
+    },
+    {
+      "op": "add_supply",
+      "preset": "three_phase_400v",
+      "as": "power"
+    },
+    {
+      "op": "place",
+      "model": "supply.terminal",
+      "symbol": "terminal",
+      "at": [
+        0,
+        0
+      ],
+      "reference": "P24",
+      "as": "p24"
+    },
+    {
+      "op": "set_param",
+      "device": "P24",
+      "key": "conductor",
+      "value": "dc_pos"
+    },
+    {
+      "op": "set_param",
+      "device": "P24",
+      "key": "supply",
+      "value": {
+        "supply": "control"
+      }
+    },
+    {
+      "op": "place",
+      "model": "supply.terminal",
+      "symbol": "terminal",
+      "at": [
+        0,
+        36
+      ],
+      "reference": "P0",
+      "as": "p0"
+    },
+    {
+      "op": "set_param",
+      "device": "P0",
+      "key": "conductor",
+      "value": "dc_neg"
+    },
+    {
+      "op": "set_param",
+      "device": "P0",
+      "key": "supply",
+      "value": {
+        "supply": "control"
+      }
+    },
+    {
+      "op": "place",
+      "model": "supply.terminal",
+      "symbol": "terminal",
+      "at": [
+        120,
+        0
+      ],
+      "reference": "L1",
+      "as": "l1"
+    },
+    {
+      "op": "set_param",
+      "device": "L1",
+      "key": "conductor",
+      "value": "l1"
+    },
+    {
+      "op": "set_param",
+      "device": "L1",
+      "key": "supply",
+      "value": {
+        "supply": "power"
+      }
+    },
+    {
+      "op": "place",
+      "model": "supply.terminal",
+      "symbol": "terminal",
+      "at": [
+        124,
+        0
+      ],
+      "reference": "L2",
+      "as": "l2"
+    },
+    {
+      "op": "set_param",
+      "device": "L2",
+      "key": "conductor",
+      "value": "l2"
+    },
+    {
+      "op": "set_param",
+      "device": "L2",
+      "key": "supply",
+      "value": {
+        "supply": "power"
+      }
+    },
+    {
+      "op": "place",
+      "model": "supply.terminal",
+      "symbol": "terminal",
+      "at": [
+        128,
+        0
+      ],
+      "reference": "L3",
+      "as": "l3"
+    },
+    {
+      "op": "set_param",
+      "device": "L3",
+      "key": "conductor",
+      "value": "l3"
+    },
+    {
+      "op": "set_param",
+      "device": "L3",
+      "key": "supply",
+      "value": {
+        "supply": "power"
+      }
+    },
+    {
+      "op": "place",
+      "model": "main_switch.3p",
+      "symbol": "main",
+      "at": [
+        124,
+        4
+      ],
+      "reference": "Q1",
+      "as": "q1"
+    },
+    {
+      "op": "place",
+      "model": "thermal_overload.generic",
+      "symbol": "element",
+      "at": [
+        124,
+        16
+      ],
+      "reference": "F1",
+      "as": "element"
+    },
+    {
+      "op": "add_symbol",
+      "device": "F1",
+      "symbol": "aux_nc",
+      "at": [
+        0,
+        4
+      ],
+      "as": "trip"
+    },
+    {
+      "op": "place",
+      "model": "pushbutton_nc",
+      "symbol": "contact",
+      "at": [
+        0,
+        10
+      ],
+      "reference": "S2",
+      "as": "stop"
+    },
+    {
+      "op": "place",
+      "model": "pushbutton_no",
+      "symbol": "contact",
+      "at": [
+        -4,
+        17
+      ],
+      "reference": "S1",
+      "as": "start"
+    },
+    {
+      "op": "place",
+      "model": "contactor.generic",
+      "symbol": "coil",
+      "at": [
+        0,
+        24
+      ],
+      "reference": "K1",
+      "as": "coil"
+    },
+    {
+      "op": "set_param",
+      "device": "K1",
+      "key": "rated_voltage_mv",
+      "value": 24000
+    },
+    {
+      "op": "set_param",
+      "device": "K1",
+      "key": "connection",
+      "value": "dc"
+    },
+    {
+      "op": "add_symbol",
+      "device": "K1",
+      "symbol": "main",
+      "at": [
+        124,
+        10
+      ],
+      "as": "main"
+    },
+    {
+      "op": "add_symbol",
+      "device": "K1",
+      "symbol": "aux_no",
+      "at": [
+        4,
+        17
+      ],
+      "as": "seal"
+    },
+    {
+      "op": "place",
+      "model": "motor.3ph",
+      "symbol": "motor",
+      "at": [
+        124,
+        22
+      ],
+      "reference": "M1",
+      "as": "motor"
+    },
+    {
+      "op": "set_param",
+      "device": "M1",
+      "key": "rated_voltage_mv",
+      "value": 400000
+    },
+    {
+      "op": "junction",
+      "at": [
+        0,
+        14
+      ],
+      "as": "top"
+    },
+    {
+      "op": "junction",
+      "at": [
+        0,
+        20
+      ],
+      "as": "bottom"
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "p24",
+        "terminal": "out"
+      },
+      "to": {
+        "symbol": "trip",
+        "terminal": "p1"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "trip",
+        "terminal": "p2"
+      },
+      "to": {
+        "symbol": "stop",
+        "terminal": "p1"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "stop",
+        "terminal": "p2"
+      },
+      "to": {
+        "junction": "top"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "junction": "top"
+      },
+      "to": {
+        "symbol": "start",
+        "terminal": "p1"
+      },
+      "via": [
+        [
+          -4,
+          14
+        ]
+      ]
+    },
+    {
+      "op": "connect",
+      "from": {
+        "junction": "top"
+      },
+      "to": {
+        "symbol": "seal",
+        "terminal": "p1"
+      },
+      "via": [
+        [
+          4,
+          14
+        ]
+      ]
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "start",
+        "terminal": "p2"
+      },
+      "to": {
+        "junction": "bottom"
+      },
+      "via": [
+        [
+          -4,
+          20
+        ]
+      ]
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "seal",
+        "terminal": "p2"
+      },
+      "to": {
+        "junction": "bottom"
+      },
+      "via": [
+        [
+          4,
+          20
+        ]
+      ]
+    },
+    {
+      "op": "connect",
+      "from": {
+        "junction": "bottom"
+      },
+      "to": {
+        "symbol": "coil",
+        "terminal": "a1"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "coil",
+        "terminal": "a2"
+      },
+      "to": {
+        "symbol": "p0",
+        "terminal": "out"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "l1",
+        "terminal": "out"
+      },
+      "to": {
+        "symbol": "q1",
+        "terminal": "pole1.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "q1",
+        "terminal": "pole1.out"
+      },
+      "to": {
+        "symbol": "main",
+        "terminal": "pole1.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "main",
+        "terminal": "pole1.out"
+      },
+      "to": {
+        "symbol": "element",
+        "terminal": "pole1.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "element",
+        "terminal": "pole1.out"
+      },
+      "to": {
+        "symbol": "motor",
+        "terminal": "u1"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "l2",
+        "terminal": "out"
+      },
+      "to": {
+        "symbol": "q1",
+        "terminal": "pole2.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "q1",
+        "terminal": "pole2.out"
+      },
+      "to": {
+        "symbol": "main",
+        "terminal": "pole2.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "main",
+        "terminal": "pole2.out"
+      },
+      "to": {
+        "symbol": "element",
+        "terminal": "pole2.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "element",
+        "terminal": "pole2.out"
+      },
+      "to": {
+        "symbol": "motor",
+        "terminal": "v1"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "l3",
+        "terminal": "out"
+      },
+      "to": {
+        "symbol": "q1",
+        "terminal": "pole3.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "q1",
+        "terminal": "pole3.out"
+      },
+      "to": {
+        "symbol": "main",
+        "terminal": "pole3.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "main",
+        "terminal": "pole3.out"
+      },
+      "to": {
+        "symbol": "element",
+        "terminal": "pole3.in"
+      }
+    },
+    {
+      "op": "connect",
+      "from": {
+        "symbol": "element",
+        "terminal": "pole3.out"
+      },
+      "to": {
+        "symbol": "motor",
+        "terminal": "w1"
+      }
+    },
+    {
+      "op": "add_sheet",
+      "number": 1,
+      "title": "Circuito de comando",
+      "origin": [
+        -14,
+        -8
+      ]
+    },
+    {
+      "op": "add_sheet",
+      "number": 2,
+      "title": "Circuito de força",
+      "origin": [
+        106,
+        -8
+      ]
+    },
+    {
+      "op": "numbering",
+      "prefix": "W",
+      "start": 1,
+      "step": 1,
+      "per_sheet": true
+    },
+    {
+      "op": "set_device_info",
+      "device": "K1",
+      "manufacturer": "Acme",
+      "part_no": "CTR-9",
+      "description": "Contactor 9 A, 24 V coil",
+      "location": "Panel 1"
+    },
+    {
+      "op": "set_device_info",
+      "device": "F1",
+      "manufacturer": "Acme",
+      "part_no": "OL-12",
+      "description": "Thermal overload relay 9-12 A",
+      "location": "Panel 1"
+    },
+    {
+      "op": "set_device_info",
+      "device": "Q1",
+      "manufacturer": "Acme",
+      "part_no": "MS-3P",
+      "description": "Main switch, 3 poles",
+      "location": "Panel 1"
+    },
+    {
+      "op": "set_device_info",
+      "device": "M1",
+      "manufacturer": "Motors Co",
+      "part_no": "M-075",
+      "description": "Three-phase motor 0.75 kW",
+      "location": "Field"
+    },
+    {
+      "op": "set_device_info",
+      "device": "S1",
+      "manufacturer": "Acme",
+      "part_no": "PB-G",
+      "description": "Pushbutton, green",
+      "location": "Door"
+    },
+    {
+      "op": "set_device_info",
+      "device": "S2",
+      "manufacturer": "Acme",
+      "part_no": "PB-R",
+      "description": "Pushbutton, red",
+      "location": "Door"
+    }
+  ]
+}

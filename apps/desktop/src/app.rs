@@ -28,6 +28,7 @@ use crate::camera::{Camera, DEFAULT_ZOOM};
 use crate::canvas;
 use crate::clock::{SPEEDS, SimClock};
 use crate::cmdline::CommandLine;
+use crate::dialog::{self, Choice, Dialog, Kind};
 use crate::dialogs;
 use crate::documentation;
 use crate::i18n::{self, Language, tr, trf, trn};
@@ -467,26 +468,32 @@ impl DesktopApp {
         if self.confirm.is_some() {
             return;
         }
-        let mut answer = None;
-        egui::Modal::new(egui::Id::unique("recover the page copy")).show(ui.ctx(), |ui| {
-            ui.heading(tr("Recover unsaved work"));
-            ui.label(tr(
+        let choices = [
+            Choice::primary(tr("Recover")),
+            Choice::destructive(tr("Discard")),
+        ];
+        let outcome = Dialog {
+            id: egui::Id::unique("recover the page copy"),
+            kind: Kind::Question,
+            title: tr("Recover unsaved work"),
+            message: tr(
                 "The last page closed without saving this project. A copy was kept in the browser.",
-            ));
+            ),
+            choices: &choices,
+        }
+        .show(ui.ctx(), |ui| {
             let place = found
                 .origin
                 .clone()
                 .unwrap_or_else(|| tr("never saved").to_owned());
-            ui.label(format!("{} — {place}", found.name));
-            ui.horizontal(|ui| {
-                if ui.button(tr("Recover")).clicked() {
-                    answer = Some(true);
-                }
-                if ui.button(tr("Discard")).clicked() {
-                    answer = Some(false);
-                }
-            });
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(format!("{} — {place}", found.name)).strong());
         });
+        let answer = match outcome.chosen {
+            Some(0) => Some(true),
+            Some(_) => Some(false),
+            None => None,
+        };
         let Some(recover) = answer else {
             return;
         };
@@ -749,7 +756,7 @@ impl DesktopApp {
             .order(egui::Order::Foreground)
             .fixed_pos(*at)
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                dialog::popup_card(ui.style()).show(ui, |ui| {
                     let label = ui.label(tr("Point"));
                     let field = ui
                         .add(
@@ -935,7 +942,7 @@ impl DesktopApp {
             .order(egui::Order::Foreground)
             .fixed_pos(at)
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                dialog::popup_card(ui.style()).show(ui, |ui| {
                     let label = ui.label(tr("Label"));
                     let field = ui
                         .add(
@@ -1852,6 +1859,7 @@ impl DesktopApp {
         let mut open = true;
         let mut restore = None;
         egui::Window::new(tr("Version history"))
+            .id(egui::Id::unique("Version history"))
             .open(&mut open)
             .collapsible(false)
             .show(ui.ctx(), |ui| {
@@ -1931,41 +1939,43 @@ impl DesktopApp {
             return;
         }
         let mut chosen: Option<(usize, bool)> = None;
-        let mut later = false;
-        egui::Modal::new(egui::Id::unique("recover unsaved work")).show(ui.ctx(), |ui| {
-            ui.heading(tr("Recover unsaved work"));
-            ui.label(tr(
+        let choices = [Choice::secondary(tr("Later"))];
+        let outcome = Dialog {
+            id: egui::Id::unique("recover unsaved work"),
+            kind: Kind::Question,
+            title: tr("Recover unsaved work"),
+            message: tr(
                 "OpenCircuit ended without saving these projects. A copy of each was kept.",
-            ));
+            ),
+            choices: &choices,
+        }
+        .show(ui.ctx(), |ui| {
             for (index, entry) in self.recover_offer.iter().enumerate() {
                 ui.separator();
                 let place = entry.original.as_ref().map_or_else(
                     || tr("never saved").to_owned(),
                     |path| path.display().to_string(),
                 );
-                ui.label(format!("{} — {place}", entry.name));
+                ui.label(egui::RichText::new(format!("{} — {place}", entry.name)).strong());
                 ui.horizontal(|ui| {
-                    let button = |ui: &mut Ui, text: &str| {
-                        let response = ui.button(text);
-                        let label = format!("{text} {}", entry.name);
-                        response.widget_info(|| {
-                            egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str())
-                        });
-                        response
-                    };
-                    if button(ui, tr("Recover")).clicked() {
+                    let recover = tr("Recover");
+                    let discard = tr("Discard");
+                    let recover_name = format!("{recover} {}", entry.name);
+                    let discard_name = format!("{discard} {}", entry.name);
+                    if dialog::choice_button(ui, Choice::primary(recover).named(&recover_name))
+                        .clicked()
+                    {
                         chosen = Some((index, true));
                     }
-                    if button(ui, tr("Discard")).clicked() {
+                    if dialog::choice_button(ui, Choice::destructive(discard).named(&discard_name))
+                        .clicked()
+                    {
                         chosen = Some((index, false));
                     }
                 });
             }
-            ui.separator();
-            if ui.button(tr("Later")).clicked() {
-                later = true;
-            }
         });
+        let later = outcome.chosen.is_some();
         if later {
             self.recover_offer.clear();
             return;
@@ -2005,35 +2015,32 @@ impl DesktopApp {
         let Some(pending) = self.confirm.clone() else {
             return;
         };
-        let mut answer = None;
-        let modal = egui::Modal::new(egui::Id::unique("unsaved changes")).show(ui.ctx(), |ui| {
-            ui.heading(tr("Unsaved changes"));
-            ui.label(tr("The project has changes that are not saved."));
-            ui.horizontal(|ui| {
-                if ui.button(tr("Save and continue")).clicked() {
-                    answer = Some("save");
-                }
-                if ui.button(tr("Discard changes")).clicked() {
-                    answer = Some("discard");
-                }
-                if ui.button(tr("Cancel")).clicked() {
-                    answer = Some("cancel");
-                }
-            });
-        });
-        match answer {
-            Some("save") => {
+        let choices = [
+            Choice::primary(tr("Save and continue")),
+            Choice::destructive(tr("Discard changes")),
+            Choice::secondary(tr("Cancel")),
+        ];
+        let outcome = Dialog {
+            id: egui::Id::unique("unsaved changes"),
+            kind: Kind::Warning,
+            title: tr("Unsaved changes"),
+            message: tr("The project has changes that are not saved."),
+            choices: &choices,
+        }
+        .show(ui.ctx(), |_| {});
+        match outcome.chosen {
+            Some(0) => {
                 if self.save() {
                     self.confirm = None;
                     self.perform(pending);
                 }
             }
-            Some("discard") => {
+            Some(1) => {
                 self.confirm = None;
                 self.perform(pending);
             }
             Some(_) => self.confirm = None,
-            None if modal.should_close() => self.confirm = None,
+            None if outcome.dismissed => self.confirm = None,
             None => {}
         }
     }
@@ -2238,6 +2245,7 @@ impl DesktopApp {
         let mut open = true;
         let mut action: Option<&str> = None;
         egui::Window::new(tr("Symbol editor"))
+        .id(egui::Id::unique("Symbol editor"))
             .open(&mut open)
             .default_width(560.0)
             .show(ui.ctx(), |ui| {
@@ -2523,7 +2531,7 @@ impl DesktopApp {
                 ui.ctx().request_repaint();
             }
         }
-        if self.settings.keys.clone().pressed(ui, Action::CommandLine) {
+        if self.settings.keys.pressed(ui, Action::CommandLine) {
             self.command_line.focus();
         }
         // The shortcut window takes the keys it waits for before any
@@ -2588,6 +2596,7 @@ impl DesktopApp {
                 palette_panel("palette")
                     .resizable(true)
                     .default_size(260.0)
+                    .size_range(palette::MIN_WIDTH..=palette::MAX_WIDTH)
                     .show(ui, |ui| {
                         if let Some(session) = &self.session {
                             palette::show(
@@ -2634,21 +2643,20 @@ impl DesktopApp {
         } else if pressed(ui, egui::Modifiers::COMMAND, egui::Key::Z) {
             self.undo();
         }
-        let keys = self.settings.keys.clone();
-        if keys.pressed(ui, Action::WireTool) {
+        if self.settings.keys.pressed(ui, Action::WireTool) {
             self.editor.set_tool(Tool::Wire);
         }
-        if keys.pressed(ui, Action::FindReplace) {
+        if self.settings.keys.pressed(ui, Action::FindReplace) {
             self.find_replace.open();
         }
-        if keys.pressed(ui, Action::EditLabel) {
+        if self.settings.keys.pressed(ui, Action::EditLabel) {
             self.edit_label();
         }
-        if keys.pressed(ui, Action::TypePoint) {
+        if self.settings.keys.pressed(ui, Action::TypePoint) {
             self.type_point();
         }
         let mut actions = Vec::new();
-        if keys.pressed(ui, Action::SelectAll) {
+        if self.settings.keys.pressed(ui, Action::SelectAll) {
             actions.push(Key::SelectAll);
         }
         // The window system may turn Ctrl+C and Ctrl+V into clipboard events
@@ -2669,7 +2677,7 @@ impl DesktopApp {
         if pressed(ui, egui::Modifiers::COMMAND, egui::Key::V) || paste {
             actions.push(Key::Paste);
         }
-        if keys.pressed(ui, Action::Duplicate) {
+        if self.settings.keys.pressed(ui, Action::Duplicate) {
             actions.push(Key::Duplicate);
         }
         // Shift moves five grid units; the plain arrow one.
@@ -2688,10 +2696,10 @@ impl DesktopApp {
                 }
             }
         }
-        if keys.pressed(ui, Action::Rotate) {
+        if self.settings.keys.pressed(ui, Action::Rotate) {
             actions.push(Key::Rotate);
         }
-        if keys.pressed(ui, Action::Mirror) {
+        if self.settings.keys.pressed(ui, Action::Mirror) {
             actions.push(Key::Mirror);
         }
         for (key, action) in [
@@ -2721,15 +2729,14 @@ impl DesktopApp {
         if ui.ctx().egui_wants_keyboard_input() {
             return;
         }
-        let keys = self.settings.keys.clone();
         // The command palette, in both modes.
-        if keys.pressed(ui, Action::CommandPalette) {
+        if self.settings.keys.pressed(ui, Action::CommandPalette) {
             self.command_palette.open();
         }
-        if keys.pressed(ui, Action::PreviousView) {
+        if self.settings.keys.pressed(ui, Action::PreviousView) {
             self.previous_view();
         }
-        if keys.pressed(ui, Action::SidePanels) {
+        if self.settings.keys.pressed(ui, Action::SidePanels) {
             self.side_panels_hidden = !self.side_panels_hidden;
         }
         let pressed = |ui: &mut Ui, key: egui::Key| {
@@ -2743,13 +2750,15 @@ impl DesktopApp {
         if pressed(ui, egui::Key::Minus) {
             self.zoom_request = Some(1.0 / KEY_ZOOM);
         }
-        if keys.pressed(ui, Action::FitDrawing) {
+        if self.settings.keys.pressed(ui, Action::FitDrawing) {
             self.fit_pending = true;
         }
-        if keys.pressed(ui, Action::FitSelection) && !self.editor.selection().is_empty() {
+        if self.settings.keys.pressed(ui, Action::FitSelection)
+            && !self.editor.selection().is_empty()
+        {
             self.frame_selection = true;
         }
-        if keys.pressed(ui, Action::TraceNet) {
+        if self.settings.keys.pressed(ui, Action::TraceNet) {
             self.trace_net = !self.trace_net;
         }
     }
@@ -3445,6 +3454,7 @@ impl DesktopApp {
         }
         let mut open = true;
         egui::Window::new(tr("Customize shortcuts"))
+            .id(egui::Id::unique("Customize shortcuts"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut open)
             .collapsible(false)
@@ -3504,6 +3514,7 @@ impl DesktopApp {
     fn help_windows(&mut self, ui: &Ui) {
         let ctx = ui.ctx().clone();
         egui::Window::new(tr("Keyboard shortcuts"))
+            .id(egui::Id::unique("Keyboard shortcuts"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_keys)
             .collapsible(false)
@@ -3527,6 +3538,7 @@ impl DesktopApp {
                 });
             });
         egui::Window::new(tr("About OpenCircuit"))
+            .id(egui::Id::unique("About OpenCircuit"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .open(&mut self.show_about)
             .collapsible(false)
@@ -3635,8 +3647,12 @@ impl DesktopApp {
                 }
             }
         }
-        if let Some(error) = &self.error {
-            ui.colored_label(ui.visuals().error_fg_color, error);
+        let dismissed = self
+            .error
+            .as_deref()
+            .is_some_and(|error| dialog::error_banner(ui, error, tr("Dismiss")));
+        if dismissed {
+            self.error = None;
         }
     }
 
@@ -4501,6 +4517,7 @@ impl DesktopApp {
             }
             if !waived.is_empty() {
                 egui::CollapsingHeader::new(trf("Waived ({0})", &[&waived.len()]))
+                    .id_salt("Waived ({0})")
                     .default_open(false)
                     .show(ui, |ui| {
                         for diagnostic in &waived {

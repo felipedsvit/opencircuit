@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-commands"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-model",
  "proptest",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-editor"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-commands",
  "circuit-model",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-export"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-model",
  "circuit-renderer",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-io"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-model",
  "proptest",
@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-model"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-project"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-model",
  "proptest",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-renderer"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-model",
  "proptest",
@@ -322,7 +322,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-report"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-io",
  "circuit-model",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "circuit-sim"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-model",
  "proptest",
@@ -1704,7 +1704,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "opencircuit-cli"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-commands",
  "circuit-export",
@@ -1721,7 +1721,7 @@ dependencies = [
 
 [[package]]
 name = "opencircuit-desktop"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-commands",
  "circuit-editor",
@@ -3219,7 +3219,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.0.2-dev"
+version = "0.0.2"
 dependencies = [
  "circuit-commands",
  "circuit-export",

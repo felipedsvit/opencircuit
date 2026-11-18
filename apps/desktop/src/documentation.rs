@@ -171,6 +171,7 @@ pub fn xref_section(ui: &mut Ui, session: &Session, symbol: SymbolId) -> Option<
     }
     let mut go = None;
     egui::CollapsingHeader::new(tr("Cross-references"))
+        .id_salt("Cross-references")
         .default_open(false)
         .show(ui, |ui| {
             let found = links(doc, catalog, symbol);
@@ -202,6 +203,7 @@ pub fn catalog_section(
     let info = device.info.clone().unwrap_or_default();
     let mut request = None;
     egui::CollapsingHeader::new(tr("Catalog data"))
+        .id_salt("Catalog data")
         .default_open(false)
         .show(ui, |ui| {
             let fields = [
@@ -290,6 +292,7 @@ pub fn wire_section(
     let numbers = WireNumbers::build(doc, session.catalog(), &nets);
     let mut request = None;
     egui::CollapsingHeader::new(tr("Wire number"))
+        .id_salt("Wire number")
         .default_open(true)
         .show(ui, |ui| {
             match numbers.of_wire(wire) {
@@ -310,6 +313,7 @@ pub fn wire_section(
     // What the wire is made of (ADR-0018), closed: selecting a wire shows
     // one row more than before, and no field.
     egui::CollapsingHeader::new(tr("Wire data"))
+        .id_salt("Wire data")
         .default_open(false)
         .show(ui, |ui| {
             let spec = found.spec.clone().unwrap_or_default();
@@ -352,6 +356,7 @@ pub fn text_section(
     let found = doc.texts.iter().find(|candidate| candidate.id == text)?;
     let mut request = None;
     egui::CollapsingHeader::new(tr("Text"))
+        .id_salt("Text")
         .default_open(true)
         .show(ui, |ui| {
             if let Some(words) =

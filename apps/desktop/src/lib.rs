@@ -24,6 +24,7 @@ mod canvas;
 pub mod clock;
 mod cmdline;
 mod command_palette;
+mod dialog;
 mod dialogs;
 mod documentation;
 pub mod files;

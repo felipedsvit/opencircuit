@@ -70,6 +70,7 @@ impl PrintPreview {
         let mut open = true;
         let mut action = None;
         egui::Window::new(tr("Print preview"))
+            .id(egui::Id::unique("Print preview"))
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
