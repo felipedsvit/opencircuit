@@ -80,7 +80,15 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("At rest", "Em repouso"),
     ("Author", "Autor"),
+    (
+        "Automatic checks are off. Check now still works.",
+        "Verificações automáticas desligadas. Verificar agora continua funcionando.",
+    ),
     ("Automation and logic", "Automação e lógica"),
+    (
+        "Available when releases are signed.",
+        "Disponível quando as versões forem assinadas.",
+    ),
     (
         "Backups next to the project",
         "Cópias de segurança ao lado do projeto",
@@ -99,6 +107,11 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Catalog data of {0} devices",
         "Dados de catálogo de {0} dispositivos",
     ),
+    ("Check for updates", "Verificar atualizações"),
+    ("Check now", "Verificar agora"),
+    ("Checked a long time ago", "Verificado há muito tempo"),
+    ("Checked today", "Verificado hoje"),
+    ("Checking...", "Verificando..."),
     ("Clear the list", "Limpar a lista"),
     (
         "Click a pin to start, empty space to bend, a pin or wire to finish.",
@@ -117,6 +130,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Clique para selecionar, arraste para mover, R para girar, Delete para remover.",
     ),
     ("Client", "Cliente"),
+    ("Close", "Fechar"),
     ("Close tab", "Fechar aba"),
     ("Close {0}", "Fechar {0}"),
     ("Colour", "Cor"),
@@ -130,6 +144,10 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Contacts and terminals", "Contatos e bornes"),
     ("Controls and actuation", "Comandos e acionamentos"),
     ("Copy selection", "Copiar seleção"),
+    (
+        "Could not reach GitHub. Check the connection and try again.",
+        "Não foi possível acessar o GitHub. Verifique a conexão e tente de novo.",
+    ),
     ("Cross-references", "Referências cruzadas"),
     ("Cross-section", "Seção"),
     ("Cross-shaped cursor", "Cursor em cruz"),
@@ -139,6 +157,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Ctrl+H", "Ctrl+H"),
     ("Ctrl+K", "Ctrl+K"),
     ("Ctrl+Z / Ctrl+Y", "Ctrl+Z / Ctrl+Y"),
+    ("Current version: {0}", "Versão atual: {0}"),
     ("Customize shortcuts", "Personalizar atalhos"),
     ("Customize shortcuts…", "Personalizar atalhos…"),
     ("DXF drawing", "Desenho DXF"),
@@ -146,6 +165,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Dark", "Escuro"),
     ("Datasheet", "Folha de dados"),
     ("Date", "Data"),
+    ("Debian package", "pacote Debian"),
     ("Default", "Padrão"),
     ("Del", "Del"),
     ("Delete all", "Excluir todos"),
@@ -163,6 +183,17 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Dismiss", "Dispensar"),
     ("Distribute", "Distribuir"),
     ("Down", "Na vertical"),
+    ("Download and check", "Baixar e conferir"),
+    ("Download {0}", "Baixar {0}"),
+    (
+        "Downloaded and checked against the published SHA-256.",
+        "Baixado e conferido com o SHA-256 publicado.",
+    ),
+    ("Downloading and checking...", "Baixando e conferindo..."),
+    (
+        "Downloads are checked against the published SHA-256.",
+        "Os downloads são conferidos com o SHA-256 publicado.",
+    ),
     ("Draw a wire (W)", "Desenhar um fio (W)"),
     ("Drawing", "Desenhando"),
     ("Drawing mode", "Modo de desenho"),
@@ -180,6 +211,8 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Element", "Elemento"),
     ("Esc", "Esc"),
     ("Events", "Eventos"),
+    ("Every 3 days", "A cada 3 dias"),
+    ("Every 5 days", "A cada 5 dias"),
     (
         "Every save of this project; open one as a new project",
         "Cada vez que este projeto foi salvo; abra uma como projeto novo",
@@ -212,6 +245,14 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Frequency (mHz)", "Frequência (mHz)"),
     ("Fuse", "Fusível"),
     ("G", "G"),
+    (
+        "GitHub did not answer. Try again later.",
+        "O GitHub não respondeu. Tente mais tarde.",
+    ),
+    (
+        "GitHub is limiting checks for now. Try again later.",
+        "O GitHub está limitando as verificações por enquanto. Tente mais tarde.",
+    ),
     ("Grid", "Grade"),
     ("Group selection", "Agrupar a seleção"),
     ("Help", "Ajuda"),
@@ -220,6 +261,12 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     (
         "Import catalog data (CSV)…",
         "Importar dados de catálogo (CSV)…",
+    ),
+    ("Install automatically", "Instalar automaticamente"),
+    ("Install updates", "Instalar atualizações"),
+    (
+        "Installer for this system: {0}",
+        "Instalador para este sistema: {0}",
     ),
     ("Insulation", "Isolação"),
     ("Join them with a wire", "Ligá-los com um fio"),
@@ -232,6 +279,11 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Label", "Rótulo"),
     ("Lamp", "Sinaleiro"),
     ("Language", "Idioma"),
+    ("Last checked {0} day ago", "Última verificação há {0} dia"),
+    (
+        "Last checked {0} days ago",
+        "Última verificação há {0} dias",
+    ),
     ("Later", "Mais tarde"),
     ("Layers", "Camadas"),
     ("Left", "Esquerda"),
@@ -272,6 +324,8 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Net of the selection: {0}, {1}",
         "Rede da seleção: {0}, {1}",
     ),
+    ("Never", "Nunca"),
+    ("Never checked", "Nunca verificado"),
     ("New", "Novo"),
     ("New comment", "Novo comentário"),
     ("New from template", "Novo a partir de modelo"),
@@ -321,6 +375,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Open in another window", "Aberto em outra janela"),
     ("Open project…", "Abrir projeto…"),
     ("Open recent", "Abrir recente"),
+    ("Open the update dialog", "Abrir o diálogo de atualização"),
     (
         "OpenCircuit ended without saving these projects. A copy of each was kept.",
         "O OpenCircuit fechou sem salvar estes projetos. Uma cópia de cada um foi guardada.",
@@ -377,6 +432,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("Put selection on {0}", "Colocar a seleção em {0}"),
     ("R", "R"),
+    ("RPM package", "pacote RPM"),
     ("Reason", "Motivo"),
     (
         "Reason for waiving {0} on {1}",
@@ -410,6 +466,8 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Relay, pushbuttons, lamp and fuse drawn in this style, as an extension library; no conformance with a standard is claimed",
         "Relé, botões, sinaleiro e fusível desenhados neste estilo, como biblioteca de extensão; nenhuma conformidade com norma é declarada",
     ),
+    ("Release page", "Página da versão"),
+    ("Remind me in {0} days", "Lembrar em {0} dias"),
     ("Remove", "Remover"),
     ("Remove supply {0}", "Remover alimentação {0}"),
     ("Renumber designators", "Renumerar designações"),
@@ -471,6 +529,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Sheet", "Folha"),
     ("Sheet {0}", "Folha {0}"),
     ("Sheets and title block", "Folhas e legenda"),
+    ("Show file", "Mostrar arquivo"),
     (
         "Show or hide the list of problems",
         "Mostrar ou ocultar a lista de problemas",
@@ -490,6 +549,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Simulate", "Simular"),
     ("Simulating", "Simulando"),
     ("Simulation mode", "Modo de simulação"),
+    ("Skip this version", "Pular esta versão"),
     ("Snap", "Encaixe"),
     (
         "Snap to wire ends, middles and crossings",
@@ -524,12 +584,37 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("T", "T"),
     ("Text", "Texto"),
     ("Text notes", "Notas de texto"),
+    (
+        "The download does not match the published SHA-256. It was discarded.",
+        "O download não confere com o SHA-256 publicado. Ele foi descartado.",
+    ),
+    (
+        "The download is incomplete. It was discarded.",
+        "O download está incompleto. Ele foi descartado.",
+    ),
+    (
+        "The download is larger than expected. It was discarded.",
+        "O download é maior que o esperado. Ele foi descartado.",
+    ),
+    (
+        "The file could not be saved. Check the disk space and try again.",
+        "Não foi possível salvar o arquivo. Verifique o espaço em disco e tente de novo.",
+    ),
+    ("The file is ready.", "O arquivo está pronto."),
+    (
+        "The folder could not be opened. Open it by hand.",
+        "Não foi possível abrir a pasta. Abra-a manualmente.",
+    ),
     ("The last 3", "As 3 últimas"),
     ("The last 5", "As 5 últimas"),
     ("The last one", "A última"),
     (
         "The last page closed without saving this project. A copy was kept in the browser.",
         "A última página fechou sem salvar este projeto. Uma cópia foi guardada no navegador.",
+    ),
+    (
+        "The latest release has no installer for this system.",
+        "A versão mais recente não tem instalador para este sistema.",
     ),
     ("The library is valid.", "A biblioteca é válida."),
     (
@@ -539,6 +624,14 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     (
         "The project has changes that are not saved.",
         "O projeto tem alterações que não foram salvas.",
+    ),
+    (
+        "The release has no published SHA-256 for this file.",
+        "A versão não tem SHA-256 publicado para este arquivo.",
+    ),
+    (
+        "The release information is not valid.",
+        "As informações da versão não são válidas.",
     ),
     (
         "The version history was not updated: {0}",
@@ -552,6 +645,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Rastrear a rede da seleção",
     ),
     ("Trim wire here", "Aparar fio aqui"),
+    ("Try again", "Tentar de novo"),
     ("Type", "Tipo"),
     (
         "Type a point as x,y or @dx,dy.",
@@ -562,9 +656,13 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Undo: {0}", "Desfazer: {0}"),
     ("Ungroup selection", "Desagrupar a seleção"),
     ("Unsaved changes", "Alterações não salvas"),
+    ("Updates", "Atualizações"),
+    ("Updates...", "Atualizações..."),
     ("Upgrade to version {0}", "Atualizar para a versão {0}"),
     ("Version history", "Histórico de versões"),
     ("Version history…", "Histórico de versões…"),
+    ("Version {0} available", "Versão {0} disponível"),
+    ("Version {0} is available.", "A versão {0} está disponível."),
     ("View", "Exibir"),
     ("Voltage (mV)", "Tensão (mV)"),
     ("W", "W"),
@@ -579,6 +677,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "While simulating: the current tick in colour.",
         "Na simulação: o tique atual, em cores.",
     ),
+    ("Windows installer", "instalador do Windows"),
     ("Wire", "Fio"),
     ("Wire data", "Dados do fio"),
     ("Wire number", "Número do fio"),
@@ -592,6 +691,11 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Write the project to another file and keep working on this one",
         "Gravar o projeto em outro arquivo e continuar trabalhando neste",
     ),
+    (
+        "You have the latest version.",
+        "Você tem a versão mais recente.",
+    ),
+    ("You have version {0}.", "Você tem a versão {0}."),
     ("Zoom extents", "Ajustar zoom ao desenho"),
     ("Zoom in", "Aumentar o zoom"),
     ("Zoom out", "Diminuir o zoom"),
@@ -607,6 +711,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("copy / paste", "copiar / colar"),
     ("delete", "excluir"),
+    ("disk image", "imagem de disco"),
     ("duplicate", "duplicar"),
     (
         "edit the label of the selection",
