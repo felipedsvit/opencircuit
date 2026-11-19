@@ -58,6 +58,11 @@ that it sorts before `0.0.2`.
    `packaging/release-notes.md`; the "What is new" part is the section of
    `CHANGELOG.md`), try a package, and publish it.
 
+   The draft appears only after the `sign` job runs. That job waits for a
+   reviewer: open the run in the Actions tab and approve the
+   `release-signing` environment. Then check the draft has `SHA256SUMS` and
+   `SHA256SUMS.minisig`.
+
 A pull request that changes `packaging/`, `assets/icons/`, `CHANGELOG.md` or the
 workflow runs the same builds and package checks without creating a release, so
 a change is tested before a tag. `workflow_dispatch` runs them by hand on a branch.
@@ -97,10 +102,18 @@ tagging it, run on the merge commit, besides the pull request's CI:
 
 ## What a release does not have yet
 
-- **Signing.** Nothing is signed or notarized, because that needs
-  certificates and secrets. The macOS binaries are signed ad hoc (no
-  certificate), which Apple Silicon requires to run them at all; the first
-  start still needs a confirmation. Windows shows SmartScreen.
+- **Code signing.** The Windows and macOS files are not signed or notarized:
+  that needs certificates (issue #117 covers the free Windows option). The
+  macOS binaries are signed ad hoc (no certificate), which Apple Silicon
+  requires to run them at all; the first start still needs a confirmation.
+  Windows shows SmartScreen.
+- **Checksums are signed.** The `sign` job signs `SHA256SUMS` with the
+  project's minisign key (ADR-0020) and writes `SHA256SUMS.minisig`, whose
+  trusted comment is `version:X.Y.Z`. The key is the secret `MINISIGN_SECRET`
+  and its password `MINISIGN_PASSWORD`, in the environment `release-signing`,
+  which only a tag can use and a reviewer must approve. The public key is
+  `packaging/update-public-key.minisign`; the update notice of the app checks
+  the signature with it.
 - Linux and Windows on ARM, Flatpak, a repository for `apt` or `dnf`, an icon
   inside the Windows executable, and a wizard in the `.msi` (it installs
   without questions).

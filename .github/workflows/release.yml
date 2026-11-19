@@ -246,11 +246,55 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  sign:
+    name: Sign the checksums
+    # Only for a tag. The key is in the environment `release-signing`: a
+    # reviewer approves this job before it runs (docs/releasing.md).
+    if: github.ref_type == 'tag'
+    needs: [version, linux, macos, windows]
+    runs-on: ubuntu-latest
+    environment: release-signing
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      MINISIGN_SECRET: ${{ secrets.MINISIGN_SECRET }}
+      MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          # The notes are not a package: they stay out of the list.
+          rm -f dist/notes.md
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Minisign 0.12
+        run: |
+          # Pinned by the digest of the archive (ADR-0020).
+          curl -fsSL -o minisign.tar.gz \
+            https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+          echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  minisign.tar.gz" | sha256sum -c -
+          tar -xzf minisign.tar.gz minisign-linux/x86_64/minisign
+          sudo install -m 0755 minisign-linux/x86_64/minisign /usr/local/bin/minisign
+          minisign -v
+      - name: Sign
+        run: packaging/sign-release.sh dist/SHA256SUMS "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signature
+          path: |
+            dist/SHA256SUMS
+            dist/SHA256SUMS.minisig
+          if-no-files-found: error
+
   release:
     name: Draft release
     # Only for a tag; a pull request stops after the packages.
     if: github.ref_type == 'tag'
-    needs: [version, notes, linux, macos, windows]
+    needs: [version, notes, linux, macos, windows, sign]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -263,13 +307,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Checksums and notes
+      - name: Notes
         run: |
           # The notes were made by the notes job; they are not a package.
+          # SHA256SUMS and its signature come from the sign job.
           mv dist/notes.md notes.md
-          cd dist
-          sha256sum * > SHA256SUMS
-          cat SHA256SUMS
       - name: Draft release
         run: |
           # A version with a `-` (0.0.2-dev) is a pre-release.
