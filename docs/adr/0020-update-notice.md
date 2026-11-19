@@ -34,8 +34,8 @@ Two facts shape the design:
      size and SHA-256 against `SHA256SUMS`, and shows the file. The user installs
      it.
    - **Install automatically:** the app installs the verified file and restarts.
-     It is offered only after signed releases exist (phase 2). Until then the
-     option is shown disabled, with the reason.
+     It is enabled in phase 3. Until then the option is shown disabled, with
+     the reason.
 3. Frequency: every 3 days, every 5 days (default), or never. "Never" turns off
    automatic checks and reminders. "Check now" still works.
 4. Automatic checks are silent when the network is down. An error is shown only
@@ -232,7 +232,15 @@ check`, `cargo run -p xtask -- check-architecture`.
    `release.yml` signs `SHA256SUMS` into `SHA256SUMS.minisig`. The public key
    `packaging/update-public-key.minisign` is embedded with `include_str!`. The
    private key sits in a protected CI environment. The app verifies signatures
-   in both modes, and the "Install automatically" option becomes enabled.
+   in both modes. The "Install automatically" option stays disabled until
+   phase 3, which is where it does something; enabling it earlier would offer
+   a button with nothing behind it.
+
+   Decided with the owner on 2026-11-19: the key is kept with a password (the
+   secret `MINISIGN_PASSWORD` in the environment), which CI feeds on standard
+   input to minisign 0.12, and the trusted comment of each signature is
+   `version:X.Y.Z`. A signed list is refused when that version is not the one
+   of the release.
 3. Automatic install, one platform at a time: AppImage, then `.deb` (`pkexec`),
    then Windows `.msi`. macOS only after tests on hardware. Each platform needs
    its manual check before it is enabled.

@@ -124,6 +124,14 @@ impl Release {
     pub fn checksums(&self) -> Option<&Asset> {
         self.assets.iter().find(|asset| asset.name == "SHA256SUMS")
     }
+
+    /// The signature of the `SHA256SUMS` file, when the release has one.
+    #[must_use]
+    pub fn signature(&self) -> Option<&Asset> {
+        self.assets
+            .iter()
+            .find(|asset| asset.name == "SHA256SUMS.minisig")
+    }
 }
 
 /// A file name with no directory part and nothing odd in it.
