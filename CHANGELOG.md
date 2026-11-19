@@ -10,6 +10,33 @@ may change anything, and what changes in a file format is listed under
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-11-19
+
+Version 0.0.3 is the first release that can tell its users about a newer one
+(ADR-0020). Installs of 0.0.2 do not have that notice: update them once by hand,
+from the release page.
+
+### Added
+
+- **Update notice.** The window looks for a newer published release at
+  startup, every 5 days by default. **Help > Updates...** sets it to every 3
+  days, every 5 days, or never, and checks now. A chip in the status bar and a
+  dialog show the version found. The dialog can download the installer for
+  this system into the user's data folder and check it against the published
+  SHA-256; the file is then shown, and installing it is left to you. The check
+  runs in the background and is silent when offline. The request carries only
+  the program's version and the name of the operating system.
+- **Signed checksums.** The release workflow signs `SHA256SUMS` with the
+  project's minisign key and publishes `SHA256SUMS.minisig` with each release.
+  The update notice refuses a download whose list does not verify, or whose
+  signature names another version.
+
+### Changed
+
+- The Help menu has a new entry, **Updates...**. The status bar shows the
+  update chip only when a newer version is known.
+- "Install automatically" is shown but not available yet (phase 3 of ADR-0020).
+
 ## [0.0.2] - 2026-11-18
 
 Version 0.0.2 closes M9 (`ROADMAP.md`): resilience, work safety,
@@ -341,7 +368,8 @@ and the command line (`opencircuit`).
 - Packages for Windows (`.zip`), macOS (`.dmg`), Debian and Ubuntu (`.deb`),
   Fedora (`.rpm`) and any Linux (AppImage and `.tar.gz`).
 
-[Unreleased]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/felipedsvit/opencircuit/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/felipedsvit/opencircuit/compare/v0.0.2-dev...v0.0.2
 [0.0.2-dev]: https://github.com/felipedsvit/opencircuit/compare/v0.0.1...v0.0.2-dev
 [0.0.1]: https://github.com/felipedsvit/opencircuit/releases/tag/v0.0.1
