@@ -271,7 +271,7 @@ mod tests {
     }
 
     /// Every source file that writes texts of the window.
-    const SOURCES: [&str; 8] = [
+    const SOURCES: [&str; 10] = [
         include_str!("../app.rs"),
         include_str!("../print_preview.rs"),
         include_str!("../command_palette.rs"),
@@ -280,6 +280,8 @@ mod tests {
         include_str!("../inspector.rs"),
         include_str!("../documentation.rs"),
         include_str!("../dialogs.rs"),
+        include_str!("../update/mod.rs"),
+        include_str!("../update/ui.rs"),
     ];
 
     /// The `{0}`, `{1}`… of a text, in order.

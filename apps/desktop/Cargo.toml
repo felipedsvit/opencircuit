@@ -32,6 +32,10 @@ eframe = { version = "0.37", default-features = false, features = ["glow", "defa
 # Native file dialogs. A browser has none: files are dropped onto the page.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = "0.18"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-native-certs = "0.8.5"
+sha2 = "0.11.1"
+ureq = { version = "3.5.2", default-features = false, features = ["rustls-no-provider"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.107"

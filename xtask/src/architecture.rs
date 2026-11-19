@@ -128,12 +128,20 @@ const PACKAGE_RULES: &[PackageRule] = &[
         // application on its canvas, read dropped files and offer downloads.
         // `serde` and `serde_json` write the small description next to a
         // recovery copy (M9.1); the workspace already pins both.
+        // The update notice (ADR-0020) asks GitHub for the latest release over
+        // HTTPS and checks its download with `sha2`. `ureq` uses `rustls` with
+        // the ring provider and the roots of the system (`rustls-native-certs`):
+        // the webpki roots are under a licence outside `deny.toml`. Native only.
         external: &[
             "eframe",
             "js-sys",
             "rfd",
+            "rustls",
+            "rustls-native-certs",
             "serde",
             "serde_json",
+            "sha2",
+            "ureq",
             "wasm-bindgen-futures",
             "web-sys",
         ],

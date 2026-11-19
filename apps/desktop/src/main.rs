@@ -73,6 +73,7 @@ mod native {
             options,
             Box::new(move |_creation| {
                 let mut app = DesktopApp::new(path.as_deref());
+                app.enable_updates();
                 // The language of the environment, read once, here and not in
                 // the window: a test of the window is always in English.
                 app.set_language(Language::from_environment(|name| std::env::var(name).ok()));

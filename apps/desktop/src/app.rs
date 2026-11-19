@@ -243,6 +243,9 @@ pub struct DesktopApp {
     show_keys: bool,
     /// The window about the program is open.
     show_about: bool,
+    /// The update notice (ADR-0020). Off until `enable_updates` is called.
+    #[cfg(not(target_arch = "wasm32"))]
+    updates: crate::update::Updates,
     /// The cursor cross over the drawing is not drawn.
     crosshair_off: bool,
     /// Where the context menu of the drawing is open, in screen points.
@@ -2511,6 +2514,9 @@ impl DesktopApp {
             self.history_window(ui);
             self.autosave_tick(ui);
             self.relock(ui);
+            self.updates.tick(ui.ctx());
+            self.updates.dialog(ui.ctx());
+            self.updates.window(ui.ctx());
         }
         self.slot_recovery_dialog(ui);
         self.slot_tick(ui);
@@ -3314,6 +3320,11 @@ impl DesktopApp {
                         ui.close();
                         self.show_about = true;
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button(tr("Updates...")).clicked() {
+                        ui.close();
+                        self.updates.open_window();
+                    }
                     ui.separator();
                     ui.menu_button(tr("Language"), |ui| {
                         for language in Language::ALL {
@@ -3550,6 +3561,23 @@ impl DesktopApp {
                 ));
                 ui.label(tr("Licensed under MIT or Apache-2.0."));
             });
+    }
+
+    /// Turn on the update notice: the settings are read from the data folder,
+    /// and the first frame checks for a newer release when one is due.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_updates(&mut self) {
+        if let Some(dir) = crate::recovery::user_data_dir() {
+            self.updates = crate::update::Updates::enabled_in(&dir);
+        }
+    }
+
+    /// Record a newer version as found, as the check would. For the window
+    /// tests only.
+    #[doc(hidden)]
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn offer_update(&mut self, version: &str) {
+        self.updates.offer(version);
     }
 
     /// The quick-access bar: files, undo and redo, the path of the project
@@ -3877,6 +3905,8 @@ impl DesktopApp {
                 {
                     self.grid_off = !self.grid_off;
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                self.updates.chip(ui);
             });
         });
     }

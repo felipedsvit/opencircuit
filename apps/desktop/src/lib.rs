@@ -45,6 +45,8 @@ mod symbol_editor;
 pub mod templates;
 mod theme;
 #[cfg(not(target_arch = "wasm32"))]
+mod update;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod versions;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
