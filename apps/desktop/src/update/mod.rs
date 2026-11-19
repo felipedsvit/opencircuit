@@ -411,33 +411,37 @@ mod tests {
     #[test]
     fn a_newer_version_found_by_hand_is_announced_and_remembered() {
         let mut updates = Updates::disabled();
-        updates.record_check(true, Ok(release("v0.0.3")), now());
+        updates.record_check(true, Ok(release("v99.0.0")), now());
 
-        assert_eq!(updates.chip_version(), Some("0.0.3"));
+        assert_eq!(updates.chip_version(), Some("99.0.0"));
         assert!(updates.dialog_open);
         assert_eq!(updates.notice, Some(Notice::Found));
-        assert_eq!(updates.settings.announced.as_deref(), Some("0.0.3"));
+        assert_eq!(updates.settings.announced.as_deref(), Some("99.0.0"));
     }
 
     #[test]
     fn an_automatic_check_announces_a_new_version_once() {
         let mut updates = Updates::disabled();
-        updates.record_check(false, Ok(release("v0.0.3")), now());
+        updates.record_check(false, Ok(release("v99.0.0")), now());
         assert!(updates.dialog_open);
 
         updates.dialog_open = false;
-        updates.record_check(false, Ok(release("v0.0.3")), now());
+        updates.record_check(false, Ok(release("v99.0.0")), now());
         assert!(
             !updates.dialog_open,
             "the same version does not open the dialog again"
         );
-        assert_eq!(updates.chip_version(), Some("0.0.3"));
+        assert_eq!(updates.chip_version(), Some("99.0.0"));
     }
 
     #[test]
     fn the_same_version_as_this_program_is_not_an_update() {
         let mut updates = Updates::disabled();
-        updates.record_check(true, Ok(release("v0.0.2")), now());
+        updates.record_check(
+            true,
+            Ok(release(&format!("v{}", env!("CARGO_PKG_VERSION")))),
+            now(),
+        );
 
         assert_eq!(updates.chip_version(), None);
         assert_eq!(updates.notice, Some(Notice::UpToDate));
@@ -448,10 +452,10 @@ mod tests {
     fn a_skipped_version_does_not_open_the_dialog_or_show_the_chip() {
         let mut updates = Updates::disabled();
         updates.settings = Settings {
-            skipped: Some("0.0.3".to_owned()),
+            skipped: Some("99.0.0".to_owned()),
             ..Settings::default()
         };
-        updates.record_check(false, Ok(release("v0.0.3")), now());
+        updates.record_check(false, Ok(release("v99.0.0")), now());
 
         assert!(!updates.dialog_open);
         assert_eq!(updates.chip_version(), None);
@@ -497,7 +501,7 @@ mod tests {
         updates.checking = Some(true);
         let _ = updates.sender.send(Done::Checked {
             manual: true,
-            result: Ok(release("v0.0.3")),
+            result: Ok(release("v99.0.0")),
         });
 
         while let Ok(done) = updates.inbox.try_recv() {
@@ -505,7 +509,7 @@ mod tests {
         }
 
         assert_eq!(updates.checking, None);
-        assert_eq!(updates.chip_version(), Some("0.0.3"));
+        assert_eq!(updates.chip_version(), Some("99.0.0"));
     }
 
     #[test]
