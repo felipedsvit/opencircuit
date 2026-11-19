@@ -111,8 +111,10 @@ impl Updates {
                 }
                 Download::Ready(path) => {
                     ui.label(
-                        RichText::new(tr("Downloaded and checked against the published SHA-256."))
-                            .weak(),
+                        RichText::new(tr(
+                            "Downloaded and checked against the signed SHA-256 list.",
+                        ))
+                        .weak(),
                     );
                     ui.add(
                         egui::Label::new(RichText::new(path.display().to_string()).monospace())
@@ -262,8 +264,10 @@ impl Updates {
             false,
             egui::RadioButton::new(false, tr("Install automatically")),
         )
-        .on_disabled_hover_text(tr("Available when releases are signed."));
-        ui.label(RichText::new(tr("Downloads are checked against the published SHA-256.")).weak());
+        .on_disabled_hover_text(tr("Not available yet."));
+        ui.label(
+            RichText::new(tr("Downloads are checked against the signed SHA-256 list.")).weak(),
+        );
         ui.separator();
 
         let busy = self.checking.is_some();

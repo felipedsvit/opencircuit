@@ -132,9 +132,12 @@ const PACKAGE_RULES: &[PackageRule] = &[
         // HTTPS and checks its download with `sha2`. `ureq` uses `rustls` with
         // the ring provider and the roots of the system (`rustls-native-certs`):
         // the webpki roots are under a licence outside `deny.toml`. Native only.
+        // `minisign-verify` checks the signature of the release list (ADR-0020,
+        // phase 2); it is pure Rust and MIT.
         external: &[
             "eframe",
             "js-sys",
+            "minisign-verify",
             "rfd",
             "rustls",
             "rustls-native-certs",

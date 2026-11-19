@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 
 use super::UpdateError;
 use super::release::{Asset, Installer, MAX_RELEASE_BYTES, Release, checksum_for};
+use super::verify;
 
 /// The latest published release of the project.
 pub const API_URL: &str = "https://api.github.com/repos/felipedsvit/opencircuit/releases/latest";
@@ -27,6 +28,8 @@ pub const ORIGIN: &str = "https://github.com/felipedsvit/opencircuit/";
 pub const MAX_INSTALLER_BYTES: u64 = 512 << 20;
 /// Largest `SHA256SUMS` file accepted, in bytes.
 const MAX_SUMS_BYTES: u64 = 64 << 10;
+/// Largest signature file accepted, in bytes. A minisign signature is 4 lines.
+const MAX_SIGNATURE_BYTES: u64 = 4 << 10;
 /// How long the release lookup may take.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long a whole download may take.
@@ -54,6 +57,7 @@ pub fn check(api_url: &str, origin: &str) -> Result<Release, UpdateError> {
 pub fn download_latest(
     api_url: &str,
     origin: &str,
+    key_file: &str,
     installer: Installer,
     folder: &Path,
 ) -> Result<PathBuf, UpdateError> {
@@ -63,12 +67,23 @@ pub fn download_latest(
         .asset_for(installer)
         .ok_or(UpdateError::NoInstaller)?;
     let sums = release.checksums().ok_or(UpdateError::NoChecksum)?;
+    let signature = release.signature().ok_or(UpdateError::NotSigned)?;
     let listing = get(
         &agent,
         &sums.url,
         "application/octet-stream",
         MAX_SUMS_BYTES,
     )?;
+    // The list is trusted only with its signature: both are checked before
+    // any installer is downloaded.
+    let signature = get(
+        &agent,
+        &signature.url,
+        "application/octet-stream",
+        MAX_SIGNATURE_BYTES,
+    )?;
+    let signature = String::from_utf8(signature).map_err(|_| UpdateError::SignatureInvalid)?;
+    verify::check_list(key_file, &listing, &signature, &release.version)?;
     let listing = String::from_utf8(listing).map_err(|_| UpdateError::BadResponse)?;
     let sha256 = checksum_for(&listing, &asset.name).ok_or(UpdateError::NoChecksum)?;
     download(&agent, asset, &sha256, folder)
@@ -241,9 +256,10 @@ mod tests {
 
     use sha2::{Digest, Sha256};
 
-    use super::{agent, download, fetch_release, get, too_long};
+    use super::{agent, download, download_latest, fetch_release, get, too_long};
     use crate::update::UpdateError;
-    use crate::update::release::Asset;
+    use crate::update::release::{Asset, Installer};
+    use crate::update::verify::fixtures::{INSTALLER, KEY_FILE, LIST, SIGNATURE};
 
     /// A free port on this machine, and the origin that names it.
     fn bind() -> (TcpListener, String) {
@@ -450,5 +466,105 @@ mod tests {
             !folder.exists(),
             "nothing is created for a refused download"
         );
+    }
+
+    /// A release with its installer, its checksums and, when `signed`, the
+    /// signature of the checksums; all served by the test server at `origin`.
+    fn release_with_files(origin: &str, signed: bool) -> Vec<u8> {
+        let signature = if signed {
+            format!(
+                r#", {{"name": "SHA256SUMS.minisig", "browser_download_url": "{origin}sums.minisig", "size": {}}}"#,
+                SIGNATURE.len()
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            r#"{{"tag_name": "v0.0.3", "html_url": "{origin}releases/tag/v0.0.3", "body": "Notes",
+                "assets": [
+                  {{"name": "opencircuit_0.0.3_amd64.deb", "browser_download_url": "{origin}asset.deb", "size": {}}},
+                  {{"name": "SHA256SUMS", "browser_download_url": "{origin}sums", "size": {}}}{signature}
+                ]}}"#,
+            INSTALLER.len(),
+            LIST.len()
+        )
+        .into_bytes()
+    }
+
+    #[test]
+    fn a_release_is_downloaded_when_its_list_verifies() {
+        let (listener, origin) = bind();
+        serve(
+            listener,
+            vec![
+                ("/release".to_owned(), release_with_files(&origin, true)),
+                ("/asset.deb".to_owned(), INSTALLER.to_vec()),
+                ("/sums".to_owned(), LIST.as_bytes().to_vec()),
+                ("/sums.minisig".to_owned(), SIGNATURE.as_bytes().to_vec()),
+            ],
+            4,
+        );
+        let folder = scratch("signed");
+
+        let path = download_latest(
+            &format!("{origin}release"),
+            &origin,
+            KEY_FILE,
+            Installer::Deb,
+            &folder,
+        )
+        .expect("downloaded");
+
+        assert_eq!(std::fs::read(&path).expect("the file"), INSTALLER);
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn a_release_without_a_signature_is_not_downloaded() {
+        let (listener, origin) = bind();
+        serve(
+            listener,
+            vec![("/release".to_owned(), release_with_files(&origin, false))],
+            1,
+        );
+        let folder = scratch("unsigned");
+
+        let result = download_latest(
+            &format!("{origin}release"),
+            &origin,
+            KEY_FILE,
+            Installer::Deb,
+            &folder,
+        );
+
+        assert_eq!(result, Err(UpdateError::NotSigned));
+        assert!(!folder.exists());
+    }
+
+    #[test]
+    fn a_list_that_does_not_verify_stops_the_download_before_the_installer() {
+        let (listener, origin) = bind();
+        let changed = LIST.replacen("b2b3", "b2b4", 1);
+        serve(
+            listener,
+            vec![
+                ("/release".to_owned(), release_with_files(&origin, true)),
+                ("/sums".to_owned(), changed.into_bytes()),
+                ("/sums.minisig".to_owned(), SIGNATURE.as_bytes().to_vec()),
+            ],
+            3,
+        );
+        let folder = scratch("tampered");
+
+        let result = download_latest(
+            &format!("{origin}release"),
+            &origin,
+            KEY_FILE,
+            Installer::Deb,
+            &folder,
+        );
+
+        assert_eq!(result, Err(UpdateError::SignatureInvalid));
+        assert!(!folder.exists(), "no installer request was made");
     }
 }

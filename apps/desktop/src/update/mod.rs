@@ -10,6 +10,7 @@ mod net;
 mod release;
 mod settings;
 mod ui;
+mod verify;
 mod version;
 
 use std::path::{Path, PathBuf};
@@ -52,6 +53,10 @@ pub enum UpdateError {
     Disk,
     /// The folder of the download could not be opened in the file manager.
     Open,
+    /// The release has no signature for its checksums.
+    NotSigned,
+    /// The signature of the checksums does not verify, or names another version.
+    SignatureInvalid,
 }
 
 impl UpdateError {
@@ -73,6 +78,12 @@ impl UpdateError {
             }
             Self::Disk => tr("The file could not be saved. Check the disk space and try again."),
             Self::Open => tr("The folder could not be opened. Open it by hand."),
+            Self::NotSigned => tr(
+                "This release is not signed. Download it from the release page and check it by hand.",
+            ),
+            Self::SignatureInvalid => {
+                tr("The signature of this release does not match. The download was not started.")
+            }
         }
     }
 }
@@ -354,7 +365,13 @@ impl Updates {
         let spawned = std::thread::Builder::new()
             .name("opencircuit-update-download".to_owned())
             .spawn(move || {
-                let result = net::download_latest(&api, &origin, installer, &folder);
+                let result = net::download_latest(
+                    &api,
+                    &origin,
+                    verify::PUBLIC_KEY_FILE,
+                    installer,
+                    &folder,
+                );
                 let _ = sender.send(Done::Downloaded(result));
                 ctx.request_repaint();
             });
@@ -522,6 +539,8 @@ mod tests {
             UpdateError::ChecksumMismatch,
             UpdateError::Disk,
             UpdateError::Open,
+            UpdateError::NotSigned,
+            UpdateError::SignatureInvalid,
         ] {
             assert!(!error.message().is_empty());
         }

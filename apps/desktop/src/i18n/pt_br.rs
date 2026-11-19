@@ -86,10 +86,6 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ),
     ("Automation and logic", "Automação e lógica"),
     (
-        "Available when releases are signed.",
-        "Disponível quando as versões forem assinadas.",
-    ),
-    (
         "Backups next to the project",
         "Cópias de segurança ao lado do projeto",
     ),
@@ -186,13 +182,13 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
     ("Download and check", "Baixar e conferir"),
     ("Download {0}", "Baixar {0}"),
     (
-        "Downloaded and checked against the published SHA-256.",
-        "Baixado e conferido com o SHA-256 publicado.",
+        "Downloaded and checked against the signed SHA-256 list.",
+        "Baixado e conferido com a lista de SHA-256 assinada.",
     ),
     ("Downloading and checking...", "Baixando e conferindo..."),
     (
-        "Downloads are checked against the published SHA-256.",
-        "Os downloads são conferidos com o SHA-256 publicado.",
+        "Downloads are checked against the signed SHA-256 list.",
+        "Os downloads são conferidos com a lista de SHA-256 assinada.",
     ),
     ("Draw a wire (W)", "Desenhar um fio (W)"),
     ("Drawing", "Desenhando"),
@@ -358,6 +354,7 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "Nenhuma versão ainda: uma é guardada a cada salvamento.",
     ),
     ("None", "Nenhuma"),
+    ("Not available yet.", "Ainda não disponível."),
     ("Nothing found", "Nada encontrado"),
     ("Nothing here.", "Nada aqui."),
     ("Nothing selected", "Nada selecionado"),
@@ -634,10 +631,18 @@ pub(super) const CATALOG: &[(&str, &str)] = &[
         "As informações da versão não são válidas.",
     ),
     (
+        "The signature of this release does not match. The download was not started.",
+        "A assinatura desta versão não confere. O download não foi iniciado.",
+    ),
+    (
         "The version history was not updated: {0}",
         "O histórico de versões não foi atualizado: {0}",
     ),
     ("Theme", "Tema"),
+    (
+        "This release is not signed. Download it from the release page and check it by hand.",
+        "Esta versão não está assinada. Baixe-a na página da versão e confira manualmente.",
+    ),
     ("Title", "Título"),
     ("Top", "Topo"),
     (
