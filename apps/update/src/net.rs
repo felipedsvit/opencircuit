@@ -14,9 +14,9 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
-use super::UpdateError;
-use super::release::{Asset, Installer, MAX_RELEASE_BYTES, Release, checksum_for};
-use super::verify;
+use crate::UpdateError;
+use crate::release::{Asset, Installer, MAX_RELEASE_BYTES, Release, checksum_for};
+use crate::verify;
 
 /// The latest published release of the project.
 pub const API_URL: &str = "https://api.github.com/repos/felipedsvit/opencircuit/releases/latest";
@@ -262,9 +262,9 @@ mod tests {
     use sha2::{Digest, Sha256};
 
     use super::{agent, download, download_latest, fetch_release, get, too_long};
-    use crate::update::UpdateError;
-    use crate::update::release::{Asset, Installer};
-    use crate::update::verify::fixtures::{INSTALLER, KEY_FILE, LIST, SIGNATURE};
+    use crate::UpdateError;
+    use crate::release::{Asset, Installer};
+    use crate::verify::fixtures::{INSTALLER, KEY_FILE, LIST, SIGNATURE};
 
     /// A free port on this machine, and the origin that names it.
     fn bind() -> (TcpListener, String) {

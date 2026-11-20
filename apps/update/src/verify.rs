@@ -5,12 +5,12 @@
 
 use minisign_verify::{PublicKey, Signature};
 
-use super::UpdateError;
-use super::version::Version;
+use crate::UpdateError;
+use crate::version::Version;
 
 /// The public key of the project, as `minisign -G` writes it: an untrusted
 /// comment line, then the key in base64.
-pub const PUBLIC_KEY_FILE: &str = include_str!("../../../../packaging/update-public-key.minisign");
+pub const PUBLIC_KEY_FILE: &str = include_str!("../../../packaging/update-public-key.minisign");
 
 /// Check `list`, the bytes of a `SHA256SUMS` file, against `signature`, the text
 /// of its `.minisig`, made with the key in `key_file`. The trusted comment of
@@ -75,8 +75,8 @@ pub(crate) mod fixtures {
 mod tests {
     use super::fixtures::{KEY_FILE, LIST, SIGNATURE};
     use super::{PUBLIC_KEY_FILE, check_list, public_key};
-    use crate::update::UpdateError;
-    use crate::update::version::Version;
+    use crate::UpdateError;
+    use crate::version::Version;
 
     fn version(text: &str) -> Version {
         match Version::parse(text) {

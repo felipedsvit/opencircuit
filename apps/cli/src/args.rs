@@ -21,6 +21,8 @@ pub(crate) enum OutputFormat {
 pub(crate) enum Command {
     Help,
     Version,
+    /// Look for a newer release and download its installer (ADR-0020).
+    Upgrade,
     Validate {
         project: PathBuf,
         format: OutputFormat,
@@ -248,6 +250,12 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
     match command.as_str() {
         "help" | "--help" | "-h" => Ok(Command::Help),
         "--version" | "-V" => Ok(Command::Version),
+        "--upgrade" => {
+            if !rest.is_empty() {
+                return Err("`--upgrade` takes no other argument".to_owned());
+            }
+            Ok(Command::Upgrade)
+        }
         "validate" => {
             let words = Words::split(rest, &["--format", "--library"], &["--deny-warnings"])?;
             let format = report_format(&words)?;

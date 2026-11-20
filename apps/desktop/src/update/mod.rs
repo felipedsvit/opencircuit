@@ -6,12 +6,8 @@
 //! The network work runs in a thread of its own. The window reads its results
 //! once a frame, so a slow connection never holds up drawing.
 
-mod net;
-mod release;
 mod settings;
 mod ui;
-mod verify;
-mod version;
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -20,6 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use eframe::egui;
 
 use crate::i18n::tr;
+use opencircuit_update::{UpdateError, net, release, verify, version};
 use release::{Installer, Release};
 use settings::Settings;
 use version::Version;
@@ -27,63 +24,30 @@ use version::Version;
 /// The version of this program, as the package states it.
 const CURRENT: &str = env!("CARGO_PKG_VERSION");
 
-/// Why an update could not be checked or downloaded. The messages are the
-/// English text; the window translates them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UpdateError {
-    /// The request did not reach GitHub, or the connection broke.
-    Connection,
-    /// GitHub refused the request because of its rate limit.
-    RateLimited,
-    /// GitHub answered with an error.
-    Unavailable,
-    /// The answer is not a release this program can read.
-    BadResponse,
-    /// A response or a file is larger than the program accepts.
-    TooLarge,
-    /// The release has no file for this system.
-    NoInstaller,
-    /// The release has no SHA-256 for its file.
-    NoChecksum,
-    /// The download ended before the size the release announces.
-    Incomplete,
-    /// The download does not have the SHA-256 the release publishes.
-    ChecksumMismatch,
-    /// A file could not be written, or a folder could not be made.
-    Disk,
-    /// The folder of the download could not be opened in the file manager.
-    Open,
-    /// The release has no signature for its checksums.
-    NotSigned,
-    /// The signature of the checksums does not verify, or names another version.
-    SignatureInvalid,
-}
-
-impl UpdateError {
-    /// What the person is told, translated to the window's language. The
-    /// literals are written here, with `tr`, so that the catalog check finds them.
-    #[must_use]
-    pub fn message(self) -> &'static str {
-        match self {
-            Self::Connection => tr("Could not reach GitHub. Check the connection and try again."),
-            Self::RateLimited => tr("GitHub is limiting checks for now. Try again later."),
-            Self::Unavailable => tr("GitHub did not answer. Try again later."),
-            Self::BadResponse => tr("The release information is not valid."),
-            Self::TooLarge => tr("The download is larger than expected. It was discarded."),
-            Self::NoInstaller => tr("The latest release has no installer for this system."),
-            Self::NoChecksum => tr("The release has no published SHA-256 for this file."),
-            Self::Incomplete => tr("The download is incomplete. It was discarded."),
-            Self::ChecksumMismatch => {
-                tr("The download does not match the published SHA-256. It was discarded.")
-            }
-            Self::Disk => tr("The file could not be saved. Check the disk space and try again."),
-            Self::Open => tr("The folder could not be opened. Open it by hand."),
-            Self::NotSigned => tr(
-                "This release is not signed. Download it from the release page and check it by hand.",
-            ),
-            Self::SignatureInvalid => {
-                tr("The signature of this release does not match. The download was not started.")
-            }
+/// The message of an error, in the language of the window. The literals are
+/// written here, with `tr`, so that the catalog check finds them.
+fn localized(error: UpdateError) -> &'static str {
+    match error {
+        UpdateError::Connection => {
+            tr("Could not reach GitHub. Check the connection and try again.")
+        }
+        UpdateError::RateLimited => tr("GitHub is limiting checks for now. Try again later."),
+        UpdateError::Unavailable => tr("GitHub did not answer. Try again later."),
+        UpdateError::BadResponse => tr("The release information is not valid."),
+        UpdateError::TooLarge => tr("The download is larger than expected. It was discarded."),
+        UpdateError::NoInstaller => tr("The latest release has no installer for this system."),
+        UpdateError::NoChecksum => tr("The release has no published SHA-256 for this file."),
+        UpdateError::Incomplete => tr("The download is incomplete. It was discarded."),
+        UpdateError::ChecksumMismatch => {
+            tr("The download does not match the published SHA-256. It was discarded.")
+        }
+        UpdateError::Disk => tr("The file could not be saved. Check the disk space and try again."),
+        UpdateError::Open => tr("The folder could not be opened. Open it by hand."),
+        UpdateError::NotSigned => tr(
+            "This release is not signed. Download it from the release page and check it by hand.",
+        ),
+        UpdateError::SignatureInvalid => {
+            tr("The signature of this release does not match. The download was not started.")
         }
     }
 }
@@ -453,7 +417,7 @@ pub fn installer_name_for_this_system() -> Option<&'static str> {
 mod tests {
     use std::sync::mpsc;
 
-    use super::{Done, Notice, Release, Report, Settings, UpdateError, Updates, now};
+    use super::{Done, Notice, Release, Report, Settings, UpdateError, Updates, localized, now};
 
     fn release(tag: &str) -> Release {
         let origin = "https://github.com/felipedsvit/opencircuit/";
@@ -630,7 +594,7 @@ mod tests {
             UpdateError::NotSigned,
             UpdateError::SignatureInvalid,
         ] {
-            assert!(!error.message().is_empty());
+            assert!(!localized(error).is_empty());
         }
     }
 }
