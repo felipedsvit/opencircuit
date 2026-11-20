@@ -20,6 +20,7 @@ pub(crate) enum OutputFormat {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
     Help,
+    Version,
     Validate {
         project: PathBuf,
         format: OutputFormat,
@@ -246,6 +247,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Command, String> {
     };
     match command.as_str() {
         "help" | "--help" | "-h" => Ok(Command::Help),
+        "--version" | "-V" => Ok(Command::Version),
         "validate" => {
             let words = Words::split(rest, &["--format", "--library"], &["--deny-warnings"])?;
             let format = report_format(&words)?;
