@@ -98,8 +98,13 @@ fn agent(timeout: Duration) -> Result<ureq::Agent, UpdateError> {
         .iter()
         .map(|der| ureq::tls::Certificate::from_der(der.as_ref()).to_owned())
         .collect();
+    // ureq does not pick a TLS provider on its own with `rustls-no-provider`,
+    // and panics without one: the provider is named here (ring, as in Cargo.toml).
     let tls = ureq::tls::TlsConfig::builder()
         .root_certs(ureq::tls::RootCerts::from(roots))
+        .unversioned_rustls_crypto_provider(std::sync::Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
         .build();
     let user_agent = format!(
         "OpenCircuit/{} ({})",
@@ -566,5 +571,21 @@ mod tests {
 
         assert_eq!(result, Err(UpdateError::SignatureInvalid));
         assert!(!folder.exists(), "no installer request was made");
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    /// The real request to GitHub over HTTPS. It needs the network, so it is
+    /// ignored by default: `cargo test -p opencircuit-desktop -- --ignored live`.
+    #[test]
+    #[ignore = "needs the network"]
+    fn live_check_reaches_github() {
+        let result = super::check(super::API_URL, super::ORIGIN);
+        match &result {
+            Ok(release) => eprintln!("OK latest = {}", release.version),
+            Err(error) => eprintln!("ERR {:?}: {}", error, error.message()),
+        }
+        assert!(result.is_ok(), "{result:?}");
     }
 }
