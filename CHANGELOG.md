@@ -10,7 +10,7 @@ may change anything, and what changes in a file format is listed under
 
 ## [Unreleased]
 
-## [0.0.3] - 2026-11-19
+## [0.0.3] - 2026-11-20
 
 Version 0.0.3 is the first release that can tell its users about a newer one
 (ADR-0020). Installs of 0.0.2 do not have that notice: update them once by hand,
@@ -30,12 +30,28 @@ from the release page.
   project's minisign key and publishes `SHA256SUMS.minisig` with each release.
   The update notice refuses a download whose list does not verify, or whose
   signature names another version.
+- **`opencircuit --version`** (and `-V`) prints `OpenCircuit <version>`, the
+  same text as Help > About in the window.
+- **`opencircuit --upgrade`** does what Help > Updates does by default: it
+  reads the latest published release and, when it is newer than the program,
+  downloads the installer for this system, checks it against the signed
+  SHA-256 list and prints where it is. Nothing is installed. When the program
+  is up to date it says so and shows the latest published version.
 
 ### Changed
 
 - The Help menu has a new entry, **Updates...**. The status bar shows the
   update chip only when a newer version is known.
 - "Install automatically" is shown but not available yet (phase 3 of ADR-0020).
+- The update code (release lookup, download, signature check) is the new crate
+  `opencircuit-update`, used by both the window and the command line.
+
+### Fixed
+
+- The update check no longer stays on "Checking..." forever: the HTTPS
+  request panicked for lack of a TLS provider, which ended the thread that was
+  to answer. The provider is set, and a thread that ends without an answer now
+  gives a connection failure.
 
 ## [0.0.2] - 2026-11-18
 
