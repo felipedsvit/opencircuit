@@ -99,6 +99,41 @@ enum Done {
     Downloaded(Result<PathBuf, UpdateError>),
 }
 
+/// Carries the answer of a worker thread to the window. The answer is sent
+/// once, with [`Report::send`]. If the thread ends without sending it (a panic
+/// on that thread), the drop sends the fallback, so the window never waits for
+/// an answer that cannot come.
+struct Report {
+    sender: Sender<Done>,
+    ctx: egui::Context,
+    fallback: Option<Done>,
+}
+
+impl Report {
+    fn new(sender: Sender<Done>, ctx: egui::Context, fallback: Done) -> Self {
+        Self {
+            sender,
+            ctx,
+            fallback: Some(fallback),
+        }
+    }
+
+    fn send(mut self, done: Done) {
+        self.fallback = None;
+        let _ = self.sender.send(done);
+        self.ctx.request_repaint();
+    }
+}
+
+impl Drop for Report {
+    fn drop(&mut self) {
+        if let Some(done) = self.fallback.take() {
+            let _ = self.sender.send(done);
+            self.ctx.request_repaint();
+        }
+    }
+}
+
 /// The state of the installer download, as the dialog shows it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 enum Download {
@@ -327,16 +362,18 @@ impl Updates {
             return;
         }
         self.checking = Some(manual);
-        let sender = self.sender.clone();
-        let ctx = ctx.clone();
+        let fallback = Done::Checked {
+            manual,
+            result: Err(UpdateError::Connection),
+        };
+        let report = Report::new(self.sender.clone(), ctx.clone(), fallback);
         let api = self.api_url.clone();
         let origin = self.origin.clone();
         let spawned = std::thread::Builder::new()
             .name("opencircuit-update-check".to_owned())
             .spawn(move || {
                 let result = net::check(&api, &origin);
-                let _ = sender.send(Done::Checked { manual, result });
-                ctx.request_repaint();
+                report.send(Done::Checked { manual, result });
             });
         if spawned.is_err() {
             self.checking = None;
@@ -358,8 +395,8 @@ impl Updates {
             return;
         };
         self.download = Download::Running;
-        let sender = self.sender.clone();
-        let ctx = ctx.clone();
+        let fallback = Done::Downloaded(Err(UpdateError::Connection));
+        let report = Report::new(self.sender.clone(), ctx.clone(), fallback);
         let api = self.api_url.clone();
         let origin = self.origin.clone();
         let spawned = std::thread::Builder::new()
@@ -372,8 +409,7 @@ impl Updates {
                     installer,
                     &folder,
                 );
-                let _ = sender.send(Done::Downloaded(result));
-                ctx.request_repaint();
+                report.send(Done::Downloaded(result));
             });
         if spawned.is_err() {
             self.download = Download::Failed(UpdateError::Connection);
@@ -415,7 +451,9 @@ pub fn installer_name_for_this_system() -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Done, Notice, Release, Settings, UpdateError, Updates, now};
+    use std::sync::mpsc;
+
+    use super::{Done, Notice, Release, Report, Settings, UpdateError, Updates, now};
 
     fn release(tag: &str) -> Release {
         let origin = "https://github.com/felipedsvit/opencircuit/";
@@ -527,6 +565,52 @@ mod tests {
 
         assert_eq!(updates.checking, None);
         assert_eq!(updates.chip_version(), Some("99.0.0"));
+    }
+
+    #[test]
+    fn a_worker_that_panics_still_gives_the_window_an_answer() {
+        let (sender, inbox) = mpsc::channel();
+        let report = Report::new(
+            sender,
+            eframe::egui::Context::default(),
+            Done::Checked {
+                manual: true,
+                result: Err(UpdateError::Connection),
+            },
+        );
+        let worker = std::thread::spawn(move || {
+            let _report = report;
+            panic!("the worker fails before it has an answer");
+        });
+        assert!(worker.join().is_err(), "the worker panicked");
+
+        let answer = inbox.try_recv();
+
+        assert!(matches!(
+            answer,
+            Ok(Done::Checked {
+                manual: true,
+                result: Err(UpdateError::Connection),
+            })
+        ));
+    }
+
+    #[test]
+    fn a_worker_that_answers_sends_its_answer_once() {
+        let (sender, inbox) = mpsc::channel();
+        let report = Report::new(
+            sender,
+            eframe::egui::Context::default(),
+            Done::Downloaded(Err(UpdateError::Connection)),
+        );
+
+        report.send(Done::Downloaded(Err(UpdateError::Disk)));
+
+        assert!(matches!(
+            inbox.try_recv(),
+            Ok(Done::Downloaded(Err(UpdateError::Disk)))
+        ));
+        assert!(inbox.try_recv().is_err(), "the fallback is not sent too");
     }
 
     #[test]
