@@ -7,7 +7,9 @@ use std::process::Command;
 use eframe::egui::{self, RichText};
 
 use super::settings::{DAY, Frequency};
-use super::{CURRENT, Download, Notice, UpdateError, Updates, installer_name_for_this_system, now};
+use opencircuit_update::UpdateError;
+
+use super::{CURRENT, Download, Notice, Updates, installer_name_for_this_system, localized, now};
 use crate::dialog::{Choice, Dialog, Kind, Role};
 use crate::i18n::{tr, trf, trn};
 
@@ -122,7 +124,7 @@ impl Updates {
                     );
                 }
                 Download::Failed(error) => {
-                    ui.colored_label(ui.visuals().error_fg_color, error.message());
+                    ui.colored_label(ui.visuals().error_fg_color, localized(*error));
                 }
             }
         });
@@ -188,7 +190,7 @@ impl Updates {
                     (tr("Try again").to_owned(), Role::Primary, Action::Retry),
                     (close.to_owned(), Role::Secondary, Action::Close),
                 ];
-                (Kind::Error, error.message().to_owned(), options)
+                (Kind::Error, localized(*error).to_owned(), options)
             }
         }
     }
@@ -293,7 +295,7 @@ impl Updates {
                 }
             }
             Some(Notice::Failed(error)) => {
-                ui.colored_label(ui.visuals().error_fg_color, error.message());
+                ui.colored_label(ui.visuals().error_fg_color, localized(error));
             }
             None => {}
         }

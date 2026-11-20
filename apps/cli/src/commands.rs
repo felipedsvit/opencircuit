@@ -27,6 +27,36 @@ const STEP_CHUNK: u32 = 100_000;
 /// Most trace events one scenario may produce.
 const MAX_TRACE_EVENTS: usize = 2_000_000;
 
+/// `--upgrade`: the same as "Download and check" in the window (ADR-0020). It
+/// reads the latest release; when it is newer, it downloads the installer for
+/// this system into the updates folder, checks it against the signed list, and
+/// prints where it is. Nothing is installed.
+fn upgrade(out: &mut dyn Write) -> Result<u8, CliError> {
+    let current = opencircuit_update::Version::parse(env!("CARGO_PKG_VERSION"))
+        .ok_or_else(|| CliError::Usage("the program has no valid version".to_owned()))?;
+    let folder = opencircuit_update::updates_folder().ok_or_else(|| {
+        CliError::Usage("no data folder: HOME or XDG_DATA_HOME must be set".to_owned())
+    })?;
+    let answer = opencircuit_update::upgrade(&current, &folder)
+        .map_err(|error| CliError::Usage(error.message().to_owned()))?;
+    match answer {
+        opencircuit_update::Upgrade::UpToDate { version } => {
+            writeln!(
+                out,
+                "OpenCircuit {current} is up to date: the latest published version is {version}."
+            )?;
+        }
+        opencircuit_update::Upgrade::Downloaded { version, path } => {
+            writeln!(
+                out,
+                "Version {version} is available. Its installer was downloaded and checked against the signed SHA-256 list:"
+            )?;
+            writeln!(out, "{}", path.display())?;
+        }
+    }
+    Ok(EXIT_OK)
+}
+
 pub(crate) fn execute(
     command: &Command,
     env: &Env,
@@ -37,6 +67,7 @@ pub(crate) fn execute(
         // `run` answers `help` before dispatching here.
         Command::Help => Ok(EXIT_OK),
         // The same text as Help > About in the window.
+        Command::Upgrade => upgrade(out),
         Command::Version => {
             writeln!(out, "OpenCircuit {}", env!("CARGO_PKG_VERSION")).map_err(CliError::from)?;
             Ok(EXIT_OK)

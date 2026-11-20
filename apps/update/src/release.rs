@@ -7,8 +7,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::UpdateError;
-use super::version::Version;
+use crate::UpdateError;
+use crate::version::Version;
 
 /// Largest release description read, in bytes.
 pub const MAX_RELEASE_BYTES: u64 = 1 << 20;
@@ -243,7 +243,7 @@ const MAX_SUM_LINES: usize = 256;
 #[cfg(test)]
 mod tests {
     use super::{Installer, MAX_RELEASE_BYTES, Release, UpdateError, checksum_for};
-    use crate::update::version::Version;
+    use crate::version::Version;
 
     const ORIGIN: &str = "https://github.com/felipedsvit/opencircuit/";
 

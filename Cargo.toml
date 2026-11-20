@@ -2,6 +2,7 @@
 members = [
     "apps/cli",
     "apps/desktop",
+    "apps/update",
     "crates/circuit-commands",
     "crates/circuit-editor",
     "crates/circuit-export",
@@ -31,6 +32,8 @@ circuit-project = { path = "crates/circuit-project", version = "0.0.3" }
 circuit-renderer = { path = "crates/circuit-renderer", version = "0.0.3" }
 circuit-report = { path = "crates/circuit-report", version = "0.0.3" }
 circuit-sim = { path = "crates/circuit-sim", version = "0.0.3" }
+# The update of ADR-0020, shared by the window and the command line (native only).
+opencircuit-update = { path = "apps/update", version = "0.0.3" }
 proptest = { version = "1", default-features = false, features = ["std"] }
 # QR codes of ADR-0018 (MIT, no dependencies).
 qrcodegen = "1.8"

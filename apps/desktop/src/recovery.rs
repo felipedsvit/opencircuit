@@ -42,32 +42,8 @@ const META_EXTENSION: &str = "json";
 /// Extension of the file a running window keeps locked.
 const LOCK_EXTENSION: &str = "lock";
 
-/// The data folder of OpenCircuit for this user: `$XDG_DATA_HOME/opencircuit`
-/// or `~/.local/share/opencircuit` on Linux and other Unix systems,
-/// `~/Library/Application Support/OpenCircuit` on macOS and
-/// `%LOCALAPPDATA%\OpenCircuit` on Windows. `None` when the environment names
-/// none.
-#[must_use]
-pub fn user_data_dir() -> Option<PathBuf> {
-    let env = |name: &str| {
-        std::env::var_os(name)
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-    };
-    Some(if cfg!(windows) {
-        env("LOCALAPPDATA")
-            .or_else(|| env("APPDATA"))?
-            .join("OpenCircuit")
-    } else if cfg!(target_os = "macos") {
-        env("HOME")?
-            .join("Library/Application Support")
-            .join("OpenCircuit")
-    } else {
-        env("XDG_DATA_HOME")
-            .or_else(|| env("HOME").map(|home| home.join(".local/share")))?
-            .join("opencircuit")
-    })
-}
+/// The data folder of OpenCircuit for this user (`opencircuit_update`).
+pub use opencircuit_update::user_data_dir;
 
 /// Create `dir` and its parents, the last one readable by this user only.
 pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {

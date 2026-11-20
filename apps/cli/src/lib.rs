@@ -50,6 +50,7 @@ OpenCircuit headless tool
 
 usage:
   opencircuit --version
+  opencircuit --upgrade
   opencircuit validate <project.ocircuit> [--format text|json] [--deny-warnings]
                        [--library <file.oclib|dir>]
   opencircuit simulate <project.ocircuit> --scenario <scenario.json>

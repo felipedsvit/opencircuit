@@ -122,33 +122,42 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-renderer",
             "circuit-report",
             "circuit-sim",
+            "opencircuit-update",
         ],
         // `rfd` gives the native file dialogs (portal over libdbus on Linux).
         // On wasm32, `web-sys`, `js-sys` and `wasm-bindgen-futures` start the
         // application on its canvas, read dropped files and offer downloads.
         // `serde` and `serde_json` write the small description next to a
         // recovery copy (M9.1); the workspace already pins both.
-        // The update notice (ADR-0020) asks GitHub for the latest release over
-        // HTTPS and checks its download with `sha2`. `ureq` uses `rustls` with
-        // the ring provider and the roots of the system (`rustls-native-certs`):
-        // the webpki roots are under a licence outside `deny.toml`. Native only.
-        // `minisign-verify` checks the signature of the release list (ADR-0020,
-        // phase 2); it is pure Rust and MIT.
+        // The network of the update (ADR-0020) lives in `opencircuit-update`.
         external: &[
             "eframe",
             "js-sys",
-            "minisign-verify",
             "rfd",
+            "serde",
+            "serde_json",
+            "wasm-bindgen-futures",
+            "web-sys",
+        ],
+        dev: &["egui_kittest"],
+        core: false,
+    },
+    // The update of ADR-0020: the release lookup, the download and the check of
+    // the signature, shared by the window and `opencircuit --upgrade`. It does
+    // the network work, so it is not a core crate; the core stays free of it.
+    PackageRule {
+        name: "opencircuit-update",
+        workspace: &[],
+        external: &[
+            "minisign-verify",
             "rustls",
             "rustls-native-certs",
             "serde",
             "serde_json",
             "sha2",
             "ureq",
-            "wasm-bindgen-futures",
-            "web-sys",
         ],
-        dev: &["egui_kittest"],
+        dev: &[],
         core: false,
     },
     PackageRule {
@@ -162,6 +171,7 @@ const PACKAGE_RULES: &[PackageRule] = &[
             "circuit-renderer",
             "circuit-report",
             "circuit-sim",
+            "opencircuit-update",
         ],
         external: &["serde", "serde_json"],
         dev: &["proptest"],
