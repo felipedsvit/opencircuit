@@ -36,6 +36,11 @@ pub(crate) fn execute(
     match command {
         // `run` answers `help` before dispatching here.
         Command::Help => Ok(EXIT_OK),
+        // The same text as Help > About in the window.
+        Command::Version => {
+            writeln!(out, "OpenCircuit {}", env!("CARGO_PKG_VERSION")).map_err(CliError::from)?;
+            Ok(EXIT_OK)
+        }
         Command::Validate {
             project,
             format,
